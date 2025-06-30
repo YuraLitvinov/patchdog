@@ -1,0 +1,15 @@
+[package]
+name = "filesystem_parsing"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+proc-macro2 = { version = "1", features = ["span-locations"] }
+
+syn = { workspace = true }
+quote = { workspace = true }
+serde = { workspace = true }
+dotenv = { workspace = true }
+serde_json = { workspace = true }
+ra_ap_line-index = "0.0.17"
+ra_ap_syntax = "0.0.289"

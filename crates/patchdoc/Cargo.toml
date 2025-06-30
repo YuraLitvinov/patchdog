@@ -1,0 +1,15 @@
+[package]
+name = "patchdoc"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+filesystem_parsing = { path = "../filesystem_parsing" }
+chatgpt = { path = "../chatgpt" }
+gemini = { path = "../gemini" }
+
+syn = { workspace = true }
+dotenv = { workspace = true }
+tokio = { workspace = true }
+similar = "2.7.0"
+
