@@ -131,15 +131,12 @@ pub fn frontend_visit_items(item: &ObjectRange) {
     let object_line_end = &object.line_end().unwrap();
     println!("type {} name {} start {} end {}", object_path, object_name, object_line_start, object_line_end);
 }
-pub fn parse_all_rust_items(path: &Path) { //Depends on visit_items and find_module_file
+pub fn parse_all_rust_items(path: &Path) -> Vec<ObjectRange> { //Depends on visit_items and find_module_file
     let src = fs::read_to_string(path).expect("Could not read");
     println!("{:?}", &path);
     let ast: File = parse_file(&src).expect("Could not parse");
     let visited = visit_items(&ast.items, path.parent().unwrap());
-    for item in &visited {
-        frontend_visit_items(&item);
-    }
-   // visited
+    visited
 } 
 
 
@@ -173,13 +170,12 @@ fn visit_items(items: &[Item], base_path: &Path) -> Vec<ObjectRange> {
                 });
             },
             
-            Item::Mod(m) => {
-                /* 
+            Item::Mod(m) => {     
                 object_line.push(ObjectRange {
                     line_range: vec![LineRange::Start(m.span().start().line), LineRange::End(m.span().end().line)],
                     name: vec![Names::TypeName("mod"), Names::Name(m.ident.to_string())],
                 });
-                */
+                /* 
                 if let Some((_, items)) = &m.content {
                     // Inline module
                     visit_items(items, base_path);
@@ -190,6 +186,7 @@ fn visit_items(items: &[Item], base_path: &Path) -> Vec<ObjectRange> {
                         parse_all_rust_items(&mod_file);
                     }
                 }
+                */
             },
              
             Item::Use(u) => {   
@@ -265,7 +262,15 @@ fn visit_items(items: &[Item], base_path: &Path) -> Vec<ObjectRange> {
                     name: vec![Names::TypeName("extern crate"), Names::Name(c.ident.to_string())],
             });
         },
-                    
+
+            Item::Static(s) => {  
+                let line_start = s.span().start().line;
+                let line_end = s.span().end().line;
+                object_line.push(ObjectRange {
+                    line_range: vec![LineRange::Start(line_start), LineRange::End(line_end)],
+                    name: vec![Names::TypeName("static"), Names::Name(s.ident.to_string())],
+                });
+            },        
             _ => println!("Other item"),
 
         }
@@ -274,7 +279,7 @@ fn visit_items(items: &[Item], base_path: &Path) -> Vec<ObjectRange> {
     object_line
 }
 
-fn find_module_file(base_path: &Path, mod_name: &str) -> Option<PathBuf> {
+pub fn find_module_file(base_path: &Path, mod_name: &str) -> Option<PathBuf> {
     let paths = [
         base_path.join(format!("{}.rs", mod_name)),               // mod.rs style
         base_path.join(mod_name).join("mod.rs"),                  // mod.rs in subdirectory
