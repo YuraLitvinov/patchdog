@@ -10,20 +10,29 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use ra_ap_syntax::{SourceFile, SyntaxNode};
 use std::io::Write;
+#[derive(Debug)]
 enum LineRange {
     Start(usize),
     End(usize),
 }
+#[derive(Debug)]
 enum Names {
     TypeName(&'static str),
     Name(String),
 }
+#[derive(Debug)]
 pub struct ObjectRange {
     line_range: Vec<LineRange>,
     name: Vec<Names>
     
 }
-
+/*
+Calling each object with ObjectRange 
+object_name = %object%.object_name().unwrap()
+object_type = %object%.object_type().unwrap()
+line_start = %object%.line_start().unwrap()
+line_end = %object%.line_end().unwrap()
+*/
 impl ObjectRange {
     pub fn object_name(&self) -> Option<String> {
         for n in &self.name {
@@ -115,20 +124,22 @@ pub fn transform(ast: &'static str) {
 }
 
 pub fn frontend_visit_items(item: &ObjectRange) {
-    //let vectorized = file_to_vector(items_from);
-    //let line_start = line_start - 1;
-    //let vectors_of_strings = &vectorized[line_start..*line_end].join("\n");
     let object = item;
-    let vectors_of_strings = &object.object_type().unwrap(); 
-    println!("{:?}", vectors_of_strings);
-    //let ast: Item = parse_str::<Item>(vectors_of_strings).expect("Unable to parse string. Does it contain valid Rust code?");
-    //let path = Path::new(items_from);
-    //visit_items(&[ast], path);
+    let object_name = &object.object_name().unwrap(); 
+    let object_path = &object.object_type().unwrap();
+    let object_line_start = &object.line_start().unwrap();
+    let object_line_end = &object.line_end().unwrap();
+    println!("type {} name {} start {} end {}", object_path, object_name, object_line_start, object_line_end);
 }
-pub fn parse_all_rust_items(path: &Path) -> Vec<ObjectRange> { //Depends on visit_items and find_module_file
-    let src = fs::read_to_string(path).expect("Could not read file");
-    let ast: File = parse_file(&src).expect("Could not parse file");
-    visit_items(&ast.items, path.parent().unwrap())
+pub fn parse_all_rust_items(path: &Path) { //Depends on visit_items and find_module_file
+    let src = fs::read_to_string(path).expect("Could not read");
+    println!("{:?}", &path);
+    let ast: File = parse_file(&src).expect("Could not parse");
+    let visited = visit_items(&ast.items, path.parent().unwrap());
+    for item in &visited {
+        frontend_visit_items(&item);
+    }
+   // visited
 } 
 
 
@@ -163,6 +174,12 @@ fn visit_items(items: &[Item], base_path: &Path) -> Vec<ObjectRange> {
             },
             
             Item::Mod(m) => {
+                /* 
+                object_line.push(ObjectRange {
+                    line_range: vec![LineRange::Start(m.span().start().line), LineRange::End(m.span().end().line)],
+                    name: vec![Names::TypeName("mod"), Names::Name(m.ident.to_string())],
+                });
+                */
                 if let Some((_, items)) = &m.content {
                     // Inline module
                     visit_items(items, base_path);
@@ -206,12 +223,49 @@ fn visit_items(items: &[Item], base_path: &Path) -> Vec<ObjectRange> {
                     name: vec![Names::TypeName("trait"), Names::Name(t.ident.to_string())],
                 });
                                 }, 
-            Item::Type(t) => println!("Type alias: {}", t.ident),
-            Item::Union(u) => println!("Union: {}", u.ident),
-            Item::Const(c) => println!("Const: {}", c.ident),
-            Item::Macro(_) => println!("Macro invocation"),
-            Item::ExternCrate(c) => println!("Extern crate: {}", c.ident),
-            
+            Item::Type(t) => { 
+                let line_start = t.span().start().line;
+                let line_end= t.span().end().line;
+                object_line.push(ObjectRange {
+                    line_range: vec![LineRange::Start(line_start), LineRange::End(line_end)],
+                    name: vec![Names::TypeName("type"), Names::Name(t.ident.to_string())],
+                });
+            },
+            Item::Union(u) => { 
+                let line_start = u.span().start().line;
+                let line_end= u.span().end().line;
+                object_line.push(ObjectRange {
+                    line_range: vec![LineRange::Start(line_start), LineRange::End(line_end)],
+                    name: vec![Names::TypeName("union"), Names::Name(u.ident.to_string())],
+                });
+            },
+            Item::Const(c) => { 
+                let line_start = c.span().start().line;
+                let line_end= c.span().end().line;
+                object_line.push(ObjectRange {
+                    line_range: vec![LineRange::Start(line_start), LineRange::End(line_end)],
+                    name: vec![Names::TypeName("const"), Names::Name(c.ident.to_string())],
+                });
+            },            
+            Item::Macro(m) => { 
+                let macro_name = format!("{:?}", m.ident.clone().unwrap());
+                let line_start = m.span().start().line;
+                let line_end= m.span().end().line;
+                object_line.push(ObjectRange {
+                    line_range: vec![LineRange::Start(line_start), LineRange::End(line_end)],
+                    name: vec![Names::TypeName("macro"), Names::Name(macro_name)],
+                });
+            },           
+        
+            Item::ExternCrate(c) => { 
+                let line_start = c.span().start().line;
+                let line_end= c.span().end().line;
+                object_line.push(ObjectRange {
+                    line_range: vec![LineRange::Start(line_start), LineRange::End(line_end)],
+                    name: vec![Names::TypeName("extern crate"), Names::Name(c.ident.to_string())],
+            });
+        },
+                    
             _ => println!("Other item"),
 
         }
