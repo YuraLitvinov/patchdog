@@ -15,22 +15,16 @@ async fn main() {
     let file_path = Path::new(&args[1]);
     let visited = parse_all_rust_items(&file_path);
     for item in &visited {
-        frontend_visit_items(&item);
+        println!("{}", frontend_visit_items(&item));
         if item.object_type().unwrap() == "mod" {
             //println!("{:?}", &file_path.parent().unwrap());
             let mod_path = find_module_file(file_path.parent().unwrap(), &item.object_name().unwrap());
             let parsed = parse_all_rust_items(&mod_path.unwrap());
             for item in &parsed {
-                frontend_visit_items(&item);
+                println!("\t{}", frontend_visit_items(&item));
             }
         }
     }
-    /* 
-    let mod_path = find_module_file(file_path, &visited[0].object_name().unwrap());
-    if let Some(mod_file) = mod_path {
-        parse_all_rust_items(&mod_file);
-    }
-    */
 }
 
 fn compare(file_to_compare: &Path, file_comparable: &Path) {

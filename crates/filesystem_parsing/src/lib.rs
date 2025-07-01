@@ -123,13 +123,14 @@ pub fn transform(ast: &'static str) {
     let _ =write_to_file(tokens.to_string(), "123".to_string());
 }
 
-pub fn frontend_visit_items(item: &ObjectRange) {
+pub fn frontend_visit_items(item: &ObjectRange) -> String {
     let object = item;
     let object_name = &object.object_name().unwrap(); 
     let object_path = &object.object_type().unwrap();
     let object_line_start = &object.line_start().unwrap();
     let object_line_end = &object.line_end().unwrap();
-    println!("type {} name {} start {} end {}", object_path, object_name, object_line_start, object_line_end);
+    let out = format!("type {} name {} start {} end {}", object_path, object_name, object_line_start, object_line_end);
+    out
 }
 pub fn parse_all_rust_items(path: &Path) -> Vec<ObjectRange> { //Depends on visit_items and find_module_file
     let src = fs::read_to_string(path).expect("Could not read");
