@@ -2,7 +2,6 @@ name: Rust
 
 on:
   push:
-    branches: [ "operations" ]
   pull_request:
     branches: [ "main" ]
 

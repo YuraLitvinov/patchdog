@@ -1,7 +1,7 @@
 use std::error::Error as Err;
 pub struct OpenAI;
 impl OpenAI {
-   pub async fn req_res(file_content: String) -> Result<String, Box<dyn Err>> {
+    pub async fn req_res(file_content: String) -> Result<String, Box<dyn Err>> {
         let api_key = std::env::var("API_KEY_OPENAI")?;
         let client = openai_rust::Client::new(&std::env::var(api_key).unwrap());
         let args = openai_rust::chat::ChatArguments::new(std::env::var("OPENAI_MODEL").expect("Unsupported OpenAI model"), vec![
