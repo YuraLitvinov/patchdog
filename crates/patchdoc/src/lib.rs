@@ -30,11 +30,13 @@ pub async fn finalized(project_file:&'static str) {
         Err(why) => { eprintln!("{}", why); }
     };
 }
-pub fn receive_context(file_path: &Path) { 
+pub fn receive_context(file_path: &Path) -> Vec<String> { 
 let visited = parse_all_rust_items(file_path);
+let mut vector_of_objects: Vec<String> = Vec::new();
 println!("{:?}", &file_path);
     for item in &visited {
     println!("{:?}", frontend_visit_items(item));
+    vector_of_objects.push(item.object_name().unwrap());
         if item.object_type().unwrap() == "mod" {
             //println!("{:?}", &file_path.parent().unwrap());
             let mod_path = find_module_file(file_path.parent().unwrap(), &item.object_name().unwrap());
@@ -44,10 +46,12 @@ println!("{:?}", &file_path);
                 //println!("\t{:?}", frontend_visit_items(&item));
                 println!("\t{:?}", &item);
                 let extr = extract_function(path2, &item.line_start().unwrap(), &item.line_end().unwrap());
-                println!("\t{}", extr);
+                vector_of_objects.push(extr.clone());
+                //println!("\t{}", extr);
             }
         }
     }
+    vector_of_objects
 }
 
 

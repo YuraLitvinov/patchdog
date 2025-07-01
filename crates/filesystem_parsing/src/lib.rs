@@ -94,14 +94,14 @@ pub fn write_to_file(response: String, name: String) -> Result<()> {
     Ok(())
 }
 
-pub fn file_deserialize(file_path: &'static str) -> Result<Vec<String>> {
+pub fn file_deserialize(file_path: &str) -> Result<Vec<String>> {
     let file = std::fs::File::open(file_path)?;
     let reader = std::io::BufReader::new(file);
     let paths: Vec<String> = serde_json::from_reader(reader)?;
     Ok(paths)
 }
 
-pub fn my_parse_file(file_path: &'static str) -> String {
+pub fn my_parse_file(file_path: &str) -> String {
     let src = std::fs::read_to_string(file_path).expect("unable to read file");
     let syntax = parse_file(&src).expect("unable to parse file");
     let syntax_tree = format!("{:#?}", &syntax);
@@ -111,7 +111,7 @@ pub fn my_parse_file(file_path: &'static str) -> String {
     //Ok(())
 }
 
-pub fn transform(ast: &'static str) {
+pub fn transform(ast: &str) {
     let mut ast = parse_file(ast).expect("Unable to parse file");
     for item in &mut ast.items {
         if let Item::Fn(func) = item {
@@ -156,8 +156,8 @@ fn visit_items(items: &[Item]) -> Vec<ObjectRange> {
 
             },
             Item::Fn(f) => { 
-                let line_start = f.block.span().start().line;
-                let line_end = f.block.span().end().line;
+                let line_start = f.span().start().line;
+                let line_end = f.span().end().line;
                 object_line.push(ObjectRange {
                     line_range: vec![LineRange::Start(line_start), LineRange::End(line_end)],
                     name: vec![Names::TypeName("fn"), Names::Name(f.sig.ident.to_string())],
