@@ -1,5 +1,6 @@
 Requires .env file to function. Insert your key, specify input and from there everything should work.
-start.sh should be the entry point as it creates project_files.json file that is necessary for proper operation. 
-The script is not bound to only *.rs files, but with a simple edit can insert any type of file into the notation.
-Currently, this .json is necessary, as it provides the project with necessary input. Potentially, it could be expanded to include code blocks that were changed as per git.
-
+The script is bound to Rust files, as it uses parsing to avoid documented and unnecessary code. 
+Main goal there is, is to avoid unnecessary dependencies that would carry a lot of overhead and impossible to maintain. 
+The project aims at smooth Github Actions integration, as it can be used to document changes in a repository - either dump them
+to a LLM or be documented by a human. 
+Essentially, this tool compares two files, dynamically joining all of their dependencies and creating documentation for them.
