@@ -10,22 +10,14 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use ra_ap_syntax::{SourceFile, SyntaxNode};
 use std::io::Write;
-#[derive(Debug)]
-#[allow(dead_code)]// Doesn't throw warning with Debug trait
 enum LineRange {
     Start(usize),
     End(usize),
 }
-#[derive(Debug)]
-#[allow(dead_code)]
 enum Names {
     TypeName(&'static str),
     Name(String),
 }
-
-
-#[derive(Debug)]
-#[allow(dead_code)]
 pub struct ObjectRange {
     line_range: Vec<LineRange>,
     name: Vec<Names>
