@@ -1,11 +1,12 @@
-use std::collections::hash_set::Difference;
+//use std::collections::hash_set::Difference;
 use std::path::Path;
-
-use filesystem_parsing::{file_deserialize, file_to_vector};
+use filesystem_parsing::extract_function;
+use filesystem_parsing::{file_deserialize, parse_all_rust_items, frontend_visit_items, find_module_file};
 use gemini::GoogleGemini;
 use filesystem_parsing::parse;
 use filesystem_parsing::write_to_file;
-
+use filesystem_parsing::file_to_vector;
+use similar::{ChangeTag, TextDiff};
 pub async fn finalized(project_file:&'static str) {
     match file_deserialize(project_file) {
         Ok(paths) => for path in paths {
@@ -29,28 +30,40 @@ pub async fn finalized(project_file:&'static str) {
         Err(why) => { eprintln!("{}", why); }
     };
 }
-//finalized("project_files.json").await;
-    //let input: String = my_parse_file("src/lib.rs");
-    //write_to_file(input, "Tree_of_file".to_string());
-    //println!("{}", input);
-    //let transform = transform(input);
-    //let output =  match GoogleGemini::req_res(input).await {
-    //    Ok(res) => write_to_file(res, "zhopa".to_string()),
-    //    Err(why) => write_to_file(why.to_string(),  "zhopa".to_string()),
-    //};
-    //let _ = output;
-    //println!("{}", output);
- 
-//Compares two file paths for any differences between them. 
-//If it notices some diff, then it will return the diff and parse all objects that are within the line range
-/* 
+pub fn receive_context(file_path: &Path) { 
+let visited = parse_all_rust_items(file_path);
+println!("{:?}", &file_path);
+    for item in &visited {
+    println!("{:?}", frontend_visit_items(item));
+        if item.object_type().unwrap() == "mod" {
+            //println!("{:?}", &file_path.parent().unwrap());
+            let mod_path = find_module_file(file_path.parent().unwrap(), &item.object_name().unwrap());
+            let path2 = &mod_path.clone().unwrap();
+            let parsed = parse_all_rust_items(&mod_path.unwrap());
+            for item in &parsed {
+                //println!("\t{:?}", frontend_visit_items(&item));
+                println!("\t{:?}", &item);
+                let extr = extract_function(path2, &item.line_start().unwrap(), &item.line_end().unwrap());
+                println!("\t{}", extr);
+            }
+        }
+    }
+}
+
+
+
 pub fn compare(file_to_compare: &Path, file_comparable: &Path) {
     let file_to_compare = file_to_vector(file_to_compare).join("\n");
     let file_comparable = file_to_vector(file_comparable).join("\n");
-    let diff = file_to_compare.diff(&file_comparable);
-    println!("{}", diff);
+    let diff = TextDiff::from_lines(&file_comparable, &file_to_compare);
 
-   
-
+    for change in diff.iter_all_changes() {
+        let sign = match change.tag() {
+            ChangeTag::Delete => "-",
+            ChangeTag::Insert => "+",
+            ChangeTag::Equal => " ",
+        };
+        println!("{} {}", sign, change);
+    }
 }
-*/
+

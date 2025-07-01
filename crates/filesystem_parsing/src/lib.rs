@@ -1,7 +1,6 @@
-use ra_ap_syntax::ast::UseBoundGenericArg;
 use syn::spanned::Spanned;
 use syn::{
-    parse_file, parse_quote, parse_str, Attribute, File, Item
+    parse_file, parse_quote, Attribute, File, Item
 };
 use quote::quote;
 //use std::io::prelude::*;
@@ -68,6 +67,9 @@ impl ObjectRange {
     }
 }
 
+pub fn frontend_visit_items(item: &ObjectRange) -> Vec<&ObjectRange> {
+    vec![item]
+}
 
 pub fn parse(file_content: String) -> Vec<String> {
     let ast: File = parse_file(&file_content).expect("Unable to parse file");
@@ -123,25 +125,16 @@ pub fn transform(ast: &'static str) {
     let _ =write_to_file(tokens.to_string(), "123".to_string());
 }
 
-pub fn frontend_visit_items(item: &ObjectRange) -> String {
-    let object = item;
-    let object_name = &object.object_name().unwrap(); 
-    let object_path = &object.object_type().unwrap();
-    let object_line_start = &object.line_start().unwrap();
-    let object_line_end = &object.line_end().unwrap();
-    let out = format!("type {} name {} start {} end {}", object_path, object_name, object_line_start, object_line_end);
-    out
-}
+
 pub fn parse_all_rust_items(path: &Path) -> Vec<ObjectRange> { //Depends on visit_items and find_module_file
     let src = fs::read_to_string(path).expect("Could not read");
-    println!("{:?}", &path);
+    //println!("{:?}", &path);
     let ast: File = parse_file(&src).expect("Could not parse");
-    let visited = visit_items(&ast.items, path.parent().unwrap());
-    visited
+    visit_items(&ast.items)
 } 
 
 
-fn visit_items(items: &[Item], base_path: &Path) -> Vec<ObjectRange> {
+fn visit_items(items: &[Item]) -> Vec<ObjectRange> {
     let mut object_line: Vec<ObjectRange> = Vec::new();
     for item in items {
         match item {
@@ -208,9 +201,14 @@ fn visit_items(items: &[Item], base_path: &Path) -> Vec<ObjectRange> {
             Item::Impl(i) => {
                 let line_start = i.span().start().line;
                 let line_end= i.span().end().line;
+                //let impl_name = format!("{:?}", i.trait_.as_ref().unwrap().1.get_ident().expect("REASON").to_string());
+                let trait_name = match &i.trait_ {
+                    Some(trait_) => trait_.1.get_ident().expect("REASON").to_string(),
+                    None => "matches struct".to_string(),
+                };
                 object_line.push(ObjectRange {
                     line_range: vec![LineRange::Start(line_start), LineRange::End(line_end)],
-                    name: vec![Names::TypeName("impl"), Names::Name("block".to_string())],
+                    name: vec![Names::TypeName("impl"), Names::Name(trait_name)],
                 });
             },
             Item::Trait(t) => { 
@@ -310,13 +308,13 @@ pub fn file_to_vector(file: &Path) -> Vec<String> { //Simplified version, using 
     code.lines().map(|line| line.to_string()).collect()
 }
 
-pub fn extract_function(from: &Path, line_start: &usize, line_end: &usize) { 
+pub fn extract_function(from: &Path, line_start: &usize, line_end: &usize) -> String { 
     let vector_of_file = file_to_vector(from);
     let line_start = line_start - 1;
     let f = &vector_of_file[line_start..*line_end].join("\n");
-    parse_all_rust_items(std::path::Path::new(f));
+    //parse_all_rust_items(std::path::Path::new(f));
     //println!("{}", f);
-
+    f.to_string()
 }
 
 pub fn find_object(line_start: usize, line_end: usize, code_block: Vec<String>){ //Determines whether the provided line range belongs to a function
