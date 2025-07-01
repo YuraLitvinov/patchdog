@@ -1,3 +1,4 @@
+use ra_ap_syntax::ast::UseBoundGenericArg;
 use syn::spanned::Spanned;
 use syn::{
     parse_file, parse_quote, parse_str, Attribute, File, Item
@@ -10,11 +11,13 @@ use std::path::{Path, PathBuf};
 use ra_ap_syntax::{SourceFile, SyntaxNode};
 use std::io::Write;
 #[derive(Debug)]
+#[allow(dead_code)]// Doesn't throw warning with Debug trait
 enum LineRange {
     Start(usize),
     End(usize),
 }
 #[derive(Debug)]
+#[allow(dead_code)]
 enum Names {
     TypeName(&'static str),
     Name(String),
@@ -22,11 +25,49 @@ enum Names {
 
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct ObjectRange {
     line_range: Vec<LineRange>,
     name: Vec<Names>
     
 }
+
+impl ObjectRange {
+    pub fn object_name(&self) -> Option<String> {
+        for n in &self.name {
+            if let Names::Name(val) = n {
+                return Some(val.to_string());
+            }
+        }
+        None
+    }
+    pub fn object_type(&self) -> Option<String> {
+        for n in &self.name {
+            if let Names::TypeName(val) = n {
+                return Some(val.to_string());
+            }
+        }
+        None
+    }
+    pub fn line_start(&self) -> Option<usize> {
+        for r in &self.line_range {
+            if let LineRange::Start(val) = r {
+                return Some(*val);
+            }
+        }
+        None
+    }
+    pub fn line_end(&self) -> Option<usize> {
+        for r in &self.line_range {
+            if let LineRange::End(val) = r {
+                return Some(*val);
+            }
+        }
+        None
+    }
+}
+
+
 pub fn parse(file_content: String) -> Vec<String> {
     let ast: File = parse_file(&file_content).expect("Unable to parse file");
     let ast: Vec<String> = ast.items.into_iter().filter_map(|item| {
@@ -81,14 +122,16 @@ pub fn transform(ast: &'static str) {
     let _ =write_to_file(tokens.to_string(), "123".to_string());
 }
 
-pub fn frontend_visit_items(items_from: &Path, line_start: &usize, line_end: &usize) {
-    let vectorized = file_to_vector(items_from);
-    let line_start = line_start - 1;
-    let vectors_of_strings = &vectorized[line_start..*line_end].join("\n");
-    println!("{}", &vectors_of_strings);
-    let ast: Item = parse_str::<Item>(vectors_of_strings).expect("Unable to parse string. Does it contain valid Rust code?");
-    let path = Path::new(items_from);
-    visit_items(&[ast], path);
+pub fn frontend_visit_items(item: &ObjectRange) {
+    //let vectorized = file_to_vector(items_from);
+    //let line_start = line_start - 1;
+    //let vectors_of_strings = &vectorized[line_start..*line_end].join("\n");
+    let object = item;
+    let vectors_of_strings = &object.object_type().unwrap(); 
+    println!("{:?}", vectors_of_strings);
+    //let ast: Item = parse_str::<Item>(vectors_of_strings).expect("Unable to parse string. Does it contain valid Rust code?");
+    //let path = Path::new(items_from);
+    //visit_items(&[ast], path);
 }
 pub fn parse_all_rust_items(path: &Path) -> Vec<ObjectRange> { //Depends on visit_items and find_module_file
     let src = fs::read_to_string(path).expect("Could not read file");

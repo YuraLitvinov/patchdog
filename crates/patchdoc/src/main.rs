@@ -2,7 +2,7 @@ use dotenv::dotenv;
 use filesystem_parsing::parse_all_rust_items;
 use std::path::Path;
 //use std::env;
-//use filesystem_parsing::frontend_visit_items;
+use filesystem_parsing::frontend_visit_items;
 use filesystem_parsing::file_to_vector;
 use similar::{ChangeTag, TextDiff};
 
@@ -17,8 +17,10 @@ async fn main() {
    // let line_end = &args[3].parse::<usize>().expect("Not a number");
     //frontend_visit_items(file_path, line_start, line_end);
    let test = parse_all_rust_items(&Path::new("crates/filesystem_parsing/src/lib.rs"));
-   println!("{:?}", test);
-    
+   let test2 = parse_all_rust_items(&Path::new("lib_old.rs"));
+   //println!("TEST: {:?}", &test);
+   //println!("TEST2: {:?}", test2);    
+   let _test3 = frontend_visit_items(&test[0]);
 }
 fn compare(file_to_compare: &Path, file_comparable: &Path) {
     let file_to_compare = file_to_vector(file_to_compare).join("\n");
