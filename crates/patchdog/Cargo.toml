@@ -11,7 +11,6 @@ gemini = { path = "../gemini" }
 syn = { workspace = true }
 dotenv = { workspace = true }
 tokio = { workspace = true }
-similar = "2.7.0"
 snafu = { workspace = true }
 git2 = "0.20.2"
 
