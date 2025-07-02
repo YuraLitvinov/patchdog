@@ -13,3 +13,5 @@ serde_json = { workspace = true }
 ra_ap_line-index = "0.0.17"
 ra_ap_syntax = "0.0.289"
 snafu = { workspace = true }
+auth-git2 = "0.5.8"
+git2 = "0.20.2"

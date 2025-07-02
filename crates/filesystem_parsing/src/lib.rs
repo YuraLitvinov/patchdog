@@ -2,7 +2,8 @@ use snafu::{ResultExt, Whatever};
 use std::fs;
 use std::path::{Path, PathBuf};
 use syn::spanned::Spanned;
-use syn::{Item, parse_file};
+use syn::{ImplItem, Item, parse_file};
+pub mod git_ops;
 #[derive(Debug)]
 enum LineRange {
     Start(usize),
@@ -14,7 +15,8 @@ enum Name {
     Name(String),
 }
 #[derive(Debug)]
-pub struct ObjectRange { //There is an ample interface for interaction with this structure, hence, I believe there is no reason to change it
+pub struct ObjectRange {
+    //There is an ample interface for interaction with this structure, hence, I believe there is no reason to change it
     line_ranges: Vec<LineRange>, // Has to stay, as a lot of functionality is bound to this field
     names: Vec<Name>,
 }
@@ -60,15 +62,10 @@ impl ObjectRange {
     }
 }
 
-pub fn frontend_visit_items(item: &ObjectRange) -> Vec<&ObjectRange> {
-    vec![item]
-}
-
 pub fn parse_all_rust_items(path: &Path) -> Result<Vec<ObjectRange>, Whatever> {
     //Depends on visit_items and find_module_file
     let src = fs::read_to_string(path)
         .with_whatever_context(|_| format!("Failed to read file: {path:?}"));
-    //println!("{:?}", &path);
     let ast_src = match src {
         Ok(src) => src,
         Err(why) => {
@@ -125,18 +122,6 @@ fn visit_items(items: &[Item]) -> Vec<ObjectRange> {
                     ],
                     names: vec![Name::TypeName("mod"), Name::Name(m.ident.to_string())],
                 });
-                /*
-                if let Some((_, items)) = &m.content {
-                    // Inline module
-                    visit_items(items, base_path);
-                } else {
-                    // External module: look for file on disk
-                    let mod_path = find_module_file(base_path, &m.ident.to_string());
-                    if let Some(mod_file) = mod_path {
-                        parse_all_rust_items(&mod_file);
-                    }
-                }
-                */
             }
 
             Item::Use(u) => {
@@ -163,8 +148,70 @@ fn visit_items(items: &[Item]) -> Vec<ObjectRange> {
                 };
                 object_line.push(ObjectRange {
                     line_ranges: vec![LineRange::Start(line_start), LineRange::End(line_end)],
-                    names: vec![Name::TypeName("impl"), Name::Name(trait_name)],
+                    names: vec![Name::TypeName("impl"), Name::Name(trait_name.clone())],
                 });
+                for item in &i.items {
+                    match item {
+                        ImplItem::Fn(f) => {
+                            object_line.push(ObjectRange {
+                                line_ranges: vec![
+                                    LineRange::Start(f.span().start().line),
+                                    LineRange::End(f.span().end().line),
+                                ],
+                                names: vec![
+                                    Name::TypeName("fn"),
+                                    Name::Name(f.sig.ident.to_string()),
+                                ],
+                            });
+                        }
+                        ImplItem::Type(t) => {
+                            object_line.push(ObjectRange {
+                                line_ranges: vec![
+                                    LineRange::Start(t.span().start().line),
+                                    LineRange::End(t.span().end().line),
+                                ],
+                                names: vec![
+                                    Name::TypeName("type"),
+                                    Name::Name(t.ident.to_string()),
+                                ],
+                            });
+                        }
+                        ImplItem::Const(c) => {
+                            object_line.push(ObjectRange {
+                                line_ranges: vec![
+                                    LineRange::Start(c.span().start().line),
+                                    LineRange::End(c.span().end().line),
+                                ],
+                                names: vec![
+                                    Name::TypeName("const"),
+                                    Name::Name(c.ident.to_string()),
+                                ],
+                            });
+                        }
+                        ImplItem::Macro(m) => {
+                            let macro_name = format!("{:?}", m.mac.clone());
+                            let line_start = m.span().start().line;
+                            let line_end = m.span().end().line;
+                            object_line.push(ObjectRange {
+                                line_ranges: vec![
+                                    LineRange::Start(line_start),
+                                    LineRange::End(line_end),
+                                ],
+                                names: vec![Name::TypeName("macro"), Name::Name(macro_name)],
+                            });
+                        }
+                        ImplItem::Verbatim(v) => {
+                            object_line.push(ObjectRange {
+                                line_ranges: vec![
+                                    LineRange::Start(v.span().start().line),
+                                    LineRange::End(v.span().end().line),
+                                ],
+                                names: vec![Name::TypeName("verbatim"), Name::Name(v.to_string())],
+                            });
+                        }
+                        _ => println!("Other impl item"),
+                    };
+                }
             }
             Item::Trait(t) => {
                 let line_start = t.span().start().line;
@@ -199,7 +246,7 @@ fn visit_items(items: &[Item]) -> Vec<ObjectRange> {
                 });
             }
             Item::Macro(m) => {
-                let macro_name = format!("{:?}", m.ident.clone().unwrap());
+                let macro_name = format!("{:?}", m.mac.clone());
                 let line_start = m.span().start().line;
                 let line_end = m.span().end().line;
                 object_line.push(ObjectRange {
@@ -268,7 +315,5 @@ pub fn extract_function(
     let vector_of_file = file_to_vector(from)?;
     let line_start = line_start - 1;
     let f = &vector_of_file[line_start..*line_end].join("\n");
-    //parse_all_rust_items(std::path::Path::new(f));
-    //println!("{}", f);
     Ok(f.to_string())
 }
