@@ -26,7 +26,7 @@ mod tests {
     use super::*;
     #[test]
     fn testing_seeker_for_basic() {
-        let string_of_func = "use filesystem_parsing::{extract_function, ObjectRange};";
+        let string_of_func = "use filesystem_parsing::parse_all_rust_items;";
         let path = Path::new("/home/runner/work/patchdog/patchdog/crates/patchdog/src/lib.rs");
         let receive = receive_context(1, path);
         let formatted_receive = receive.to_string();
@@ -34,7 +34,7 @@ mod tests {
     }
     #[test]
     fn testing_seeker_for_zero() {
-        let string_of_func: &'static str = "Index out of bounds";
+        let string_of_func: &'static str = "Line index 0 is out of bounds";
         let path = Path::new("/home/runner/work/patchdog/patchdog/crates/patchdog/src/lib.rs");
         let receive = receive_context(0, path);
         let formatted_receive = receive.to_string();
@@ -42,7 +42,7 @@ mod tests {
     }
     #[test]
     fn testing_seeker_for_out_of_bounds() {
-        let string_of_func: &'static str = "Index out of bounds";
+        let string_of_func: &'static str = "Line index 10000 is out of bounds";
         let path = Path::new("/home/runner/work/patchdog/patchdog/crates/patchdog/src/lib.rs");
         let receive = receive_context(10000, path);
         let formatted_receive = receive.to_string();

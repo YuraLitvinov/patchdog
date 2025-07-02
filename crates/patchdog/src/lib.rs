@@ -48,7 +48,8 @@ pub fn seeker(line_index: usize, item: ObjectRange, from: &Path) -> String {
     let line_start = item.line_start().unwrap();
     let line_end = item.line_end().unwrap();
     if line_start > line_end {
-        panic!("Line start can't be greater than line end");
+        let err = format!("Line start can't be greater than line end");
+        return err;
     }
     if line_start <= line_index && line_end >= line_index {
         let extracted = match extract_function(from, &line_start, &line_end) {
@@ -60,7 +61,8 @@ pub fn seeker(line_index: usize, item: ObjectRange, from: &Path) -> String {
         };
         return extracted;
     }
-    "Line index out of bounds".to_string()
+    let err = format!("Line index {} is out of bounds", line_index);
+    err
 }
 
 pub fn receive_context(line_from: usize, file_path: &Path) -> String {
@@ -77,5 +79,6 @@ pub fn receive_context(line_from: usize, file_path: &Path) -> String {
         }
         return found;
     }
-    "Unexpected error".to_string()
+    let err = format!("Line index {} is out of bounds", line_from);
+    err
 }
