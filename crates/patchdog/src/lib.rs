@@ -48,7 +48,7 @@ pub fn seeker(line_index: usize, item: ObjectRange, from: &Path) -> String {
     let line_start = item.line_start().unwrap();
     let line_end = item.line_end().unwrap();
     if line_start > line_end {
-        let err = format!("Line start can't be greater than line end");
+        let err = "Line start can't be greater than line end".to_string();
         return err;
     }
     if line_start <= line_index && line_end >= line_index {
