@@ -26,7 +26,7 @@ pub fn seeker(line_index: usize, item: ObjectRange, from: &Path) -> Result<Strin
     extract_function(from, &line_start, &line_end)
         .with_whatever_context(|_| {
             format!(
-                "{} {}",
+                "Unable to read {} from file {}",
                 line_index,
                 from.display()
             )
@@ -43,7 +43,7 @@ pub fn receive_context(line_from: usize, file_path: &Path) -> Result<String, Han
         let found = seeker(line_from, item, file_path)
             .with_whatever_context(|_| {
                 format!(
-                    "{} {}",
+                    "Unable to read {} from file {}",
                     line_from,
                     file_path.display()
                 )
