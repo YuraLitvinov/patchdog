@@ -2,7 +2,7 @@ use snafu::{ResultExt, Whatever};
 use std::fs;
 use std::path::{Path, PathBuf};
 use syn::spanned::Spanned;
-use syn::{ImplItem, Item, parse_file};
+use syn::{Item, parse_file};
 pub mod git_ops;
 #[derive(Debug)]
 enum LineRange {
@@ -66,22 +66,10 @@ pub fn parse_all_rust_items(path: &Path) -> Result<Vec<ObjectRange>, Whatever> {
     //Depends on visit_items and find_module_file
     let src = fs::read_to_string(path)
         .with_whatever_context(|_| format!("Failed to read file: {path:?}"));
-    let ast_src = match src {
-        Ok(src) => src,
-        Err(why) => {
-            eprintln!("{}", why);
-            return Err(why);
-        }
-    };
-    let ast = match parse_file(&ast_src).with_whatever_context(|_| {
+    let ast_src = src?;
+    let ast = parse_file(&ast_src).with_whatever_context(|_| {
         format!("Failed to parse file: {path:?} \n Does it contain Rust code?")
-    }) {
-        Ok(ast) => ast,
-        Err(why) => {
-            eprintln!("{}", why);
-            return Err(why);
-        }
-    };
+    })?;
     Ok(visit_items(&ast.items))
 }
 
@@ -150,68 +138,6 @@ fn visit_items(items: &[Item]) -> Vec<ObjectRange> {
                     line_ranges: vec![LineRange::Start(line_start), LineRange::End(line_end)],
                     names: vec![Name::TypeName("impl"), Name::Name(trait_name.clone())],
                 });
-                for item in &i.items {
-                    match item {
-                        ImplItem::Fn(f) => {
-                            object_line.push(ObjectRange {
-                                line_ranges: vec![
-                                    LineRange::Start(f.span().start().line),
-                                    LineRange::End(f.span().end().line),
-                                ],
-                                names: vec![
-                                    Name::TypeName("fn"),
-                                    Name::Name(f.sig.ident.to_string()),
-                                ],
-                            });
-                        }
-                        ImplItem::Type(t) => {
-                            object_line.push(ObjectRange {
-                                line_ranges: vec![
-                                    LineRange::Start(t.span().start().line),
-                                    LineRange::End(t.span().end().line),
-                                ],
-                                names: vec![
-                                    Name::TypeName("type"),
-                                    Name::Name(t.ident.to_string()),
-                                ],
-                            });
-                        }
-                        ImplItem::Const(c) => {
-                            object_line.push(ObjectRange {
-                                line_ranges: vec![
-                                    LineRange::Start(c.span().start().line),
-                                    LineRange::End(c.span().end().line),
-                                ],
-                                names: vec![
-                                    Name::TypeName("const"),
-                                    Name::Name(c.ident.to_string()),
-                                ],
-                            });
-                        }
-                        ImplItem::Macro(m) => {
-                            let macro_name = format!("{:?}", m.mac.clone());
-                            let line_start = m.span().start().line;
-                            let line_end = m.span().end().line;
-                            object_line.push(ObjectRange {
-                                line_ranges: vec![
-                                    LineRange::Start(line_start),
-                                    LineRange::End(line_end),
-                                ],
-                                names: vec![Name::TypeName("macro"), Name::Name(macro_name)],
-                            });
-                        }
-                        ImplItem::Verbatim(v) => {
-                            object_line.push(ObjectRange {
-                                line_ranges: vec![
-                                    LineRange::Start(v.span().start().line),
-                                    LineRange::End(v.span().end().line),
-                                ],
-                                names: vec![Name::TypeName("verbatim"), Name::Name(v.to_string())],
-                            });
-                        }
-                        _ => println!("Other impl item"),
-                    };
-                }
             }
             Item::Trait(t) => {
                 let line_start = t.span().start().line;

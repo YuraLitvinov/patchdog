@@ -17,7 +17,7 @@ async fn main() {
     };
     println!("{}", line_from);
     let receive = receive_context(line_from, file_path);
-    let formatted_receive = receive.to_string();
+    let formatted_receive = receive.unwrap();
     println!("{}", formatted_receive);
 }
 
@@ -29,7 +29,7 @@ mod tests {
         let string_of_func = "use filesystem_parsing::parse_all_rust_items;";
         let path = Path::new("/home/runner/work/patchdog/patchdog/crates/patchdog/src/lib.rs");
         let receive = receive_context(1, path);
-        let formatted_receive = receive.to_string();
+        let formatted_receive = receive.unwrap();
         assert_eq!(formatted_receive, string_of_func);
     }
     #[test]
@@ -37,7 +37,7 @@ mod tests {
         let string_of_func: &'static str = "Line index 0 is out of bounds";
         let path = Path::new("/home/runner/work/patchdog/patchdog/crates/patchdog/src/lib.rs");
         let receive = receive_context(0, path);
-        let formatted_receive = receive.to_string();
+        let formatted_receive = receive.unwrap();
         assert_eq!(formatted_receive, string_of_func);
     }
     #[test]
@@ -45,7 +45,7 @@ mod tests {
         let string_of_func: &'static str = "Line index 10000 is out of bounds";
         let path = Path::new("/home/runner/work/patchdog/patchdog/crates/patchdog/src/lib.rs");
         let receive = receive_context(10000, path);
-        let formatted_receive = receive.to_string();
+        let formatted_receive = receive.unwrap();
         assert_eq!(formatted_receive, string_of_func);
     }
 }

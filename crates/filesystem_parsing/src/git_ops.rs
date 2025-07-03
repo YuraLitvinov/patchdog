@@ -1,12 +1,5 @@
-use git2::{Cred, FetchOptions, RemoteCallbacks, Repository};
+use git2::{Cred, FetchOptions, RemoteCallbacks};
 //, Commit, ObjectType, DiffFormat, Oid};
-
-pub fn open_repo(path: &str) -> Repository {
-    match Repository::open(path) {
-        Ok(repo) => repo,
-        Err(e) => panic!("failed to open: {}", e),
-    }
-}
 
 pub fn clone_repo(url: &str) -> Result<(), Box<dyn std::error::Error>> {
     let mut callbacks = RemoteCallbacks::new();
