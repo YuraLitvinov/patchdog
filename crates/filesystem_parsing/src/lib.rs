@@ -1,20 +1,47 @@
-use snafu::{ResultExt, Whatever};
+use snafu::ResultExt;
+use snafu::Snafu;
 use std::fs;
 use std::path::{Path, PathBuf};
 use syn::spanned::Spanned;
 use syn::{Item, parse_file};
 pub mod git_ops;
+
+#[derive(Debug, Snafu)]
+#[snafu(visibility(pub))]
+pub enum ErrorHandling {
+    #[snafu(display("Unable to read {line_index} from file {file_name}"))]
+    BadFile {
+        line_index: usize,
+        file_name: String,
+    },
+    InvalidLineRange {
+        line_start: usize,
+        line_end: usize,
+    },
+    ErrorParsingFile {
+        in_line: usize,
+        from: String,
+    },
+
+    LineOutOfBounds {
+        line_index: usize,
+    },
+    InvalidIoOperations {
+        source: std::io::Error,
+    },
+    InvalidSynParsing {
+        source: syn::Error,
+    },
+}
 #[derive(Debug)]
-enum LineRange {
+pub enum LineRange {
     Start(usize),
     End(usize),
 }
-#[derive(Debug)]
-enum Name {
+pub enum Name {
     TypeName(&'static str),
     Name(String),
 }
-#[derive(Debug)]
 pub struct ObjectRange {
     //There is an ample interface for interaction with this structure, hence, I believe there is no reason to change it
     line_ranges: Vec<LineRange>, // Has to stay, as a lot of functionality is bound to this field
@@ -62,14 +89,10 @@ impl ObjectRange {
     }
 }
 
-pub fn parse_all_rust_items(path: &Path) -> Result<Vec<ObjectRange>, Whatever> {
+pub fn parse_all_rust_items(path: &Path) -> Result<Vec<ObjectRange>, ErrorHandling> {
     //Depends on visit_items and find_module_file
-    let src = fs::read_to_string(path)
-        .with_whatever_context(|_| format!("Failed to read file: {path:?}"));
-    let ast_src = src?;
-    let ast = parse_file(&ast_src).with_whatever_context(|_| {
-        format!("Failed to parse file: {path:?} \n Does it contain Rust code?")
-    })?;
+    let src = fs::read_to_string(path).context(InvalidIoOperationsSnafu)?;
+    let ast = parse_file(&src).context(InvalidSynParsingSnafu)?;
     Ok(visit_items(&ast.items))
 }
 
@@ -207,7 +230,10 @@ fn visit_items(items: &[Item]) -> Vec<ObjectRange> {
     object_line
 }
 
-pub fn find_module_file(base_path: &Path, mod_name: &str) -> Result<Option<PathBuf>, Whatever> {
+pub fn find_module_file(
+    base_path: &Path,
+    mod_name: &str,
+) -> Result<Option<PathBuf>, ErrorHandling> {
     let paths = [
         base_path.join(format!("{}.rs", mod_name)), // mod.rs style
         base_path.join(mod_name).join("mod.rs"),    // mod.rs in subdirectory
@@ -222,22 +248,23 @@ pub fn find_module_file(base_path: &Path, mod_name: &str) -> Result<Option<PathB
     Ok(None)
 }
 
-pub fn file_to_vector(file: &Path) -> Result<Vec<String>, Whatever> {
+pub fn file_to_vector(file: &Path) -> Result<Vec<String>, ErrorHandling> {
     //Simplified version, using the standard library; functions virtually the same
     let code = fs::read_to_string(file)
-        .with_whatever_context(|_| format!("Failed to read file: {file:?}"));
-    let collected_vector = match code {
-        Ok(code) => Ok(code.lines().map(|line| line.to_string()).collect()),
-        Err(why) => Err(why),
-    };
-    collected_vector
+        .map(|code| {
+            code.lines()
+                .map(|line| line.into())
+                .collect::<Vec<String>>()
+        })
+        .context(InvalidIoOperationsSnafu);
+    code
 }
 
 pub fn extract_function(
     from: &Path,
     line_start: &usize,
     line_end: &usize,
-) -> Result<String, Whatever> {
+) -> Result<String, ErrorHandling> {
     let vector_of_file = file_to_vector(from)?;
     let line_start = line_start - 1;
     let f = &vector_of_file[line_start..*line_end].join("\n");

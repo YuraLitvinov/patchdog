@@ -21,4 +21,3 @@ async fn main() {
     let formatted_receive = receive.unwrap();
     println!("{}", formatted_receive);
 }
-
