@@ -13,7 +13,7 @@ mod tests {
         let formatted_receive = receive.unwrap();
         assert_eq!(formatted_receive, string_of_func);
     }
-     
+
     #[test]
     fn testing_seeker_for_zero() {
         let string_of_func: &'static str = "LineOutOfBounds";
@@ -57,7 +57,7 @@ mod tests {
         let formatted_receive = receive.unwrap();
         assert_eq!(formatted_receive, string_of_func);
     }
-    
+
     #[test]
     fn find_function() {
         let string_of_func = "fn bookshop(
