@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod tests {
-    const TEST_PATH: &str = "/home/runner/work/patchdog/patchdog/tests/data.rs";
+    //const TEST_PATH: &'static str = "/home/runner/work/patchdog/patchdog/tests/data.rs";
+    const TEST_PATH: &'static str = "/home/yurii-sama/Desktop/patchdog/tests/data.rs";
     use crate::receive_context;
     use std::path::Path;
     #[test]
@@ -32,7 +33,7 @@ mod tests {
     }
     #[test]
     fn find_impl() {
-        let string_of_func = "impl Item {
+        let string_of_func = r#"impl Item {
     fn new(
         name: &str,
         item_type: ItemType,
@@ -51,7 +52,7 @@ mod tests {
     ) {
         self.status = Status::Inactive;
     }
-}";
+}"#;
         let path = Path::new(TEST_PATH);
         let receive = receive_context(43, path);
         let formatted_receive = receive.unwrap();
@@ -60,7 +61,7 @@ mod tests {
 
     #[test]
     fn find_function() {
-        let string_of_func = "fn bookshop(
+        let string_of_func = r#"fn bookshop(
     name: &str,
     item_type: ItemType,
     price: f32,
@@ -71,7 +72,7 @@ mod tests {
         price,
         status: Status::Active,
     }
-}";
+}"#;
         let path = Path::new(TEST_PATH);
         let receive = receive_context(166, path);
         let formatted_receive = receive.unwrap();
