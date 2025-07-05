@@ -5,8 +5,9 @@ mod tests {
     use rust_parsing::{extract_by_line, file_to_vector, parse_all_rust_items, string_to_vector};
     use std::fs;
     use std::path::Path;
+    const _GIT_PATH: &str = "/home/runner/work/patchdog/patchdog/";
     const PATH: &str = "/home/runner/work/patchdog/patchdog/tests/data.rs";
-    const PATH_TO_GEMINI: &str = "/home/runner/patchdog/patchdog/crates/gemini/src/lib.rs";
+    const PATH_TO_GEMINI: &str = "/home/runner/work/patchdog/patchdog/crates/gemini/src/lib.rs";
     const IMPL_GEMINI: &str = r#"impl GoogleGemini {
     pub async fn req_res(file_content: String) -> Result<String, Box<dyn Err>> {
         let api_key = std::env::var("API_KEY_GEMINI")?;
