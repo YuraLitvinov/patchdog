@@ -1,23 +1,17 @@
-use dotenv::dotenv;
-use patchdog::receive_context;
-use std::env;
+/*
+use filesystem_parsing::parse_all_rust_items;
+use filesystem_parsing::InvalidIoOperationsSnafu;
+use anyhow::Context;
+use std::fs;
 use std::path::Path;
+*/
+use git_parsing::git_get;
+
 pub mod tests;
+//const PATH: &str  = "/home/yurii-sama/Desktop/patchdog/crates/filesystem_parsing/src/lib.rs";
+
 #[tokio::main]
 
 async fn main() {
-    dotenv().ok();
-    let args: Vec<String> = env::args().collect();
-    let file_path = Path::new(&args[2]);
-    let line_from = match args[1].parse::<usize>() {
-        Ok(line_from) => line_from,
-        Err(why) => {
-            eprintln!("{}", why);
-            return;
-        }
-    };
-    println!("{}", line_from);
-    let receive = receive_context(line_from, file_path);
-    let formatted_receive = receive.unwrap();
-    println!("{}", formatted_receive);
+    let _ = git_get();
 }

@@ -5,8 +5,9 @@ default-members = ["crates/patchdog"]
 members = [
     "crates/gemini",
     "crates/chatgpt",
-    "crates/filesystem_parsing",
-    "crates/patchdog"
+    "crates/rust_parsing",
+    "crates/patchdog",
+    "crates/git_parsing"
 ]
 
 [workspace.dependencies]

@@ -1,179 +1,70 @@
-use std::collections::{HashMap,
-    HashSet,
-    VecDeque};
-use std::fmt;
+// Regular private function
+fn regular_function() {}
 
-// === Enums ===
-#[derive(Debug)]
-enum Status {
-    Active,
-    Inactive,
-    Unknown,
+// Public function
+pub fn public_function() {}
+
+// Function with return type
+fn function_with_return() -> i32 {
+    0
 }
 
-#[derive(Debug)]
-enum ItemType {
-    Book,
-    Gadget,
-    Clothing,
+// Function with parameters
+fn function_with_params(a: i32, b: &str) {}
+
+// Generic function
+fn generic_function<T>(value: T) {}
+
+// Function with lifetimes
+fn lifetime_function<'a>(input: &'a str) -> &'a str {
+    input
 }
 
-// === Structs ===
-#[derive(Debug)]
-struct Item {
-    name: String,
-    item_type: ItemType,
-    price: f32,
-    status: Status,
+// Const function
+const fn const_function(x: i32) -> i32 {
+    x
 }
 
-#[derive(Debug)]
-struct Shelf {
-    label: String,
-    items: Vec<Item>,
+// Async function
+async fn async_function() {}
+
+// Unsafe function
+unsafe fn unsafe_function() {}
+
+// Extern function declaration (FFI)
+extern "C" fn extern_c_function() {}
+
+// Function returning a Result
+fn result_function() -> Result<(), String> {
+    Ok(())
 }
 
-#[derive(Debug)]
-struct Warehouse {
-    shelves: HashMap<String, Shelf>,
-}
+// Method in impl
+struct MyStruct;
 
+impl MyStruct {
+    fn method(&self) {}
 
-// === Implementations ===
-impl Item {
-    fn new(
-        name: &str,
-        item_type: ItemType,
-        price: f32,
-    ) -> Self {
-        Self {
-            name: name.to_string(),
-            item_type,
-            price,
-            status: Status::Active,
-        }
+    pub fn public_method(&self) {}
+
+    fn static_method() {}
+
+    fn method_with_lifetime<'a>(&'a self, input: &'a str) -> &'a str {
+        input
     }
 
-    fn deactivate(
-        &mut self
-    ) {
-        self.status = Status::Inactive;
-    }
+    fn method_with_generic<T>(&self, value: T) {}
 }
 
-impl Shelf {
-    fn new(
-        label: &str
-    ) -> Self {
-        Self {
-            label: label.to_string(),
-            items: Vec::new(),
-        }
-    }
+// Trait with functions
+trait MyTrait {
+    fn required_function(&self);
 
-    fn add_item(
-        &mut self,
-        item: Item,
-    ) {
-        self.items.push(item);
-    }
-
-    fn list_active_items(
-        &self
-    ) {
-        println!("Items on shelf '{}':", self.label);
-        for item in &self.items {
-            if let Status::Active = item.status {
-                println!(
-                    " - {} ({:?}): ${}",
-                    item.name, item.item_type, item.price
-                );
-            }
-        }
+    fn default_function(&self) {
+        // Default implementation
     }
 }
 
-impl Warehouse {
-    fn new() -> Self {
-        Self {
-            shelves: HashMap::new(),
-        }
-    }
-
-    fn add_shelf(
-        &mut self,
-        shelf: Shelf,
-    ) {
-        self.shelves.insert(shelf.label.clone(), shelf);
-    }
-
-    fn list_all_items(
-        &self
-    ) {
-        for (label, shelf) in &self.shelves {
-            println!("\nShelf: {}", label);
-            shelf.list_active_items();
-        }
-    }
-}
-
-// === Sample function with 3+ objects ("shelf-like" grouping) ===
-fn setup_warehouse() -> Warehouse {
-    let mut shelf1 = Shelf::new("A1");
-    shelf1.add_item(Item::new(
-        "Rust Book",
-        ItemType::Book,
-        29.99,
-    ));
-    shelf1.add_item(Item::new(
-        "Bluetooth Speaker",
-        ItemType::Gadget,
-        49.99,
-    ));
-    shelf1.add_item(Item::new(
-        "T-Shirt",
-        ItemType::Clothing,
-        19.99,
-    ));
-
-    let mut shelf2 = Shelf::new("B2");
-    shelf2.add_item(Item::new(
-        "Keyboard",
-        ItemType::Gadget,
-        79.99,
-    ));
-    shelf2.add_item(Item::new(
-        "Novel",
-        ItemType::Book,
-        14.99,
-    ));
-    shelf2.add_item(Item::new(
-        "Jeans",
-        ItemType::Clothing,
-        39.99,
-    ));
-
-    let mut warehouse = Warehouse::new();
-    warehouse.add_shelf(shelf1);
-    warehouse.add_shelf(shelf2);
-
-    warehouse
-}
-fn bookshop(
-    name: &str,
-    item_type: ItemType,
-    price: f32,
-) -> Self {
-    Self {
-        name: name.to_string(),
-        item_type,
-        price,
-        status: Status::Active,
-    }
-}
-
-// === Entry Point ===
-fn main() {
-    let warehouse = setup_warehouse();
-    warehouse.list_all_items();
+impl MyTrait for MyStruct {
+    fn required_function(&self) {}
 }
