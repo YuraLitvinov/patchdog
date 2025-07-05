@@ -1,0 +1,10 @@
+on: push 
+  jobs: 
+  dump-rust-files:
+  runs-on: ubuntu-latest
+
+  steps:
+  - name: Remove old
+    uses: actions/checkout@v3
+  - name: Runs command
+    run: find . -type f -name "*.rsDOC" -delete

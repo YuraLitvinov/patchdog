@@ -1,0 +1,32 @@
+on: [push]
+jobs:
+  dump-rust-files:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install jq
+        run: sudo apt-get install -y jq
+
+      - name: Dump .rs files with content to JSON
+        run: |
+          echo "[" > project_files.json
+          FIRST=1
+          while IFS= read -r file; do
+            # Add comma between objects if not first
+            if [ $FIRST -eq 0 ]; then
+              echo "," >> project_files.json
+            fi
+
+            echo "\"$file\"" >> project_files.json
+            FIRST=0
+          done < <(find . -type f -name "*.rs" | sort)
+          echo "]" >> project_files.json
+
+      - name: Upload JSON
+        uses: actions/upload-artifact@v4
+        with:
+          name: project_files
+          path: project_files.json
