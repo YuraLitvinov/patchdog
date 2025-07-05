@@ -47,9 +47,7 @@ mod tests {
                 .context(format!("{:?}", InvalidIoOperationsSnafu))
                 .unwrap();
         let vector_from_string = string_to_vector(function_from_file);
-        let vector_from_file = file_to_vector(Path::new(
-            "/home/yurii-sama/Desktop/patchdog/crates/gemini/src/lib.rs",
-        ))
+        let vector_from_file = file_to_vector(Path::new(PATH_TO_GEMINI))
         .context(format!("{:?}", InvalidIoOperationsSnafu))
         .unwrap();
         assert_eq!(vector_from_file, vector_from_string);
