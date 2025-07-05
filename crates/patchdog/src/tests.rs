@@ -1,7 +1,8 @@
 #[cfg(test)]
 mod tests {
 
-    const PATH: &'static str = "/home/runner/work/patchdog/patchdog/tests/data.rs";
+    const PATH: &str = "/home/runner/work/patchdog/patchdog/tests/data.rs";
+    const PATH_TO_GEMINI: &str = "/home/runner/work/patchdog/crates/gemini/src/lib.rs";
     use anyhow::Context;
     use rust_parsing::{InvalidIoOperationsSnafu, InvalidSynParsingSnafu};
     use rust_parsing::{extract_by_line, file_to_vector, parse_all_rust_items, string_to_vector};
@@ -28,7 +29,7 @@ mod tests {
         let end: usize = 23;
         //Actually an impl block; doesn't affect the result
         let function_from_file =
-            fs::read_to_string("/home/yurii-sama/Desktop/patchdog/crates/gemini/src/lib.rs")
+            fs::read_to_string(PATH_TO_GEMINI)
                 .context(format!("{:?}", InvalidIoOperationsSnafu))
                 .unwrap();
         let vector_of_file = string_to_vector(function_from_file);
@@ -43,7 +44,7 @@ mod tests {
     fn test_string_vs_file() {
         //Actually an impl block; doesn't affect the result
         let function_from_file =
-            fs::read_to_string("/home/yurii-sama/Desktop/patchdog/crates/gemini/src/lib.rs")
+            fs::read_to_string(PATH_TO_GEMINI)
                 .context(format!("{:?}", InvalidIoOperationsSnafu))
                 .unwrap();
         let vector_from_string = string_to_vector(function_from_file);
@@ -59,9 +60,7 @@ mod tests {
     #[test]
     fn test_file_to_vector() {
         //file_to_vectors splits a file into a string of vectors line by line
-        let vectored_file = file_to_vector(Path::new(
-            "/home/yurii-sama/Desktop/patchdog/crates/gemini/src/lib.rs",
-        ))
+        let vectored_file = file_to_vector(Path::new(PATH_TO_GEMINI))
         .context(format!("{:?}", InvalidIoOperationsSnafu))
         .unwrap();
         let line_eight_from_vector = &vectored_file[7]; //Count in vec! starts from 0 
