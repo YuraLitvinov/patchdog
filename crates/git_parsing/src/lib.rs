@@ -68,7 +68,11 @@ pub fn git_get() -> Result<(), git2::Error> {
                         line.old_lineno().unwrap_or(0),
                         String::from_utf8_lossy(line.content()).trim_end()
                     ),
-                    ' ' => {} // context line — skip or handle differently
+                    ' ' => println!(
+                        "    Edited line @ {}: {}",
+                        line.old_lineno().unwrap_or(0),
+                        String::from_utf8_lossy(line.content()).trim_end()
+                    ),
                     _ => {}
                 }
             }

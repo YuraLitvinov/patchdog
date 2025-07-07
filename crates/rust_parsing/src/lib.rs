@@ -11,7 +11,7 @@ use snafu::Snafu;
 use snafu::prelude::*;
 use std::path::PathBuf;
 use syn::spanned::Spanned;
-use syn::{Item, parse_file};
+use syn::{Item, parse_str};
 
 #[derive(Debug, Snafu)]
 #[snafu(visibility(pub))]
@@ -100,7 +100,7 @@ impl ObjectRange {
 //Wrapper for visit_items that handles errors and outputs result of visit_items for a file
 pub fn parse_all_rust_items(src: String) -> Result<Vec<ObjectRange>, ErrorHandling> {
     //Depends on visit_items and find_module_file
-    let ast = parse_file(&src).context(InvalidSynParsingSnafu)?; //Actually, parses any string, that would contain valid rust code
+    let ast: syn::File = parse_str(&src).context(InvalidSynParsingSnafu)?; //Actually, parses any string, that would contain valid rust code
     Ok(visit_items(&ast.items))
 }
 //This structure is static. It finds matches within the file that are rust objects.

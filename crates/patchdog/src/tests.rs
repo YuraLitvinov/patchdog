@@ -152,4 +152,28 @@ mod tests {
 
         assert_eq!(EXPECTED_BEHAVIOR, received);
     }
+
+    const _FUNCTION_BLOCK: &str = "// Regular private function
+fn regular_function() {}
+";
+    #[test]
+    fn test_extract_object_preserving_comments() {
+        let path = Path::new(PATH_BASE).join("tests/data.rs");
+        let str_src = fs::read_to_string(path.clone()).unwrap();
+        let source = string_to_vector(str_src.clone());
+        let parsed = parse_all_rust_items(str_src).unwrap();
+        let mut new_previous: Vec<usize> = Vec::new();
+        new_previous.push(1);
+        let mut i = 0;
+        for each in &parsed {
+            let previous_end_line = each.line_end().unwrap() + 1;
+            new_previous.push(previous_end_line);
+            let extracted =
+                extract_by_line(source.clone(), &new_previous[i], &each.line_end().unwrap())
+                    .unwrap();
+            println!("{}", extracted);
+            i = i + 1;
+        }
+        //assert_eq!(FUNCTION_BLOCK, output);
+    }
 }
