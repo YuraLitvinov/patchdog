@@ -1,15 +1,15 @@
-//!Reminder how to use rust_parser:
 //! If you want to see the list of objects in a .rs file you have to call parse_all_rust_items
-//! Most of the operations revolve around it, as it greps all the object types, their and where they are located
+//! Most of the operations revolve around it, as it greps all the object types, their name, line numbers and where they are located
 //! This can be easily used via the interface of ObjectRange, which implements 4 functions that are only useful
 //! for interacting with it. Hence, with this information about objects, they can exclusively pulled out using the
 //! string_to_vec method if you preemptively have taken a list of files that include rust code and have read them into a
 //! string type variable.
+//! Syn crate itself provides functionality to pull out objects from a file, albeit it loses very helpful //comments, so instead
+//! it was chosen as best practice to only get line numbers and from there pull out the whole object.
 use snafu::ResultExt;
 use snafu::Snafu;
 use snafu::prelude::*;
-use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use syn::spanned::Spanned;
 use syn::{Item, parse_file};
 
@@ -31,7 +31,7 @@ pub enum ErrorHandling {
     },
 
     LineOutOfBounds {
-        line_index: usize,
+        line_number: usize,
     },
     InvalidIoOperations {
         source: std::io::Error,
@@ -97,14 +97,13 @@ impl ObjectRange {
         None
     }
 }
-
-pub fn parse_all_rust_items(src: &String) -> Result<Vec<ObjectRange>, ErrorHandling> {
+//Wrapper for visit_items that handles errors and outputs result of visit_items for a file
+pub fn parse_all_rust_items(src: String) -> Result<Vec<ObjectRange>, ErrorHandling> {
     //Depends on visit_items and find_module_file
-    // let src = fs::read_to_string(path).context(InvalidIoOperationsSnafu)?;
-    let ast = parse_file(src).context(InvalidSynParsingSnafu)?;
+    let ast = parse_file(&src).context(InvalidSynParsingSnafu)?; //Actually, parses any string, that would contain valid rust code
     Ok(visit_items(&ast.items))
 }
-
+//This structure is static. It finds matches within the file that are rust objects.
 fn visit_items(items: &[Item]) -> Vec<ObjectRange> {
     let mut object_line: Vec<ObjectRange> = Vec::new();
     for item in items {
@@ -238,17 +237,16 @@ fn visit_items(items: &[Item]) -> Vec<ObjectRange> {
     }
     object_line
 }
-
+//Roams through lib.rs file seeking for mod objects that are indicators for files within the same folder as i.e. lib.rs
+//Is used to recursively parse all objects in said file
 pub fn find_module_file(
-    base_path: &Path,
-    mod_name: &str,
+    base_path: PathBuf,
+    mod_name: String,
 ) -> Result<Option<PathBuf>, ErrorHandling> {
-    let paths = [
-        base_path.join(format!("{}.rs", mod_name)), // mod.rs style
-        base_path.join(mod_name).join("mod.rs"),    // mod.rs in subdirectory
-    ];
-
-    for path in &paths {
+    let mut path = base_path;
+    path.pop();
+    let paths = [path.join(format!("{}.rs", mod_name))];
+    for path in paths {
         if path.exists() {
             return Ok(Some(path.to_path_buf()));
         }
@@ -256,43 +254,46 @@ pub fn find_module_file(
 
     Ok(None)
 }
-
-pub fn file_to_vector(file: &Path) -> Result<Vec<String>, ErrorHandling> {
-    //Simplified version, using the standard library; functions virtually the same
-    let code = fs::read_to_string(file);
-    code.map(|code| {
-        code.lines()
-            .map(|line| line.into())
-            .collect::<Vec<String>>()
-    })
-    .context(InvalidIoOperationsSnafu)
-}
+//Splits the string that is usually parsed from fs::read_to_string
+//split_inclusive method is necessary for preserving newline indentation.
 pub fn string_to_vector(str_source: String) -> Vec<String> {
-    str_source.lines().map(|line| line.to_string()).collect()
+    str_source
+        .split_inclusive('\n')
+        .map(|line| line.to_string())
+        .collect()
 }
-
-pub fn receive_context(line_from: usize, str_source: Vec<String>) -> Result<String, ErrorHandling> {
-    //let src_path = fs::read_to_string(file_path).context(InvalidIoOperationsSnafu)?;
-    let visited = parse_all_rust_items(&str_source.join(""));
-    let visited = match visited {
-        Ok(visited) => visited,
-        Err(_) => {
-            return Err(ErrorHandling::ErrorParsingFile {
-                in_line: line_from,
-                from: str_source.join(""),
-            });
-        }
-    };
+//Main entry for seeker and extract_by_line, roams through Vec<ObjectRange> seeking for the object that fits
+//the requested line number. If it finds no match, then LineOutOfBounds error is thrown
+pub fn receive_context(
+    from_line_number: usize,
+    visited: Vec<ObjectRange>,
+    src: Vec<String>,
+) -> Result<String, ErrorHandling> {
     for item in visited {
-        let found = seeker(line_from, item, str_source.clone());
+        let found = seeker(from_line_number, item, src.clone());
         if found.is_err() {
             continue;
         }
         return found;
     }
     Err(ErrorHandling::LineOutOfBounds {
-        line_index: line_from,
+        line_number: from_line_number,
     })
+}
+//Finds an object, justifying whether the said line number belongs to the range of the object.
+//If it does, then object is printed with extract_by_line
+pub fn seeker(
+    line_number: usize,
+    item: ObjectRange,
+    src: Vec<String>,
+) -> Result<String, ErrorHandling> {
+    let line_start = item.line_start().unwrap();
+    let line_end = item.line_end().unwrap();
+    ensure!(
+        line_start <= line_number && line_end >= line_number,
+        LineOutOfBoundsSnafu { line_number }
+    );
+    extract_by_line(src, &line_start, &line_end)
 }
 //Extracts a snippet from a file in regard to the snippet boundaries
 pub fn extract_by_line(
@@ -300,24 +301,8 @@ pub fn extract_by_line(
     line_start: &usize,
     line_end: &usize,
 ) -> Result<String, ErrorHandling> {
-    //let vector_of_file = file_to_vector(from)?;
     let line_start = line_start - 1;
+
     let f = &from[line_start..*line_end];
     Ok(f.join(""))
-}
-
-//TESTS FOR SEEKER;
-//line_number not line_index
-fn seeker(
-    line_index: usize,
-    item: ObjectRange,
-    str_source: Vec<String>,
-) -> Result<String, ErrorHandling> {
-    let line_start = item.line_start().unwrap();
-    let line_end = item.line_end().unwrap();
-    ensure!(
-        line_start <= line_index && line_end >= line_index,
-        LineOutOfBoundsSnafu { line_index }
-    );
-    extract_by_line(str_source, &line_start, &line_end)
 }
