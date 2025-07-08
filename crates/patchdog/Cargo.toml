@@ -12,7 +12,5 @@ syn = { workspace = true }
 dotenv = { workspace = true }
 tokio = { workspace = true }
 snafu = { workspace = true }
-anyhow = "1.0.98"
 tracing = "0.1.41"
-rustc_lexer = "0.1.0"
 

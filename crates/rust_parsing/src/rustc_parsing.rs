@@ -1,5 +1,4 @@
 use std::fs;
-
 use rustc_lexer::TokenKind;
 use rustc_lexer::tokenize;
 

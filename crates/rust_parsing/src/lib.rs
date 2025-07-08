@@ -40,6 +40,7 @@ pub enum ErrorHandling {
     InvalidSynParsing {
         source: syn::Error,
     },
+
 }
 #[derive(Debug)]
 pub enum LineRange {
@@ -295,7 +296,7 @@ pub fn seeker(
         line_start <= line_number && line_end >= line_number,
         LineOutOfBoundsSnafu { line_number }
     );
-    extract_by_line(src, &line_start, &line_end)
+    Ok(extract_by_line(src, &line_start, &line_end))
 }
 fn seeker_for_comments(
     line_number: usize,
@@ -307,18 +308,17 @@ fn seeker_for_comments(
         line_start <= line_number && line_end >= line_number,
         LineOutOfBoundsSnafu { line_number }
     );
-    extract_by_line(src, &line_start, &line_end)
+    Ok(extract_by_line(src, &line_start, &line_end))
 }
 //Extracts a snippet from a file in regard to the snippet boundaries
 pub fn extract_by_line(
     from: Vec<String>,
     line_start: &usize,
     line_end: &usize,
-) -> Result<String, ErrorHandling> {
+) -> String {
     let line_start = line_start - 1;
 
-    let f = &from[line_start..*line_end];
-    Ok(f.join(""))
+    from[line_start..*line_end].join("")
 }
 pub fn extract_object_preserving_comments(
     src: Vec<String>,
@@ -351,8 +351,7 @@ pub fn extract_object_preserving_comments(
             &each
                 .line_end()
                 .expect("Failed to unwrap ObjectRange for line end"),
-        )
-        .expect("Failed to extract object by line");
+        );
         return Ok(extracted);
     }
     Err(ErrorHandling::LineOutOfBounds { line_number: 0 })

@@ -1,15 +1,12 @@
 #[cfg(test)]
 mod tests {
-    use anyhow::Context;
-    use rust_parsing::rustc_parsing::comment_lexer;
-    use rust_parsing::{InvalidIoOperationsSnafu, InvalidSynParsingSnafu, find_module_file};
     use rust_parsing::{
         export_object, extract_by_line, extract_object_preserving_comments, parse_all_rust_items,
-        string_to_vector,
+        string_to_vector, InvalidIoOperationsSnafu, find_module_file, rustc_parsing::comment_lexer
     };
+    use snafu::ResultExt;
     use git_parsing::git_get;
-    use std::fs;
-    use std::path::Path;
+    use std::{fs, path::Path};
     const PATH_BASE: &str = "../../tests/data.rs";
     const PATH_GEMINI: &str = "../../crates/gemini/src/lib.rs";
     const IMPL_GEMINI: &str = r#"impl GoogleGemini {
@@ -32,12 +29,9 @@ mod tests {
         let end: usize = 23;
         //Actually an impl block; doesn't affect the result
         let function_from_file = fs::read_to_string(PATH_GEMINI)
-            .context(format!("{:?}", InvalidIoOperationsSnafu))
             .expect("File read failed");
         let vector_of_file = string_to_vector(function_from_file);
-        let extracted_object = extract_by_line(vector_of_file, &start, &end)
-            .context(format!("{:?}", InvalidIoOperationsSnafu))
-            .expect("Extracting string by line failed");
+        let extracted_object = extract_by_line(vector_of_file, &start, &end);
         let object_from_const = format!("{}", IMPL_GEMINI);
         assert_ne!(object_from_const, extracted_object);
     }
@@ -47,7 +41,7 @@ mod tests {
         //file_to_vectors splits a file into a string of vectors line by line
         let path = Path::new(PATH_BASE);
         let source = fs::read_to_string(&path)
-            .context(format!("{:?}", InvalidIoOperationsSnafu))
+            .context(InvalidIoOperationsSnafu)
             .expect("File read failed");
         let vectored_file = string_to_vector(source);
         let line_eight_from_vector = &vectored_file[7]; //Count in vec! starts from 0 
@@ -56,10 +50,9 @@ mod tests {
     #[test]
     fn test_parse() {
         let source = fs::read_to_string(PATH_BASE)
-            .context(format!("{:?}", InvalidIoOperationsSnafu))
+            .context(InvalidIoOperationsSnafu)
             .expect("File read failed");
         let parsed = parse_all_rust_items(source)
-            .context(format!("{:?}", InvalidSynParsingSnafu))
             .expect("Parsing failed");
         for object in parsed {
             let obj_type = object
@@ -75,7 +68,7 @@ mod tests {
     #[test]
     fn find_all_fn() {
         let source = fs::read_to_string(PATH_BASE)
-            .context(format!("{:?}", InvalidIoOperationsSnafu))
+            .context(InvalidIoOperationsSnafu)
             .expect("Failed to read file");
         let parsed = parse_all_rust_items(source).expect("Failed to parse");
         for object in parsed {
@@ -90,13 +83,13 @@ mod tests {
     }
     #[test]
     fn test_find_module_files() {
-        let expected_behavior: &str = r#"Some("/home/runner/work/patchdog/patchdog/tests/test_lib.rs")
-        Some("/home/runner/work/patchdog/patchdog/tests/data.rs")"#;
-        let path = Path::new(PATH_BASE);
+        let expected_behavior: &str = "../../tests/test_lib.rs\n../../tests/data.rs";
+        let path = Path::new("../../tests/lib.rs");
         let source = fs::read_to_string(&path)
-            .context(format!("{:?}", InvalidIoOperationsSnafu))
+            .context(InvalidIoOperationsSnafu)
             .expect("Failed to read file");
         let parsed = parse_all_rust_items(source).expect("Failed to parse");
+        let mut obj_vector: Vec<String> = Vec::new();
         for object in parsed {
             let obj_type = object
                 .object_type()
@@ -106,13 +99,12 @@ mod tests {
                 .expect("Unwrapping ObjectRange to name failed");
             if obj_type == "mod".to_string() {
                 let module_location = find_module_file(path.to_path_buf(), obj_name.clone())
-                    .context(format!("{:?}", InvalidIoOperationsSnafu))
                     .expect("Couldn't find mod file");
-                println!("{:?}", module_location);
+                obj_vector.push(module_location.unwrap().to_string_lossy().to_string());
             }
         }
 
-        assert_eq!(expected_behavior, "");
+        assert_eq!(expected_behavior, obj_vector.join("\n"));
     }
     #[test]
     fn test_receive_context_on_zero() {
@@ -161,7 +153,14 @@ mod tests {
         assert_ne!(EXPECTED_BEHAVIOR, received);
     }
 
-    const FUNCTION_BLOCK: &str = "\n// Method in impl\nstruct MyStruct;\n";
+    const FUNCTION_BLOCK: &str = r#"// Trait with functions
+trait MyTrait {
+    fn required_function(&self);
+
+    fn default_function(&self) {
+        // Default implementation
+    }
+}"#;
     #[test]
     #[tracing::instrument(level = "debug")]
     fn test_extract_object_preserving_comments() {
@@ -171,10 +170,8 @@ mod tests {
         let from_where = 62;
         let parsed = parse_all_rust_items(src).expect("Parse failed");
         let check = extract_object_preserving_comments(source, from_where, parsed).expect("Check?");
-        //println!("{}", check);
         assert_eq!(check, FUNCTION_BLOCK);
     }
-
     #[test]
     fn test_lexer() {
         //block is of 94 symbols length
