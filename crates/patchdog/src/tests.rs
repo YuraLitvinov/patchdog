@@ -1,8 +1,13 @@
 #[cfg(test)]
 mod tests {
     use anyhow::Context;
+    use rust_parsing::rustc_parsing::comment_lexer;
     use rust_parsing::{InvalidIoOperationsSnafu, InvalidSynParsingSnafu, find_module_file};
-    use rust_parsing::{export_object, extract_by_line, parse_all_rust_items, string_to_vector};
+    use rust_parsing::{
+        export_object, extract_by_line, extract_object_preserving_comments, parse_all_rust_items,
+        string_to_vector,
+    };
+    use git_parsing::git_get;
     use std::fs;
     use std::path::Path;
     const PATH_BASE: &str = "../../tests/data.rs";
@@ -26,10 +31,9 @@ mod tests {
         let start: usize = 10;
         let end: usize = 23;
         //Actually an impl block; doesn't affect the result
-        let function_from_file =
-            fs::read_to_string(PATH_GEMINI)
-                .context(format!("{:?}", InvalidIoOperationsSnafu))
-                .expect("File read failed");
+        let function_from_file = fs::read_to_string(PATH_GEMINI)
+            .context(format!("{:?}", InvalidIoOperationsSnafu))
+            .expect("File read failed");
         let vector_of_file = string_to_vector(function_from_file);
         let extracted_object = extract_by_line(vector_of_file, &start, &end)
             .context(format!("{:?}", InvalidIoOperationsSnafu))
@@ -157,36 +161,34 @@ mod tests {
         assert_ne!(EXPECTED_BEHAVIOR, received);
     }
 
-    const FUNCTION_BLOCK: &str = "// Regular private function
-fn regular_function() {}
-";
+    const FUNCTION_BLOCK: &str = "\n// Method in impl\nstruct MyStruct;\n";
     #[test]
     #[tracing::instrument(level = "debug")]
     fn test_extract_object_preserving_comments() {
-        let str_src = fs::read_to_string(PATH_BASE).expect("Failed to read file");
-        let source = string_to_vector(str_src.clone());
-        let parsed = parse_all_rust_items(str_src).expect("Failed to parse");
-        let mut new_previous: Vec<usize> = Vec::new();
-        new_previous.push(1);
+        let path_src = "../../tests/data.rs";
+        let src = fs::read_to_string(path_src).unwrap();
+        let source = string_to_vector(src.clone());
+        let from_where = 62;
+        let parsed = parse_all_rust_items(src).expect("Parse failed");
+        let check = extract_object_preserving_comments(source, from_where, parsed).expect("Check?");
+        //println!("{}", check);
+        assert_eq!(check, FUNCTION_BLOCK);
+    }
+
+    #[test]
+    fn test_lexer() {
+        //block is of 94 symbols length
+        let block = "//! If you want to see the list of objects in a .rs file you have to call parse_all_rust_items";
+        let _ = comment_lexer("../../crates/rust_parsing/src/lib.rs");
         let mut i = 0;
-        for each in &parsed {
-            let previous_end_line = each
-                .line_end()
-                .expect("Failed to unwrap ObjectRange for line end")
-                + 1;
-            new_previous.push(previous_end_line);
-            let extracted = extract_by_line(
-                source.clone(),
-                &new_previous[i],
-                &each
-                    .line_end()
-                    .expect("Failed to unwrap ObjectRange for line end"),
-            )
-            .expect("Failed to extract object by line");
-            println!("{}", extracted);
+        for _each in block.chars() {
             i = i + 1;
         }
+        assert_eq!(i, 94);
+    }
 
-        assert_eq!(FUNCTION_BLOCK, "");
+    #[test]
+    fn test_git_get() {
+        let _ = git_get("../../tests/data.rs");
     }
 }

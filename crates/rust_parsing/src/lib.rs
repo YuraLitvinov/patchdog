@@ -12,6 +12,7 @@ use snafu::prelude::*;
 use std::path::PathBuf;
 use syn::spanned::Spanned;
 use syn::{Item, parse_str};
+pub mod rustc_parsing;
 
 #[derive(Debug, Snafu)]
 #[snafu(visibility(pub))]
@@ -97,6 +98,7 @@ impl ObjectRange {
         None
     }
 }
+
 //Wrapper for visit_items that handles errors and outputs result of visit_items for a file
 pub fn parse_all_rust_items(src: String) -> Result<Vec<ObjectRange>, ErrorHandling> {
     //Depends on visit_items and find_module_file
@@ -270,7 +272,7 @@ pub fn export_object(
     src: Vec<String>,
 ) -> Result<String, ErrorHandling> {
     for item in visited {
-        let found = seeker(from_line_number, item, src.clone());
+        let found = seeker(from_line_number, &item, src.clone());
         if found.is_err() {
             continue;
         }
@@ -284,11 +286,23 @@ pub fn export_object(
 //If it does, then object is printed with extract_by_line
 pub fn seeker(
     line_number: usize,
-    item: ObjectRange,
+    item: &ObjectRange,
     src: Vec<String>,
 ) -> Result<String, ErrorHandling> {
     let line_start = item.line_start().unwrap();
     let line_end = item.line_end().unwrap();
+    ensure!(
+        line_start <= line_number && line_end >= line_number,
+        LineOutOfBoundsSnafu { line_number }
+    );
+    extract_by_line(src, &line_start, &line_end)
+}
+fn seeker_for_comments(
+    line_number: usize,
+    line_start: usize,
+    line_end: usize,
+    src: Vec<String>,
+) -> Result<String, ErrorHandling> {
     ensure!(
         line_start <= line_number && line_end >= line_number,
         LineOutOfBoundsSnafu { line_number }
@@ -305,4 +319,41 @@ pub fn extract_by_line(
 
     let f = &from[line_start..*line_end];
     Ok(f.join(""))
+}
+pub fn extract_object_preserving_comments(
+    src: Vec<String>,
+    from_line: usize,
+    parsed: Vec<ObjectRange>,
+) -> Result<String, ErrorHandling> {
+    let mut new_previous: Vec<usize> = Vec::new();
+    new_previous.push(1);
+    let mut i = 0;
+    for each in parsed {
+        //println!("{} {}", new_previous[i], each.line_end().unwrap());
+        let found = seeker_for_comments(
+            from_line,
+            new_previous[i],
+            each.line_end().unwrap(),
+            src.clone(),
+        );
+        if found.is_err() {
+            i += 1;
+            let previous_end_line = each
+                .line_end()
+                .expect("Failed to unwrap ObjectRange for line end")
+                + 1;
+            new_previous.push(previous_end_line);
+            continue;
+        }
+        let extracted = extract_by_line(
+            src.clone(),
+            &new_previous[i],
+            &each
+                .line_end()
+                .expect("Failed to unwrap ObjectRange for line end"),
+        )
+        .expect("Failed to extract object by line");
+        return Ok(extracted);
+    }
+    Err(ErrorHandling::LineOutOfBounds { line_number: 0 })
 }

@@ -14,9 +14,10 @@ impl CommitData {
         self.date.clone().seconds()
     }
 }
-pub fn git_get() -> Result<(), git2::Error> {
+
+pub fn git_get(src: &str) -> Result<(), git2::Error> {
     // Read the patch file into memory
-    let patch_text = fs::read("/home/runner/work/patchdog/patchdog/<Your patch>.patch")
+    let patch_text = fs::read(src)
         .expect("Failed to read patch file");
 
     // Parse the diff from raw patch content
