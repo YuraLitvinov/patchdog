@@ -1,5 +1,5 @@
 //! If you want to see the list of objects in a .rs file you have to call parse_all_rust_items
-//! Most of the operations revolve around it, as it greps all the object types, their name, line numbers and where they are located
+//! Most of the operations revolve around it, as it greps all the object types, their names, line numbers and where they are located
 //! This can be easily used via the interface of ObjectRange, which implements 4 functions that are only useful
 //! for interacting with it. Hence, with this information about objects, they can exclusively pulled out using the
 //! string_to_vec method if you preemptively have taken a list of files that include rust code and have read them into a
@@ -264,7 +264,7 @@ pub fn string_to_vector(str_source: String) -> Vec<String> {
 }
 //Main entry for seeker and extract_by_line, roams through Vec<ObjectRange> seeking for the object that fits
 //the requested line number. If it finds no match, then LineOutOfBounds error is thrown
-pub fn receive_context(
+pub fn export_object(
     from_line_number: usize,
     visited: Vec<ObjectRange>,
     src: Vec<String>,

@@ -12,6 +12,6 @@ syn = { workspace = true }
 dotenv = { workspace = true }
 tokio = { workspace = true }
 snafu = { workspace = true }
-git2 = "0.20.2"
 anyhow = "1.0.98"
+tracing = "0.1.41"
 
