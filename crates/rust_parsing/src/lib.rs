@@ -136,13 +136,18 @@ fn visit_items(items: &[Item]) -> Vec<ObjectRange> {
             }
 
             Item::Mod(m) => {
-                object_line.push(ObjectRange {
-                    line_ranges: vec![
-                        LineRange::Start(m.span().start().line),
-                        LineRange::End(m.span().end().line),
-                    ],
-                    names: vec![Name::TypeName("mod"), Name::Name(m.ident.to_string())],
-                });
+                match m.content.clone() {
+                    Some((_, items)) => object_line.extend(visit_items(&items)),
+                    None => {
+                        object_line.push(ObjectRange {
+                            line_ranges: vec![
+                                LineRange::Start(m.span().start().line),
+                                LineRange::End(m.span().end().line),
+                            ],
+                            names: vec![Name::TypeName("mod"), Name::Name(m.ident.to_string())],
+                        });
+                    }
+                }
             }
 
             Item::Use(u) => {
