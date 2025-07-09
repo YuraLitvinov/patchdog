@@ -82,7 +82,6 @@ pub fn git_get_hunks(
     }
     Ok(hunk_tuple)
 }
-
 pub fn read_non_repeting_functions(src: &[u8]) -> Result<Vec<String>, Git2ErrorHandling> {
     let mut vec_of_files: Vec<String> = Vec::new();
     let diff = Diff::from_buffer(src).unwrap();
@@ -95,9 +94,7 @@ pub fn read_non_repeting_functions(src: &[u8]) -> Result<Vec<String>, Git2ErrorH
 
     for each in hunks.iter().skip(1) {
         if &each.2 != last_path {
-            let file_extension = Path::new(last_path)
-                .extension()
-                .and_then(OsStr::to_str);
+            let file_extension = Path::new(last_path).extension().and_then(OsStr::to_str);
 
             if let Some("rs") = file_extension {
                 let path = format!("../../{}", last_path);
@@ -107,9 +104,7 @@ pub fn read_non_repeting_functions(src: &[u8]) -> Result<Vec<String>, Git2ErrorH
             last_path = &each.2;
         }
     }
-    let file_extension = Path::new(last_path)
-        .extension()
-        .and_then(OsStr::to_str);
+    let file_extension = Path::new(last_path).extension().and_then(OsStr::to_str);
 
     if let Some("rs") = file_extension {
         let path = format!("../../{}", last_path);

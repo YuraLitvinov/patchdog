@@ -142,20 +142,27 @@ fn visit_items(items: &[Item]) -> Vec<ObjectRange> {
                 });
             }
 
-            Item::Mod(m) => {
-                match m.content.clone() {
-                    Some((_, items)) => object_line.extend(visit_items(&items)),
-                    None => {
-                        object_line.push(ObjectRange {
-                            line_ranges: vec![
-                                LineRange::Start(m.span().start().line),
-                                LineRange::End(m.span().end().line),
-                            ],
-                            names: vec![Name::TypeName("mod"), Name::Name(m.ident.to_string())],
-                        });
-                    }
+            Item::Mod(m) => match m.content.clone() {
+                Some((_, items)) => {
+                    object_line.push(ObjectRange {
+                        line_ranges: vec![
+                            LineRange::Start(m.ident.span().start().line),
+                            LineRange::End(m.ident.span().end().line),
+                        ],
+                        names: vec![Name::TypeName("mod"), Name::Name(m.ident.to_string())],
+                    });
+                    object_line.extend(visit_items(&items));
                 }
-            }
+                None => {
+                    object_line.push(ObjectRange {
+                        line_ranges: vec![
+                            LineRange::Start(m.ident.span().start().line),
+                            LineRange::End(m.ident.span().end().line),
+                        ],
+                        names: vec![Name::TypeName("mod"), Name::Name(m.ident.to_string())],
+                    });
+                }
+            },
 
             Item::Use(u) => {
                 if let syn::UseTree::Path(path) = u.tree.to_owned() {
@@ -270,7 +277,7 @@ pub fn find_module_file(
 }
 //Splits the string that is usually parsed from fs::read_to_string
 //split_inclusive method is necessary for preserving newline indentation.
-pub fn string_to_vector(str_source: &String) -> Vec<String> {
+pub fn string_to_vector(str_source: &str) -> Vec<String> {
     str_source
         .split_inclusive('\n')
         .map(|line| line.to_string())
@@ -284,14 +291,15 @@ pub fn export_object(
     src: &Vec<String>,
 ) -> Result<String, ErrorHandling> {
     for item in &visited {
-        let found = seeker(from_line_number, &item, &src);
+        let found = seeker(from_line_number, item, src);
         if found.is_err() {
             continue;
         }
         return found;
     }
     Err(ErrorHandling::ExportObjectFailed {
-        line_number: from_line_number, src: src[from_line_number].clone()
+        line_number: from_line_number,
+        src: src[from_line_number].clone(),
     })
 }
 //Finds an object, justifying whether the said line number belongs to the range of the object.
@@ -307,7 +315,7 @@ pub fn seeker(
         line_start <= line_number && line_end >= line_number,
         SeekerFailedSnafu { line_number }
     );
-    Ok(extract_by_line(&src, &line_start, &line_end))
+    Ok(extract_by_line(src, &line_start, &line_end))
 }
 fn seeker_for_comments(
     line_number: usize,
@@ -322,7 +330,7 @@ fn seeker_for_comments(
     Ok(extract_by_line(&src, &line_start, &line_end))
 }
 //Extracts a snippet from a file in regard to the snippet boundaries
-pub fn extract_by_line(from: &Vec<String>, line_start: &usize, line_end: &usize) -> String {
+pub fn extract_by_line(from: &[String], line_start: &usize, line_end: &usize) -> String {
     let line_start = line_start - 1;
 
     from[line_start..*line_end].join("")
