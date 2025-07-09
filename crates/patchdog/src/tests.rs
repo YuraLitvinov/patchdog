@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use git_parsing::{get_filenames, git_get_hunks, read_from_patch};
+    use git_parsing::{get_filenames, git_get_hunks, read_non_repeting_functions};
     use git2::Diff;
     use rust_parsing::{
         InvalidIoOperationsSnafu, export_object, extract_by_line,
@@ -31,8 +31,8 @@ mod tests {
         let end: usize = 23;
         //Actually an impl block; doesn't affect the result
         let function_from_file = fs::read_to_string(PATH_GEMINI).expect("File read failed");
-        let vector_of_file = string_to_vector(function_from_file);
-        let extracted_object = extract_by_line(vector_of_file, &start, &end);
+        let vector_of_file = string_to_vector(&function_from_file);
+        let extracted_object = extract_by_line(&vector_of_file, &start, &end);
         let object_from_const = format!("{}", IMPL_GEMINI);
         assert_ne!(object_from_const, extracted_object);
     }
@@ -44,7 +44,7 @@ mod tests {
         let source = fs::read_to_string(&path)
             .context(InvalidIoOperationsSnafu)
             .expect("File read failed");
-        let vectored_file = string_to_vector(source);
+        let vectored_file = string_to_vector(&source);
         let line_eight_from_vector = &vectored_file[7]; //Count in vec! starts from 0 
         assert_eq!(COMPARE_LINES, line_eight_from_vector); //This test has passed
     }
@@ -109,25 +109,25 @@ mod tests {
     #[test]
     fn test_receive_context_on_zero() {
         let str_src = fs::read_to_string(PATH_BASE).expect("Failed to read file");
-        let source = string_to_vector(str_src.clone());
+        let source = string_to_vector(&str_src);
         let parsed = parse_all_rust_items(str_src).expect("Failed to parse");
         let expected_behavior = "LineOutOfBounds { line_number: 0 }";
         assert_eq!(
             expected_behavior,
-            export_object(0, parsed, source).expect("Failed to export object")
+            export_object(0, parsed, &source).expect("Failed to export object")
         );
     }
 
     #[test]
     fn test_receive_context_on_exceed() {
         let str_src = fs::read_to_string(PATH_BASE).expect("Failed to read file");
-        let source = string_to_vector(str_src.clone());
+        let source = string_to_vector(&str_src);
         let parsed = parse_all_rust_items(str_src).expect("Failed to parse");
 
         let expected_behavior: &'static str = "LineOutOfBounds { line_number: 999999 }";
         assert_eq!(
             expected_behavior,
-            export_object(999999, parsed, source).expect("Failed to export object")
+            export_object(999999, parsed, &source).expect("Failed to export object")
         );
     }
     const EXPECTED_BEHAVIOR: &str = "impl MyStruct {
@@ -146,9 +146,9 @@ mod tests {
     #[test]
     fn test_receive_context_on_true() {
         let str_src = fs::read_to_string(PATH_BASE).expect("Failed to read file");
-        let source = string_to_vector(str_src.clone());
+        let source = string_to_vector(&str_src);
         let parsed = parse_all_rust_items(str_src).expect("Failed to parse");
-        let received = export_object(50, parsed, source).expect("Failed to export object");
+        let received = export_object(50, parsed, &source).expect("Failed to export object");
 
         assert_ne!(EXPECTED_BEHAVIOR, received);
     }
@@ -166,7 +166,7 @@ trait MyTrait {
     fn test_extract_object_preserving_comments() {
         let path_src = "../../tests/data.rs";
         let src = fs::read_to_string(path_src).unwrap();
-        let source = string_to_vector(src.clone());
+        let source = string_to_vector(&src);
         let from_where = 62;
         let parsed = parse_all_rust_items(src).expect("Parse failed");
         let check = extract_object_preserving_comments(source, from_where, parsed).expect("Check?");
@@ -210,19 +210,76 @@ trait MyTrait {
  
     #[test]
     fn test_combine_git(){
-        let src = "../../test2.patch";
+        let src = "../../patchfromlatest.patch";
         let patch_text = fs::read(src).expect("Failed to read patch file");
-        let read = read_from_patch(&patch_text)
+        let read = read_non_repeting_functions(&patch_text)
             .expect("Failed to read");
         for each in read {
             println!("{:?}", each);
             let file_src = fs::read_to_string(each).expect("failed to read");
             let parsed = parse_all_rust_items(file_src).expect("failed parse");
             for each in parsed {
-                println!("{:?}", each);
-            }
+                    if each.object_type().unwrap() == "fn" {
+                        println!("{:?}", each);
+                    }
+                }
         }
         assert_eq!(true, false);
+    }
+
+    #[test]
+    fn test_match_patch_with_parse(){
+        let src = "../../patchfromlatest.patch";
+        let patch_text = fs::read(src).expect("Failed to read patch file");
+        let read = read_non_repeting_functions(&patch_text)
+            .expect("Failed to read");
+        let diff = Diff::from_buffer(&patch_text).unwrap();
+        let changed = get_filenames(&diff).expect("Unwrap on get_filenames failed");
+        let mut hunks =  git_get_hunks(diff, changed)
+            .expect("Error?");
+
+        hunks.sort_by(|a, b| a.2.cmp(&b.2));
+        for read in read {
+                for each in hunks.clone().into_iter() {
+                    let file = fs::read_to_string(&read)
+                        .expect("failed to read");
+                    let file_vector = string_to_vector(&file);
+                    let parsed = parse_all_rust_items(file)
+                        .expect("failed to parse");
+                    let what_change_occured = match each.0 {
+                        "Add" => { 
+                            println!("Added: \n {}", &read);
+                            export_object(
+                                each.1,
+                                parsed,
+                                &file_vector
+                            ).unwrap()},
+
+                        "Remove" => { 
+                            println!("Removed line number: {} \n{} ", each.1, &read);
+                            "".to_string() 
+                        },
+                        "Modify" => {
+                            println!("Modified: \n {}", &read);
+                            export_object(
+                                each.1,
+                                parsed,
+                                &file_vector
+                            ).expect("Error on Modify")
+                        },
+                        _ => "".to_string()
+
+                    };
+                        println!("{}", what_change_occured)
+
+            
+
+                }
+
+        }
+
+
+        assert_eq!(true,false);
     }
 }
 

@@ -1,7 +1,6 @@
 use git2::{Diff, Patch};
 use snafu::{ResultExt, Snafu};
 use std::{ffi::OsStr, path::Path};
-
 #[derive(Debug, Snafu)]
 #[snafu(visibility(pub))]
 pub enum Git2ErrorHandling {
@@ -71,7 +70,7 @@ pub fn git_get_hunks(
                     }
                     ' ' => {
                         hunk_tuple.push((
-                            "Edit",
+                            "Modify",
                             line.old_lineno().unwrap_or(0).try_into().unwrap(),
                             tuple_vector_of_file_names[i.0].1.clone(),
                         ));
@@ -84,24 +83,38 @@ pub fn git_get_hunks(
     Ok(hunk_tuple)
 }
 
-pub fn read_from_patch(src: &[u8]) -> Result<Vec<String>, Git2ErrorHandling> {
+pub fn read_non_repeting_functions(src: &[u8]) -> Result<Vec<String>, Git2ErrorHandling> {
     let mut vec_of_files: Vec<String> = Vec::new();
     let diff = Diff::from_buffer(src).unwrap();
     let filenames = get_filenames(&diff).expect("failed to get filenames");
     let hunks = git_get_hunks(diff, filenames).expect("Unwrap on get_filenames failed");
-    let mut i = 0;
+    if hunks.is_empty() {
+        return Ok(vec_of_files);
+    }
+    let mut last_path = &hunks[0].2;
+
     for each in hunks.iter().skip(1) {
-            if each.2 != hunks[i].2 {
-                let file_extension = Path::new(&each.2)
-                    .extension()
-                    .and_then(OsStr::to_str)
-                    .expect("Failed to get extension");
-                if file_extension == "rs" {
-                    let path = "../../".to_string() + &each.2;
-                    vec_of_files.push(path);
-                    }
+        if &each.2 != last_path {
+            let file_extension = Path::new(last_path)
+                .extension()
+                .and_then(OsStr::to_str);
+
+            if let Some("rs") = file_extension {
+                let path = format!("../../{}", last_path);
+                vec_of_files.push(path);
             }
-            i += 1;
+
+            last_path = &each.2;
         }
-        Ok(vec_of_files)
+    }
+    let file_extension = Path::new(last_path)
+        .extension()
+        .and_then(OsStr::to_str);
+
+    if let Some("rs") = file_extension {
+        let path = format!("../../{}", last_path);
+        vec_of_files.push(path);
+    }
+
+    Ok(vec_of_files)
 }

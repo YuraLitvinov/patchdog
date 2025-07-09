@@ -40,6 +40,13 @@ pub enum ErrorHandling {
     InvalidSynParsing {
         source: syn::Error,
     },
+    SeekerFailed {
+        line_number: usize,
+    },
+    ExportObjectFailed {
+        line_number: usize,
+        src: String,
+    },
 }
 #[derive(Debug)]
 pub enum LineRange {
@@ -263,7 +270,7 @@ pub fn find_module_file(
 }
 //Splits the string that is usually parsed from fs::read_to_string
 //split_inclusive method is necessary for preserving newline indentation.
-pub fn string_to_vector(str_source: String) -> Vec<String> {
+pub fn string_to_vector(str_source: &String) -> Vec<String> {
     str_source
         .split_inclusive('\n')
         .map(|line| line.to_string())
@@ -274,17 +281,17 @@ pub fn string_to_vector(str_source: String) -> Vec<String> {
 pub fn export_object(
     from_line_number: usize,
     visited: Vec<ObjectRange>,
-    src: Vec<String>,
+    src: &Vec<String>,
 ) -> Result<String, ErrorHandling> {
-    for item in visited {
-        let found = seeker(from_line_number, &item, src.clone());
+    for item in &visited {
+        let found = seeker(from_line_number, &item, &src);
         if found.is_err() {
             continue;
         }
         return found;
     }
-    Err(ErrorHandling::LineOutOfBounds {
-        line_number: from_line_number,
+    Err(ErrorHandling::ExportObjectFailed {
+        line_number: from_line_number, src: src[from_line_number].clone()
     })
 }
 //Finds an object, justifying whether the said line number belongs to the range of the object.
@@ -292,15 +299,15 @@ pub fn export_object(
 pub fn seeker(
     line_number: usize,
     item: &ObjectRange,
-    src: Vec<String>,
+    src: &Vec<String>,
 ) -> Result<String, ErrorHandling> {
     let line_start = item.line_start().unwrap();
     let line_end = item.line_end().unwrap();
     ensure!(
         line_start <= line_number && line_end >= line_number,
-        LineOutOfBoundsSnafu { line_number }
+        SeekerFailedSnafu { line_number }
     );
-    Ok(extract_by_line(src, &line_start, &line_end))
+    Ok(extract_by_line(&src, &line_start, &line_end))
 }
 fn seeker_for_comments(
     line_number: usize,
@@ -312,10 +319,10 @@ fn seeker_for_comments(
         line_start <= line_number && line_end >= line_number,
         LineOutOfBoundsSnafu { line_number }
     );
-    Ok(extract_by_line(src, &line_start, &line_end))
+    Ok(extract_by_line(&src, &line_start, &line_end))
 }
 //Extracts a snippet from a file in regard to the snippet boundaries
-pub fn extract_by_line(from: Vec<String>, line_start: &usize, line_end: &usize) -> String {
+pub fn extract_by_line(from: &Vec<String>, line_start: &usize, line_end: &usize) -> String {
     let line_start = line_start - 1;
 
     from[line_start..*line_end].join("")
@@ -346,7 +353,7 @@ pub fn extract_object_preserving_comments(
             continue;
         }
         let extracted = extract_by_line(
-            src.clone(),
+            &src,
             &new_previous[i],
             &each
                 .line_end()
