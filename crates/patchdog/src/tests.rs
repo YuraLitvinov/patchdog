@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use git_parsing::{get_filenames, git_get_hunks};
+    use git_parsing::{get_filenames, git_get_hunks, read_from_patch};
     use git2::Diff;
     use rust_parsing::{
         InvalidIoOperationsSnafu, export_object, extract_by_line,
@@ -207,49 +207,22 @@ trait MyTrait {
             }
         }
     }
+ 
     #[test]
-    fn test_patch_for_parsing() {
+    fn test_combine_git(){
         let src = "../../test2.patch";
         let patch_text = fs::read(src).expect("Failed to read patch file");
-        let diff = Diff::from_buffer(&patch_text).unwrap();
-        let filenames = get_filenames(&diff).expect("failed to get filenames");
-        let hunks = git_get_hunks(diff, filenames).expect("Unwrap on get_filenames failed");
-        let mut i = 0;
-        for each in hunks.iter().skip(1) {
-            //println!("{}", &i);
-            if each.2 != hunks[i].2 {
-                println!("{}", each.2);
-                let file_extension = Path::new(&each.2)
-                    .extension()
-                    .and_then(OsStr::to_str)
-                    .expect("Failed to get extension");
-                if file_extension == "rs" {
-                    let path = "../../".to_string() + &each.2;
-                    let file_src = fs::read_to_string(path).expect("failed to read");
-                    let parsed = parse_all_rust_items(file_src).expect("failed parse");
-                    for each in parsed {
-                        println!("{:?}", each);
-                    }
-                }
+        let read = read_from_patch(&patch_text)
+            .expect("Failed to read");
+        for each in read {
+            println!("{:?}", each);
+            let file_src = fs::read_to_string(each).expect("failed to read");
+            let parsed = parse_all_rust_items(file_src).expect("failed parse");
+            for each in parsed {
+                println!("{:?}", each);
             }
-            i += 1;
         }
-
         assert_eq!(true, false);
     }
 }
 
-/*let file_extension = Path::new(&each.2)
-    .extension()
-    .and_then(OsStr::to_str)
-    .expect("Failed to get extension");
-if file_extension == "rs" {
-    let path = "../../".to_string() + &each.2;
-    let file_src = fs::read_to_string(path)
-        .expect("failed to read");
-    let parsed = parse_all_rust_items(file_src)
-        .expect("failed parse");
-    for each in parsed {
-        //println!("{:?}", each);
-    }
-}  */

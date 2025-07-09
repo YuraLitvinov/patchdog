@@ -1,5 +1,6 @@
 use git2::{Diff, Patch};
 use snafu::{ResultExt, Snafu};
+use std::{ffi::OsStr, path::Path};
 
 #[derive(Debug, Snafu)]
 #[snafu(visibility(pub))]
@@ -81,4 +82,26 @@ pub fn git_get_hunks(
         }
     }
     Ok(hunk_tuple)
+}
+
+pub fn read_from_patch(src: &[u8]) -> Result<Vec<String>, Git2ErrorHandling> {
+    let mut vec_of_files: Vec<String> = Vec::new();
+    let diff = Diff::from_buffer(src).unwrap();
+    let filenames = get_filenames(&diff).expect("failed to get filenames");
+    let hunks = git_get_hunks(diff, filenames).expect("Unwrap on get_filenames failed");
+    let mut i = 0;
+    for each in hunks.iter().skip(1) {
+            if each.2 != hunks[i].2 {
+                let file_extension = Path::new(&each.2)
+                    .extension()
+                    .and_then(OsStr::to_str)
+                    .expect("Failed to get extension");
+                if file_extension == "rs" {
+                    let path = "../../".to_string() + &each.2;
+                    vec_of_files.push(path);
+                    }
+            }
+            i += 1;
+        }
+        Ok(vec_of_files)
 }
