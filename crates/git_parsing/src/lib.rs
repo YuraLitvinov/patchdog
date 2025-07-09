@@ -1,30 +1,20 @@
 use git2::{Diff, Patch};
-use std::fs;
-#[derive(Debug)]
-pub struct CommitData {
-    commit_id: String,
-    date: git2::Time,
+use snafu::{ResultExt, Snafu};
+
+#[derive(Debug, Snafu)]
+#[snafu(visibility(pub))]
+pub enum Git2ErrorHandling {
+    #[snafu(display("Unable to read {source}"))]
+    Git2Error {
+        source: git2::Error,
+    },
 }
-
-impl CommitData {
-    pub fn get_id(&self) -> String {
-        self.commit_id.clone()
-    }
-    pub fn get_date(&self) -> i64 {
-        self.date.clone().seconds()
-    }
-}
-
-pub fn git_get(src: &str) -> Result<(), git2::Error> {
-    // Read the patch file into memory
-    let patch_text = fs::read(src)
-        .expect("Failed to read patch file");
-
-    // Parse the diff from raw patch content
-    let diff = Diff::from_buffer(&patch_text)?;
-
-    for (i, delta) in diff.deltas().enumerate() {
-        let patch = Patch::from_diff(&diff, i)?;
+//get_filenames.0 corresponds to old file name, get_filenames.1 corresponds to new file name
+//Those can be interchanged, as this only indicates where change occured. 
+//and may correspond to actual file name change if renaming occurs
+pub fn get_filenames(diff: Diff<'static>) -> Result<Vec<(String, String)>, Git2ErrorHandling> {
+    let mut tuple_vector_of_file_names: Vec<(String, String)> = Vec::new();
+    for delta in diff.deltas() {
         let old_path = delta
             .old_file()
             .path()
@@ -35,18 +25,23 @@ pub fn git_get(src: &str) -> Result<(), git2::Error> {
             .path()
             .map(|p| p.display().to_string())
             .unwrap_or_default();
-
-        println!("File: {} -> {}", old_path, new_path);
+        tuple_vector_of_file_names.push((old_path, new_path));
+    }
+    Ok(tuple_vector_of_file_names)
+}
+pub fn git_get_hunks(diff: Diff<'static>) -> Result<(), Git2ErrorHandling> {
+    for i in diff.deltas().enumerate() {
+        let patch = Patch::from_diff(&diff, i.0).context(Git2Snafu)?;
 
         for hunk_idx in 0..patch.as_ref().unwrap().num_hunks() {
             let (hunk, _) = patch.as_ref().unwrap().hunk(hunk_idx).unwrap();
 
             println!(
                 "  Hunk starting at old: {}, new: {}",
-                hunk.old_start(),
-                hunk.new_start()
+                &hunk.old_start(),
+                &hunk.new_start()
             );
-            let patch_clone = Patch::from_diff(&diff, i)?;
+            let patch_clone = Patch::from_diff(&diff, i.0).context(Git2Snafu)?;
             for line_idx in 0..patch_clone
                 .as_ref()
                 .unwrap()
@@ -70,9 +65,9 @@ pub fn git_get(src: &str) -> Result<(), git2::Error> {
                         String::from_utf8_lossy(line.content()).trim_end()
                     ),
                     ' ' => println!(
-                        "    Edited line @ {}: {}",
+                        "    Edited line @ {}: ",
                         line.old_lineno().unwrap_or(0),
-                        String::from_utf8_lossy(line.content()).trim_end()
+                        //String::from_utf8_lossy(line.content()).trim_end()
                     ),
                     _ => {}
                 }

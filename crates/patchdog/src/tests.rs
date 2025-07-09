@@ -5,8 +5,9 @@ mod tests {
         string_to_vector, InvalidIoOperationsSnafu, find_module_file, rustc_parsing::comment_lexer
     };
     use snafu::ResultExt;
-    use git_parsing::git_get;
-    use std::{fs, path::Path};
+    use git_parsing::get_filenames;
+    use std::{ffi::OsStr, fs, path::Path};
+    use git2::Diff;
     const PATH_BASE: &str = "../../tests/data.rs";
     const PATH_GEMINI: &str = "../../crates/gemini/src/lib.rs";
     const IMPL_GEMINI: &str = r#"impl GoogleGemini {
@@ -79,7 +80,7 @@ mod tests {
                 println!("{:?}", object);
             }
         }
-        assert_eq!(true, true);
+        assert_ne!(true, true);
     }
     #[test]
     fn test_find_module_files() {
@@ -186,6 +187,44 @@ trait MyTrait {
 
     #[test]
     fn test_git_get() {
-        let _ = git_get("../../tests/data.rs");
+        let src = "../../test2.patch";
+        let patch_text = fs::read(src)
+            .expect("Failed to read patch file");
+        let diff = Diff::from_buffer(&patch_text).unwrap();
+        let changed = get_filenames(diff).expect("Unwrap on get_filenames failed");
+        for each in changed {
+            println!("{:?}", each.1);
+        
+        }
+        assert_eq!(true, false);
+    }
+    #[test]
+    fn test_parse_on_patch() {
+            let src = "../../test2.patch";
+            let patch_text = fs::read(src)
+                .expect("Failed to read patch file");
+            let diff = Diff::from_buffer(&patch_text).unwrap();
+            let changed = get_filenames(diff).expect("Unwrap on get_filenames failed");
+            //changed.remove(0);
+            for each in changed {
+            let str_path = "../../".to_string() + &each.1;
+            let path = Path::new(&str_path)
+                .extension()   
+                .and_then(OsStr::to_str)
+                .expect("Failed to get extension");
+            if path == "rs" {
+                println!("actual path: {}", str_path);
+                let str_src = fs::read_to_string(&str_path).expect("Failed to read file");
+                //let source = string_to_vector(str_src.clone());
+                let parsed = parse_all_rust_items(str_src).expect("Failed to parse");
+                for each_parsed in parsed {
+                    println!("{:?}", each_parsed);
+                }
+            }
+            else {
+                println!("Non-rust path: {:?}", str_path);
+            }
+        }
+        assert_eq!(true, false);
     }
 }

@@ -7,4 +7,6 @@ use std::path::PathBuf;
 
 pub mod tests;
 #[tokio::main]
-async fn main() {}
+async fn main() {
+
+}
