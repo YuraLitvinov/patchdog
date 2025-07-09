@@ -5,7 +5,7 @@ mod tests {
         string_to_vector, InvalidIoOperationsSnafu, find_module_file, rustc_parsing::comment_lexer
     };
     use snafu::ResultExt;
-    use git_parsing::get_filenames;
+    use git_parsing::{get_filenames, git_get, git_get_hunks};
     use std::{ffi::OsStr, fs, path::Path};
     use git2::Diff;
     const PATH_BASE: &str = "../../tests/data.rs";
@@ -184,37 +184,22 @@ trait MyTrait {
         }
         assert_eq!(i, 94);
     }
-
-    #[test]
-    fn test_git_get() {
-        let src = "../../test2.patch";
-        let patch_text = fs::read(src)
-            .expect("Failed to read patch file");
-        let diff = Diff::from_buffer(&patch_text).unwrap();
-        let changed = get_filenames(diff).expect("Unwrap on get_filenames failed");
-        for each in changed {
-            println!("{:?}", each.1);
-        
-        }
-        assert_eq!(true, false);
-    }
     #[test]
     fn test_parse_on_patch() {
             let src = "../../test2.patch";
             let patch_text = fs::read(src)
                 .expect("Failed to read patch file");
             let diff = Diff::from_buffer(&patch_text).unwrap();
-            let changed = get_filenames(diff).expect("Unwrap on get_filenames failed");
-            //changed.remove(0);
+            let changed = get_filenames(&diff).expect("Unwrap on get_filenames failed");
             for each in changed {
-            let str_path = "../../".to_string() + &each.1;
-            let path = Path::new(&str_path)
+            let path = "../../".to_string() + &each.1;
+            let extension = Path::new(&path)
                 .extension()   
                 .and_then(OsStr::to_str)
                 .expect("Failed to get extension");
-            if path == "rs" {
-                println!("actual path: {}", str_path);
-                let str_src = fs::read_to_string(&str_path).expect("Failed to read file");
+            if extension == "rs" {
+                println!("actual path: {}", path);
+                let str_src = fs::read_to_string(&path).expect("Failed to read file");
                 //let source = string_to_vector(str_src.clone());
                 let parsed = parse_all_rust_items(str_src).expect("Failed to parse");
                 for each_parsed in parsed {
@@ -222,9 +207,33 @@ trait MyTrait {
                 }
             }
             else {
-                println!("Non-rust path: {:?}", str_path);
+               assert_eq!("../../crates/patchdog/Cargo.toml".to_string(), path);
             }
         }
+        assert_eq!(true, false);
+    }
+    #[test]
+    fn test_parse_on_patch_2() {
+        let src = "../../test2.patch";
+        let patch_text = fs::read(src)
+        .expect("Failed to read patch file");
+        let diff = Diff::from_buffer(&patch_text).unwrap();
+
+        let filenames = get_filenames(&diff)
+            .expect("failed to get filenames");
+        let _ = git_get_hunks(diff, filenames).expect("Unwrap on get_filenames failed");
+        
+        
+        assert_eq!(true, false);
+    }
+    #[test]
+    fn git_get_test(){
+                let src = "../../test2.patch";
+        let patch_text = fs::read(src)
+        .expect("Failed to read patch file");
+        let diff = Diff::from_buffer(&patch_text).unwrap();
+
+        let _ = git_get(diff);
         assert_eq!(true, false);
     }
 }
