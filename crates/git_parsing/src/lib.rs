@@ -5,15 +5,15 @@ use snafu::{ResultExt, Snafu};
 #[snafu(visibility(pub))]
 pub enum Git2ErrorHandling {
     #[snafu(display("Unable to read {source}"))]
-    Git2Error {
-        source: git2::Error,
-    },
+    Git2Error { source: git2::Error },
 }
 //get_filenames.0 corresponds to old file name, get_filenames.1 corresponds to new file name
-//Those can be interchanged, as this only indicates where change occured. 
+//Those can be interchanged, as this only indicates where change occured.
 //and may correspond to actual file name change if renaming occurs
-pub fn get_filenames(diff: &Diff<'static>) -> Result<Vec<(String, String, usize)>, Git2ErrorHandling> {
-    let mut tuple_vector_of_file_names: Vec<(String, String, usize )> = Vec::new();
+pub fn get_filenames(
+    diff: &Diff<'static>,
+) -> Result<Vec<(String, String, usize)>, Git2ErrorHandling> {
+    let mut tuple_vector_of_file_names: Vec<(String, String, usize)> = Vec::new();
     let mut i = 0;
     for delta in diff.deltas() {
         i += 1;
@@ -31,7 +31,10 @@ pub fn get_filenames(diff: &Diff<'static>) -> Result<Vec<(String, String, usize)
     }
     Ok(tuple_vector_of_file_names)
 }
-pub fn git_get_hunks(diff: Diff<'static>, tuple_vector_of_file_names: Vec<(String, String, usize)>) -> Result<Vec<(&'static str, usize, String)>, Git2ErrorHandling> {
+pub fn git_get_hunks(
+    diff: Diff<'static>,
+    tuple_vector_of_file_names: Vec<(String, String, usize)>,
+) -> Result<Vec<(&'static str, usize, String)>, Git2ErrorHandling> {
     let mut hunk_tuple: Vec<(&str, usize, String)> = Vec::new();
     for i in diff.deltas().enumerate() {
         let patch = Patch::from_diff(&diff, i.0).context(Git2Snafu)?;
@@ -52,26 +55,26 @@ pub fn git_get_hunks(diff: Diff<'static>, tuple_vector_of_file_names: Vec<(Strin
                     .unwrap();
                 match line.origin() {
                     '+' => {
-                        hunk_tuple.push(
-                            ("Add", 
+                        hunk_tuple.push((
+                            "Add",
                             line.new_lineno().unwrap_or(0).try_into().unwrap(),
-                            tuple_vector_of_file_names[i.0].1.clone()
+                            tuple_vector_of_file_names[i.0].1.clone(),
                         ));
-                    },
-                    '-' => { 
-                        hunk_tuple.push(
-                            ("Remove", 
+                    }
+                    '-' => {
+                        hunk_tuple.push((
+                            "Remove",
                             line.old_lineno().unwrap_or(0).try_into().unwrap(),
-                            tuple_vector_of_file_names[i.0].1.clone()
+                            tuple_vector_of_file_names[i.0].1.clone(),
                         ));
-                    },
-                    ' ' => { 
-                        hunk_tuple.push(
-                            ("Edit", 
+                    }
+                    ' ' => {
+                        hunk_tuple.push((
+                            "Edit",
                             line.old_lineno().unwrap_or(0).try_into().unwrap(),
-                            tuple_vector_of_file_names[i.0].1.clone()
+                            tuple_vector_of_file_names[i.0].1.clone(),
                         ));
-                    },
+                    }
                     _ => {}
                 }
             }

@@ -1,6 +1,6 @@
-use std::fs;
 use rustc_lexer::TokenKind;
 use rustc_lexer::tokenize;
+use std::fs;
 
 pub fn comment_lexer(src: &str) {
     let source = match fs::read_to_string(src) {

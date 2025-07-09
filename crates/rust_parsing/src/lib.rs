@@ -40,7 +40,6 @@ pub enum ErrorHandling {
     InvalidSynParsing {
         source: syn::Error,
     },
-
 }
 #[derive(Debug)]
 pub enum LineRange {
@@ -311,11 +310,7 @@ fn seeker_for_comments(
     Ok(extract_by_line(src, &line_start, &line_end))
 }
 //Extracts a snippet from a file in regard to the snippet boundaries
-pub fn extract_by_line(
-    from: Vec<String>,
-    line_start: &usize,
-    line_end: &usize,
-) -> String {
+pub fn extract_by_line(from: Vec<String>, line_start: &usize, line_end: &usize) -> String {
     let line_start = line_start - 1;
 
     from[line_start..*line_end].join("")
