@@ -31,20 +31,13 @@ pub fn get_filenames(diff: &Diff<'static>) -> Result<Vec<(String, String, usize)
     }
     Ok(tuple_vector_of_file_names)
 }
-pub fn git_get_hunks(diff: Diff<'static>, tuple_vector_of_file_names: Vec<(String, String, usize)>) -> Result<(), Git2ErrorHandling> {
+pub fn git_get_hunks(diff: Diff<'static>, tuple_vector_of_file_names: Vec<(String, String, usize)>) -> Result<Vec<(&'static str, usize, String)>, Git2ErrorHandling> {
+    let mut hunk_tuple: Vec<(&str, usize, String)> = Vec::new();
     for i in diff.deltas().enumerate() {
         let patch = Patch::from_diff(&diff, i.0).context(Git2Snafu)?;
 
         for hunk_idx in 0..patch.as_ref().unwrap().num_hunks() {
-            let (hunk, _) = patch.as_ref().unwrap().hunk(hunk_idx).unwrap();
-
-            println!(
-                "Hunk starting at old line: {}, old file: {}  \nat new line: {} at new file: {}",
-                &hunk.old_start(),
-                &tuple_vector_of_file_names[i.0].0,
-                &hunk.new_start(),
-                &tuple_vector_of_file_names[i.0].1,
-            );
+            let (_hunk, _) = patch.as_ref().unwrap().hunk(hunk_idx).unwrap();
             let patch_clone = Patch::from_diff(&diff, i.0).context(Git2Snafu)?;
             for line_idx in 0..patch_clone
                 .as_ref()
@@ -58,73 +51,31 @@ pub fn git_get_hunks(diff: Diff<'static>, tuple_vector_of_file_names: Vec<(Strin
                     .line_in_hunk(hunk_idx, line_idx)
                     .unwrap();
                 match line.origin() {
-                    '+' =>  println!(
-                        "    Added   line @ {}: {}",
-                        line.new_lineno().unwrap_or(0),
-                        String::from_utf8_lossy(line.content()).trim_end()
-                    ),
-                    '-' => println!(
-                        "    Removed line @ {}: {}",
-                        line.old_lineno().unwrap_or(0),
-                        String::from_utf8_lossy(line.content()).trim_end()
-                    ),
-                    ' ' => println!(
-                        "    Edited line @ {}: {}",
-                        line.old_lineno().unwrap_or(0),
-                        String::from_utf8_lossy(line.content()).trim_end()
-                    ),
+                    '+' => {
+                        hunk_tuple.push(
+                            ("Add", 
+                            line.new_lineno().unwrap_or(0).try_into().unwrap(),
+                            tuple_vector_of_file_names[i.0].1.clone()
+                        ));
+                    },
+                    '-' => { 
+                        hunk_tuple.push(
+                            ("Remove", 
+                            line.old_lineno().unwrap_or(0).try_into().unwrap(),
+                            tuple_vector_of_file_names[i.0].1.clone()
+                        ));
+                    },
+                    ' ' => { 
+                        hunk_tuple.push(
+                            ("Edit", 
+                            line.old_lineno().unwrap_or(0).try_into().unwrap(),
+                            tuple_vector_of_file_names[i.0].1.clone()
+                        ));
+                    },
                     _ => {}
                 }
             }
         }
     }
-
-    Ok(())
-}
-pub fn git_get(diff: Diff<'static>) -> Result<(), git2::Error> {
-    for (i, _delta) in diff.deltas().enumerate() {
-        let patch = Patch::from_diff(&diff, i)?;
-        for hunk_idx in 0..patch.as_ref().unwrap().num_hunks() {
-            let (hunk, _) = patch.as_ref().unwrap().hunk(hunk_idx).unwrap();
-
-            println!(
-                "Hunk starting at old: {}, new: {}",
-                hunk.old_start(),
-                hunk.new_start()
-            );
-            let patch_clone = Patch::from_diff(&diff, i)?;
-            for line_idx in 0..patch_clone
-                .as_ref()
-                .unwrap()
-                .num_lines_in_hunk(hunk_idx)
-                .unwrap()
-            {
-                let line = patch_clone
-                    .as_ref()
-                    .unwrap()
-                    .line_in_hunk(hunk_idx, line_idx)
-                    .unwrap();
-                match line.origin() {
-                    '+' => println!(
-                        "    Added   line @ {}: {}",
-                        line.new_lineno().unwrap_or(0),
-                        String::from_utf8_lossy(line.content()).trim_end()
-                    ),
-                    '-' => println!(
-                        "    Removed line @ {}: {}",
-                        line.old_lineno().unwrap_or(0),
-                        String::from_utf8_lossy(line.content()).trim_end()
-                    ),
-                    ' ' => println!(
-                        "    Edited line @ {}: {}",
-                        line.old_lineno().unwrap_or(0),
-                        String::from_utf8_lossy(line.content()).trim_end()
-                    ),
-                    _ => {}
-                }
-            }
-        }
-    }
-
-    Ok(())
+    Ok(hunk_tuple)
 }

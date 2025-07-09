@@ -5,7 +5,7 @@ mod tests {
         string_to_vector, InvalidIoOperationsSnafu, find_module_file, rustc_parsing::comment_lexer
     };
     use snafu::ResultExt;
-    use git_parsing::{get_filenames, git_get, git_get_hunks};
+    use git_parsing::{get_filenames, git_get_hunks};
     use std::{ffi::OsStr, fs, path::Path};
     use git2::Diff;
     const PATH_BASE: &str = "../../tests/data.rs";
@@ -200,7 +200,6 @@ trait MyTrait {
             if extension == "rs" {
                 println!("actual path: {}", path);
                 let str_src = fs::read_to_string(&path).expect("Failed to read file");
-                //let source = string_to_vector(str_src.clone());
                 let parsed = parse_all_rust_items(str_src).expect("Failed to parse");
                 for each_parsed in parsed {
                     println!("{:?}", each_parsed);
@@ -210,30 +209,30 @@ trait MyTrait {
                assert_eq!("../../crates/patchdog/Cargo.toml".to_string(), path);
             }
         }
-        assert_eq!(true, false);
     }
     #[test]
-    fn test_parse_on_patch_2() {
+    fn test_patch_for_parsing() {
         let src = "../../test2.patch";
         let patch_text = fs::read(src)
-        .expect("Failed to read patch file");
+            .expect("Failed to read patch file");
         let diff = Diff::from_buffer(&patch_text).unwrap();
-
         let filenames = get_filenames(&diff)
             .expect("failed to get filenames");
-        let _ = git_get_hunks(diff, filenames).expect("Unwrap on get_filenames failed");
-        
-        
-        assert_eq!(true, false);
-    }
-    #[test]
-    fn git_get_test(){
-                let src = "../../test2.patch";
-        let patch_text = fs::read(src)
-        .expect("Failed to read patch file");
-        let diff = Diff::from_buffer(&patch_text).unwrap();
+        let hunks = git_get_hunks(diff, filenames).expect("Unwrap on get_filenames failed");
+        for each in hunks { 
+            let file_extension = Path::new(&each.2)
+                .extension()   
+                .and_then(OsStr::to_str)
+                .expect("Failed to get extension");
+            if file_extension == "rs" {
+                println!("{:?}", each);
+                
+            }
 
-        let _ = git_get(diff);
+
+        }
+    
         assert_eq!(true, false);
     }
+
 }
