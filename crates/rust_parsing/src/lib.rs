@@ -7,10 +7,8 @@
 //! Syn crate itself provides functionality to pull out objects from a file, albeit it loses very helpful //comments, so instead
 //! it was chosen as best practice to only get line numbers and from there pull out the whole object.
 use snafu::Snafu;
-use std::path::PathBuf;
-use syn::Item;
 pub mod rustc_parsing;
-pub mod object_parsing;
+pub mod rust_parser;
 pub mod file_parsing;
 
 #[derive(Debug, Snafu)]
@@ -105,14 +103,6 @@ impl ObjectRange {
     }
 }
 
-pub trait Objects {
-    fn find_module_file(base_path: PathBuf) -> Result<Option<PathBuf>, ErrorHandling>;
-    fn visit_items(items: &[Item]) -> Vec<ObjectRange>;
-    fn parse_all_rust_items(src: String) -> Result<Vec<ObjectRange>, ErrorHandling>;
-}
-pub struct Parsing {
-
-}
 
 pub trait Files {
     fn check_for_not_comment(parsed: &Vec<ObjectRange>, line_number: usize) -> Result<bool, ErrorHandling>;
