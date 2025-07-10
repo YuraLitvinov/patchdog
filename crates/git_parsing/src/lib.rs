@@ -164,7 +164,8 @@ pub fn match_patch_with_parse(relative_path: &str, patch_src: &[u8]) -> Result<V
     for each_unique in list_of_unique_files.iter() {
         let mut count = 0;
         for each in hunks.clone().into_iter() {
-            if each.filename() == *each_unique {
+            let full_path = relative_path.to_owned() + &each.filename();
+            if full_path == *each_unique {
                 count += 1;
             let _ = match each.change {
                 HunkChange::Add => {
@@ -196,4 +197,21 @@ pub fn match_patch_with_parse(relative_path: &str, patch_src: &[u8]) -> Result<V
 }
 
 
+
+pub fn get_easy_hunk (patch_src: &[u8], at_file_path: &str) -> Result<Vec<Hunk>, Git2ErrorHandling> {
+    let mut vec_of_hunks: Vec<Hunk> = Vec::new();
+    let diff = Diff::from_buffer(patch_src).unwrap();
+    let filenames = get_filenames(&diff).expect("failed to get filenames");
+    let hunks = git_get_hunks(diff, filenames).expect("Unwrap on get_filenames failed");
+    vec_of_hunks.sort_by_key(|hunk| hunk.filename.clone());
+  
+    for hunk in hunks {
+        if hunk.filename() == at_file_path {
+
+            vec_of_hunks.push(hunk);
+    }
+    }
+    Ok(vec_of_hunks)
+
+}
 

@@ -10,7 +10,6 @@ use snafu::Snafu;
 pub mod rustc_parsing;
 pub mod rust_parser;
 pub mod file_parsing;
-
 #[derive(Debug, Snafu)]
 #[snafu(visibility(pub))]
 pub enum ErrorHandling {
@@ -103,30 +102,3 @@ impl ObjectRange {
     }
 }
 
-
-pub trait Files {
-    fn check_for_not_comment(parsed: &Vec<ObjectRange>, line_number: usize) -> Result<bool, ErrorHandling>;
-    fn extract_object_preserving_comments(
-        src: Vec<String>,
-        from_line: usize,
-        parsed: Vec<ObjectRange>,
-    ) -> Result<String, ErrorHandling>;
-    fn extract_by_line(from: &[String], line_start: &usize, line_end: &usize) -> String;
-    fn seeker_for_comments(
-        line_number: usize,
-        line_start: usize,
-        line_end: usize,
-        src: Vec<String>,
-    ) -> Result<String, ErrorHandling>;
-    fn seeker(
-        line_number: usize,
-        item: &ObjectRange,
-        src: &Vec<String>,
-    ) -> Result<String, ErrorHandling>;
-    fn export_object(
-        from_line_number: usize,
-        visited: &Vec<ObjectRange>,
-        src: &Vec<String>,
-    ) -> Result<String, ErrorHandling>;
-    fn string_to_vector(str_source: &str) -> Vec<String>;
-}

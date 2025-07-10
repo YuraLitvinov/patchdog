@@ -6,26 +6,26 @@ use snafu::ResultExt;
 use syn::spanned::Spanned;
 use std::path::PathBuf;
 use syn::File;
-pub trait RustItemParser {
-    fn parse_all_rust_items(&self, src: String) -> Result<Vec<ObjectRange>, ErrorHandling>;
-    fn find_module_file(&self, base_path: PathBuf, mod_name: String) -> Result<Option<PathBuf>, ErrorHandling>;
+pub trait RustParser {
+    fn parse_all_rust_items(src: &String) -> Result<Vec<ObjectRange>, ErrorHandling>;
+    fn find_module_file(base_path: PathBuf, mod_name: String) -> Result<Option<PathBuf>, ErrorHandling>;
 }
 
-pub struct DefaultRustItemParser;
+pub struct RustItemParser;
 
-impl RustItemParser for DefaultRustItemParser {
-    fn parse_all_rust_items(&self, src: String) -> Result<Vec<ObjectRange>, ErrorHandling> {
-        let ast: File = parse_str(&src).context(InvalidSynParsingSnafu)?;
+impl RustParser for RustItemParser {
+    fn parse_all_rust_items(src: &String) -> Result<Vec<ObjectRange>, ErrorHandling> {
+        let ast: File = parse_str(src).context(InvalidSynParsingSnafu)?;
         Ok(visit_items(&ast.items))
     }
 
-    fn find_module_file(&self, base_path: PathBuf, mod_name: String) -> Result<Option<PathBuf>, ErrorHandling> {
+    fn find_module_file(base_path: PathBuf, mod_name: String) -> Result<Option<PathBuf>, ErrorHandling> {
         let mut path = base_path;
         path.pop();
         let paths = [path.join(format!("{}.rs", mod_name))];
         for path in paths {
             if path.exists() {
-                return Ok(Some(path.to_path_buf()));
+                return Ok(Some(path));
             }
         }
         Ok(None)

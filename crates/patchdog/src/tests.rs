@@ -10,18 +10,11 @@ mod tests {
     use git2::Diff;
     use rust_parsing::{
         InvalidIoOperationsSnafu, 
-        object_parsing::parse_all_rust_items,
         rustc_parsing::comment_lexer,
     };
-    use rust_parsing::
-    {
-        object_parsing::find_module_file, 
-        file_parsing::export_object, 
-        file_parsing::extract_by_line, 
-        file_parsing::extract_object_preserving_comments,
-        file_parsing::string_to_vector,
-        file_parsing::check_for_not_comment
-    };
+    use rust_parsing::rust_parser::{RustParser, RustItemParser};
+
+    use rust_parsing::file_parsing::{Files, FileExtractor};
 
     use snafu::ResultExt;
     use std::{ffi::OsStr, fs, path::Path};
@@ -47,8 +40,8 @@ mod tests {
         let end: usize = 23;
         //Actually an impl block; doesn't affect the result
         let function_from_file = fs::read_to_string(PATH_GEMINI).expect("File read failed");
-        let vector_of_file = string_to_vector(&function_from_file);
-        let extracted_object = extract_by_line(&vector_of_file, &start, &end);
+        let vector_of_file = FileExtractor::string_to_vector(&function_from_file);
+        let extracted_object = FileExtractor::extract_by_line(&vector_of_file, &start, &end);
         let object_from_const = format!("{}", IMPL_GEMINI);
         assert_ne!(object_from_const, extracted_object);
     }
@@ -60,7 +53,7 @@ mod tests {
         let source = fs::read_to_string(&path)
             .context(InvalidIoOperationsSnafu)
             .expect("File read failed");
-        let vectored_file = string_to_vector(&source);
+        let vectored_file = FileExtractor::string_to_vector(&source);
         let line_eight_from_vector = &vectored_file[7]; //Count in vec! starts from 0 
         assert_eq!(COMPARE_LINES, line_eight_from_vector); //This test has passed
     }
@@ -69,7 +62,7 @@ mod tests {
         let source = fs::read_to_string(PATH_BASE)
             .context(InvalidIoOperationsSnafu)
             .expect("File read failed");
-        let parsed = parse_all_rust_items(source).expect("Parsing failed");
+        let parsed = RustItemParser::parse_all_rust_items(&source).expect("Parsing failed");
         for object in parsed {
             let obj_type = object
                 .object_type()
@@ -86,7 +79,7 @@ mod tests {
         let source = fs::read_to_string(PATH_BASE)
             .context(InvalidIoOperationsSnafu)
             .expect("Failed to read file");
-        let parsed = parse_all_rust_items(source).expect("Failed to parse");
+        let parsed = RustItemParser::parse_all_rust_items(&source).expect("Failed to parse");
         for object in parsed {
             let obj_type = object
                 .object_type()
@@ -104,7 +97,7 @@ mod tests {
         let source = fs::read_to_string(&path)
             .context(InvalidIoOperationsSnafu)
             .expect("Failed to read file");
-        let parsed = parse_all_rust_items(source).expect("Failed to parse");
+        let parsed = RustItemParser::parse_all_rust_items(&source).expect("Failed to parse");
         let mut obj_vector: Vec<String> = Vec::new();
         for object in parsed {
             let obj_type = object
@@ -114,7 +107,7 @@ mod tests {
                 .object_name()
                 .expect("Unwrapping ObjectRange to name failed");
             if obj_type == "mod".to_string() {
-                let module_location = find_module_file(path.to_path_buf(), obj_name.clone())
+                let module_location = RustItemParser::find_module_file(path.to_path_buf(), obj_name.clone())
                     .expect("Couldn't find mod file");
                 obj_vector.push(module_location.unwrap().to_string_lossy().to_string());
             }
@@ -125,24 +118,24 @@ mod tests {
     #[test]
     fn test_receive_context_on_zero() {
         let str_src = fs::read_to_string(PATH_BASE).expect("Failed to read file");
-        let source = string_to_vector(&str_src);
-        let parsed = parse_all_rust_items(str_src).expect("Failed to parse");
+        let source = FileExtractor::string_to_vector(&str_src);
+        let parsed = RustItemParser::parse_all_rust_items(&str_src).expect("Failed to parse");
         let expected_behavior = "LineOutOfBounds { line_number: 0 }";
         assert_eq!(
             expected_behavior,
-            export_object(0, &parsed, &source).expect("Failed to export object")
+            FileExtractor::export_object(0, &parsed, &source).expect("Failed to export object")
         );
     }
     #[test]
     fn test_receive_context_on_exceed() {
         let str_src = fs::read_to_string(PATH_BASE).expect("Failed to read file");
-        let source = string_to_vector(&str_src);
-        let parsed = parse_all_rust_items(str_src).expect("Failed to parse");
+        let source = FileExtractor::string_to_vector(&str_src);
+        let parsed = RustItemParser::parse_all_rust_items(&str_src).expect("Failed to parse");
 
         let expected_behavior: &'static str = "LineOutOfBounds { line_number: 999999 }";
         assert_eq!(
             expected_behavior,
-            export_object(999999, &parsed, &source).expect("Failed to export object")
+            FileExtractor::export_object(999999, &parsed, &source).expect("Failed to export object")
         );
     }
     const EXPECTED_BEHAVIOR: &str = "impl MyStruct {
@@ -161,9 +154,9 @@ mod tests {
     #[test]
     fn test_receive_context_on_true() {
         let str_src = fs::read_to_string(PATH_BASE).expect("Failed to read file");
-        let source = string_to_vector(&str_src);
-        let parsed = parse_all_rust_items(str_src).expect("Failed to parse");
-        let received = export_object(50, &parsed, &source).expect("Failed to export object");
+        let source = FileExtractor::string_to_vector(&str_src);
+        let parsed = RustItemParser::parse_all_rust_items(&str_src).expect("Failed to parse");
+        let received = FileExtractor::export_object(50, &parsed, &source).expect("Failed to export object");
 
         assert_ne!(EXPECTED_BEHAVIOR, received);
     }
@@ -180,10 +173,10 @@ trait MyTrait {
     fn test_extract_object_preserving_comments() {
         let path_src = "../../tests/data.rs";
         let src = fs::read_to_string(path_src).unwrap();
-        let source = string_to_vector(&src);
+        let source = FileExtractor::string_to_vector(&src);
         let from_where = 62;
-        let parsed = parse_all_rust_items(src).expect("Parse failed");
-        let check = extract_object_preserving_comments(source, from_where, parsed).expect("Check?");
+        let parsed = RustItemParser::parse_all_rust_items(&src).expect("Parse failed");
+        let check = FileExtractor::extract_object_preserving_comments(source, from_where, parsed).expect("Check?");
         assert_eq!(check, FUNCTION_BLOCK);
     }
     #[test]
@@ -212,7 +205,7 @@ trait MyTrait {
             if extension == "rs" {
                 println!("actual path: {}", path);
                 let str_src = fs::read_to_string(&path).expect("Failed to read file");
-                let parsed = parse_all_rust_items(str_src).expect("Failed to parse");
+                let parsed = RustItemParser::parse_all_rust_items(&str_src).expect("Failed to parse");
                 for each_parsed in parsed {
                     println!("{:?}", each_parsed);
                 }
@@ -230,7 +223,7 @@ trait MyTrait {
         for each in read {
             println!("{:?}", each);
             let file_src = fs::read_to_string(each).expect("failed to read");
-            let parsed = parse_all_rust_items(file_src).expect("failed parse");
+            let parsed = RustItemParser::parse_all_rust_items(&file_src).expect("failed parse");
             for each in parsed {
                 if each.object_type().unwrap() == "fn" {
                     println!("{:?}", each);
@@ -254,12 +247,12 @@ trait MyTrait {
                 println!("{:?}", each.filename());
                 let path = "/home/yurii-sama/Desktop/patchdog/".to_string() + &each.filename();
                 let file = fs::read_to_string(&path).expect("failed to read");
-                let file_vector = string_to_vector(&file);
-                let parsed = parse_all_rust_items(file).expect("failed to parse");
+                let file_vector = FileExtractor::string_to_vector(&file);
+                let parsed = RustItemParser::parse_all_rust_items(&file).expect("failed to parse");
                 let what_change_occured = match each.get_change() {
                     "Add" => {
                         println!("Added: \n {:?}", &read);
-                        export_object(each.get_line(), &parsed, &file_vector).unwrap()
+                        FileExtractor::export_object(each.get_line(), &parsed, &file_vector).unwrap()
                     }
 
                     "Remove" => {
@@ -268,7 +261,7 @@ trait MyTrait {
                     }
                     "Modify" => {
                         println!("Modified: \n {}", &each.filename());
-                        export_object(each.get_line(), &parsed, &file_vector).expect("Error on Modify")
+                        FileExtractor::export_object(each.get_line(), &parsed, &file_vector).expect("Error on Modify")
                     }
                     _ => "".to_string(),
                 };
@@ -281,14 +274,14 @@ trait MyTrait {
     #[test]
     fn test_export_object() {
         let file = fs::read_to_string("/home/yurii-sama/Desktop/patchdog/crates/git_parsing/src/lib.rs").expect("failed to read");
-        let parsed = parse_all_rust_items(file.clone()).expect("Failed to parse");
+        let parsed = RustItemParser::parse_all_rust_items(&file).expect("Failed to parse");
         for each in &parsed {
             println!("{:?}", each);
         }
-        let check = check_for_not_comment(&parsed, 45);
+        let check = FileExtractor::check_for_not_comment(&parsed, 45);
         println!("is there comment: {:?}", check);
-        let file_vector = string_to_vector(&file);
-        let what_change_occured = export_object(45, &parsed, &file_vector).expect("Error on Modify");
+        let file_vector = FileExtractor::string_to_vector(&file);
+        let what_change_occured = FileExtractor::export_object(45, &parsed, &file_vector).expect("Error on Modify");
 
         assert_eq!(what_change_occured, "");
     }
@@ -309,13 +302,13 @@ trait MyTrait {
                 for each in hunks.clone().into_iter() {
                     let path = read;
                     let file = fs::read_to_string(&path).expect("failed to read");
-                    let file_vector = string_to_vector(&file);
-                    let parsed = parse_all_rust_items(file).expect("failed to parse");
+                    let file_vector = FileExtractor::string_to_vector(&file);
+                    let parsed = RustItemParser::parse_all_rust_items(&file).expect("failed to parse");
                     let what_change_occured = match each.get_change() {
                         "Add" => {
                             println!("Added: \n {:?}", &each);
-                           let exported_object = export_object(each.get_line(), &parsed, &file_vector).unwrap();
-                           if check_for_not_comment(&parsed, each.get_line()).unwrap() || exported_object.trim().is_empty() {
+                           let exported_object = FileExtractor::export_object(each.get_line(), &parsed, &file_vector).unwrap();
+                           if FileExtractor::check_for_not_comment(&parsed, each.get_line()).unwrap() || exported_object.trim().is_empty() {
                                 println!("SKIPPED ADD AT :{} {}", exported_object, each.get_line());
                                 continue;
                            }
@@ -328,8 +321,8 @@ trait MyTrait {
                         }
                         "Modify" => {
                             println!("Modified: \n {:?}", &each);
-                            let exported_object = export_object(each.get_line(), &parsed, &file_vector).unwrap();
-                            if check_for_not_comment(&parsed, each.get_line()).unwrap() || exported_object.trim().is_empty() {
+                            let exported_object = FileExtractor::export_object(each.get_line(), &parsed, &file_vector).unwrap();
+                            if FileExtractor::check_for_not_comment(&parsed, each.get_line()).unwrap() || exported_object.trim().is_empty() {
                                 println!("SKIPPED MODIFY AT :{} {}", exported_object, each.get_line());
                                 continue;
                             }
@@ -359,7 +352,7 @@ trait MyTrait {
             let path = "/home/yurii-sama/Desktop/patchdog/".to_string() + &change_line.change_at_hunk.filename();
             let file = fs::read_to_string(path)
                 .expect("Failed to read file");
-            let parsed = parse_all_rust_items(file.clone())
+            let parsed = RustItemParser::parse_all_rust_items(&file)
             .expect("Failed to parse");
         println!("{}", change_line.change_at_hunk.filename);
 
