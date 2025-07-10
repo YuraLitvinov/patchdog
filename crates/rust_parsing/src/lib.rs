@@ -7,9 +7,9 @@
 //! Syn crate itself provides functionality to pull out objects from a file, albeit it loses very helpful //comments, so instead
 //! it was chosen as best practice to only get line numbers and from there pull out the whole object.
 use snafu::Snafu;
-pub mod rustc_parsing;
-pub mod rust_parser;
 pub mod file_parsing;
+pub mod rust_parser;
+pub mod rustc_parsing;
 #[derive(Debug, Snafu)]
 #[snafu(visibility(pub))]
 pub enum ErrorHandling {
@@ -44,17 +44,17 @@ pub enum ErrorHandling {
         src: String,
     },
 }
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum LineRange {
     Start(usize),
     End(usize),
 }
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Name {
     TypeName(&'static str),
     Name(String),
 }
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ObjectRange {
     //There is an ample interface for interaction with this structure, hence, I believe there is no reason to change it
     line_ranges: Vec<LineRange>, // Has to stay, as a lot of functionality is bound to this field
@@ -101,4 +101,3 @@ impl ObjectRange {
         None
     }
 }
-

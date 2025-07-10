@@ -1,14 +1,11 @@
+use crate::{ErrorHandling, LineOutOfBoundsSnafu, ObjectRange, SeekerFailedSnafu};
 use snafu::ensure;
-use crate::
-{
-    ObjectRange,
-    ErrorHandling,
-    SeekerFailedSnafu,
-    LineOutOfBoundsSnafu
-};
 pub struct FileExtractor;
 pub trait Files {
-    fn check_for_not_comment(parsed: &Vec<ObjectRange>, line_number: usize) -> Result<bool, ErrorHandling>;
+    fn check_for_not_comment(
+        parsed: &Vec<ObjectRange>,
+        line_number: usize,
+    ) -> Result<bool, ErrorHandling>;
     fn extract_object_preserving_comments(
         src: Vec<String>,
         from_line: usize,
@@ -32,35 +29,62 @@ pub trait Files {
         src: &Vec<String>,
     ) -> Result<String, ErrorHandling>;
     fn string_to_vector(str_source: &str) -> Vec<String>;
+    fn return_match(
+        line_number: usize,
+        visited: Vec<ObjectRange>,
+    ) -> Result<ObjectRange, ErrorHandling>;
+    fn return_sought(line_number: usize, item: ObjectRange) -> Result<ObjectRange, ErrorHandling>;
 }
 
 impl Files for FileExtractor {
     //Splits the string that is usually parsed from fs::read_to_string
     //split_inclusive method is necessary for preserving newline indentation.
     fn string_to_vector(str_source: &str) -> Vec<String> {
-        str_source
-            .lines()
-            .map(|line| line.to_string())
-            .collect()
+        str_source.lines().map(|line| line.to_string()).collect()
     }
     //Main entry for seeker and extract_by_line, roams through Vec<ObjectRange> seeking for the object that fits
     //the requested line number. If it finds no match, then LineOutOfBounds error is thrown
     fn export_object(
-        from_line_number: usize,
+        line_number: usize,
         visited: &Vec<ObjectRange>,
         src: &Vec<String>,
     ) -> Result<String, ErrorHandling> {
         for item in visited {
-            let found = Self::seeker(from_line_number, item, src);
+            let found = Self::seeker(line_number, item, src);
             if found.is_err() {
                 continue;
             }
             return found;
         }
         Err(ErrorHandling::ExportObjectFailed {
-            line_number: from_line_number,
-            src: src[from_line_number].clone(),
+            line_number: line_number,
+            src: src[line_number].clone(),
         })
+    }
+    fn return_match(
+        line_number: usize,
+        visited: Vec<ObjectRange>,
+    ) -> Result<ObjectRange, ErrorHandling> {
+        for item in visited {
+            let found = Self::return_sought(line_number, item);
+            if found.is_err() {
+                continue;
+            }
+            return found;
+        }
+        Err(ErrorHandling::ExportObjectFailed {
+            line_number: line_number,
+            src: "refers to return_match".to_string(),
+        })
+    }
+    fn return_sought(line_number: usize, item: ObjectRange) -> Result<ObjectRange, ErrorHandling> {
+        let line_start = item.line_start().unwrap();
+        let line_end = item.line_end().unwrap();
+        ensure!(
+            line_start <= line_number && line_end >= line_number,
+            SeekerFailedSnafu { line_number }
+        );
+        Ok(item)
     }
     //Finds an object, justifying whether the said line number belongs to the range of the object.
     //If it does, then object is printed with extract_by_line
@@ -131,10 +155,13 @@ impl Files for FileExtractor {
         }
         Err(ErrorHandling::LineOutOfBounds { line_number: 0 })
     }
-    fn check_for_not_comment(parsed: &Vec<ObjectRange>, line_number: usize) -> Result<bool, ErrorHandling> { 
-        println!("LEN OF CHECK: {}", parsed.len());
+    fn check_for_not_comment(
+        parsed: &Vec<ObjectRange>,
+        line_number: usize,
+    ) -> Result<bool, ErrorHandling> {
         for each in parsed {
-            if each.line_start().unwrap() <= line_number && line_number <= each.line_end().unwrap()  {
+            if each.line_start().unwrap() <= line_number && line_number <= each.line_end().unwrap()
+            {
                 return Ok(false);
             }
         }

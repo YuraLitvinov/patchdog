@@ -51,9 +51,7 @@ impl Change {
 //get_filenames.0 corresponds to old file name, get_filenames.1 corresponds to new file name
 //Those can be interchanged, as this only indicates where change occured.
 //and may correspond to actual file name change if renaming occurs
-pub fn get_filenames(
-    diff: &Diff<'static>,
-) -> Result<Vec<String>, Git2ErrorHandling> {
+pub fn get_filenames(diff: &Diff<'static>) -> Result<Vec<String>, Git2ErrorHandling> {
     let mut vector_of_filenames: Vec<String> = Vec::new();
     for delta in diff.deltas() {
         let new_path = delta
@@ -87,11 +85,7 @@ pub fn git_get_hunks(
                     .unwrap()
                     .line_in_hunk(hunk_idx, line_idx)
                     .expect("Failed to unwrap at line: DiffLine<'_>");
-                let line_processed: usize = line
-                    .new_lineno()
-                    .unwrap_or(0)
-                    .try_into()
-                    .unwrap();
+                let line_processed: usize = line.new_lineno().unwrap_or(0).try_into().unwrap();
                 match line.origin() {
                     '+' => {
                         hunk_tuple.push(Hunk {
@@ -121,13 +115,18 @@ pub fn git_get_hunks(
     }
     Ok(hunk_tuple)
 }
-pub fn read_non_repeting_functions(patch_src: &[u8], relative_path: &str) -> Result<Vec<String>, Git2ErrorHandling> {
+pub fn read_non_repeting_functions(
+    patch_src: &[u8],
+    relative_path: &str,
+) -> Result<Vec<String>, Git2ErrorHandling> {
     let mut vec_of_files: Vec<String> = Vec::new();
     let diff = Diff::from_buffer(patch_src).unwrap();
     let filenames = get_filenames(&diff).expect("failed to get filenames");
     let hunks = git_get_hunks(diff, filenames).expect("Unwrap on get_filenames failed");
     let mut seen = HashSet::new();
-    let unique_files = hunks.into_iter().filter(|hunk| seen.insert(hunk.filename.clone()));
+    let unique_files = hunks
+        .into_iter()
+        .filter(|hunk| seen.insert(hunk.filename.clone()));
     for list_of_unique_files in unique_files {
         let new_filename = list_of_unique_files.filename();
         let file_extension = Path::new(&new_filename).extension().and_then(OsStr::to_str);
@@ -137,24 +136,28 @@ pub fn read_non_repeting_functions(patch_src: &[u8], relative_path: &str) -> Res
         }
     }
     Ok(vec_of_files)
-
 }
 pub fn remove_repeating(vector_of_objects: Vec<String>) -> Result<Vec<String>, Git2ErrorHandling> {
     let mut vec_of_files: Vec<String> = Vec::new();
     let mut seen = HashSet::new();
-    let unique_files = vector_of_objects.into_iter().filter(|object| seen.insert(object.clone()));
+    let unique_files = vector_of_objects
+        .into_iter()
+        .filter(|object| seen.insert(object.clone()));
     for list_of_unique_files in unique_files {
-        let file_extension = Path::new(&list_of_unique_files).extension().and_then(OsStr::to_str);
+        let file_extension = Path::new(&list_of_unique_files)
+            .extension()
+            .and_then(OsStr::to_str);
         if let Some("rs") = file_extension {
             vec_of_files.push(list_of_unique_files);
         }
     }
     Ok(vec_of_files)
-
 }
 
-
-pub fn match_patch_with_parse(relative_path: &str, patch_src: &[u8]) -> Result<Vec<Change>, Git2ErrorHandling>{
+pub fn match_patch_with_parse(
+    relative_path: &str,
+    patch_src: &[u8],
+) -> Result<Vec<Change>, Git2ErrorHandling> {
     let mut changes: Vec<Change> = Vec::new();
     let list_of_unique_files = read_non_repeting_functions(&patch_src, relative_path)?;
     let diff = Diff::from_buffer(&patch_src).context(Git2Snafu)?;
@@ -167,27 +170,27 @@ pub fn match_patch_with_parse(relative_path: &str, patch_src: &[u8]) -> Result<V
             let full_path = relative_path.to_owned() + &each.filename();
             if full_path == *each_unique {
                 count += 1;
-            let _ = match each.change {
-                HunkChange::Add => {
-                    changes.push(Change {
-                        quantity: count,
-                        change_at_hunk: each.clone(),
-                    });
-                }
+                let _ = match each.change {
+                    HunkChange::Add => {
+                        changes.push(Change {
+                            quantity: count,
+                            change_at_hunk: each.clone(),
+                        });
+                    }
 
-                HunkChange::Remove => {
-                    changes.push(Change {
-                        quantity: count,
-                        change_at_hunk: each.clone(),
-                    });
-                }
-                HunkChange::Modify => {
-                    changes.push(Change {
-                        quantity: count,
-                        change_at_hunk: each.clone(),
-                    });
-                }
-            };  
+                    HunkChange::Remove => {
+                        changes.push(Change {
+                            quantity: count,
+                            change_at_hunk: each.clone(),
+                        });
+                    }
+                    HunkChange::Modify => {
+                        changes.push(Change {
+                            quantity: count,
+                            change_at_hunk: each.clone(),
+                        });
+                    }
+                };
             }
         }
     }
@@ -196,22 +199,17 @@ pub fn match_patch_with_parse(relative_path: &str, patch_src: &[u8]) -> Result<V
     Ok(changes)
 }
 
-
-
-pub fn get_easy_hunk (patch_src: &[u8], at_file_path: &str) -> Result<Vec<Hunk>, Git2ErrorHandling> {
+pub fn get_easy_hunk(patch_src: &[u8], at_file_path: &str) -> Result<Vec<Hunk>, Git2ErrorHandling> {
     let mut vec_of_hunks: Vec<Hunk> = Vec::new();
     let diff = Diff::from_buffer(patch_src).unwrap();
     let filenames = get_filenames(&diff).expect("failed to get filenames");
     let hunks = git_get_hunks(diff, filenames).expect("Unwrap on get_filenames failed");
     vec_of_hunks.sort_by_key(|hunk| hunk.filename.clone());
-  
+
     for hunk in hunks {
         if hunk.filename() == at_file_path {
-
             vec_of_hunks.push(hunk);
-    }
+        }
     }
     Ok(vec_of_hunks)
-
 }
-

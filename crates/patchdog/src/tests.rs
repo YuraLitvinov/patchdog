@@ -1,20 +1,13 @@
 #[cfg(test)]
 mod tests {
-    use git_parsing::
-    {
-        get_filenames,
-        git_get_hunks,
-        read_non_repeting_functions,
-        match_patch_with_parse
+    use git_parsing::{
+        get_filenames, git_get_hunks, match_patch_with_parse, read_non_repeting_functions,
     };
     use git2::Diff;
-    use rust_parsing::{
-        InvalidIoOperationsSnafu, 
-        rustc_parsing::comment_lexer,
-    };
-    use rust_parsing::rust_parser::{RustParser, RustItemParser};
+    use rust_parsing::rust_parser::{RustItemParser, RustParser};
+    use rust_parsing::{InvalidIoOperationsSnafu, rustc_parsing::comment_lexer};
 
-    use rust_parsing::file_parsing::{Files, FileExtractor};
+    use rust_parsing::file_parsing::{FileExtractor, Files};
 
     use snafu::ResultExt;
     use std::{ffi::OsStr, fs, path::Path};
@@ -107,8 +100,9 @@ mod tests {
                 .object_name()
                 .expect("Unwrapping ObjectRange to name failed");
             if obj_type == "mod".to_string() {
-                let module_location = RustItemParser::find_module_file(path.to_path_buf(), obj_name.clone())
-                    .expect("Couldn't find mod file");
+                let module_location =
+                    RustItemParser::find_module_file(path.to_path_buf(), obj_name.clone())
+                        .expect("Couldn't find mod file");
                 obj_vector.push(module_location.unwrap().to_string_lossy().to_string());
             }
         }
@@ -135,7 +129,8 @@ mod tests {
         let expected_behavior: &'static str = "LineOutOfBounds { line_number: 999999 }";
         assert_eq!(
             expected_behavior,
-            FileExtractor::export_object(999999, &parsed, &source).expect("Failed to export object")
+            FileExtractor::export_object(999999, &parsed, &source)
+                .expect("Failed to export object")
         );
     }
     const EXPECTED_BEHAVIOR: &str = "impl MyStruct {
@@ -156,7 +151,8 @@ mod tests {
         let str_src = fs::read_to_string(PATH_BASE).expect("Failed to read file");
         let source = FileExtractor::string_to_vector(&str_src);
         let parsed = RustItemParser::parse_all_rust_items(&str_src).expect("Failed to parse");
-        let received = FileExtractor::export_object(50, &parsed, &source).expect("Failed to export object");
+        let received =
+            FileExtractor::export_object(50, &parsed, &source).expect("Failed to export object");
 
         assert_ne!(EXPECTED_BEHAVIOR, received);
     }
@@ -176,7 +172,8 @@ trait MyTrait {
         let source = FileExtractor::string_to_vector(&src);
         let from_where = 62;
         let parsed = RustItemParser::parse_all_rust_items(&src).expect("Parse failed");
-        let check = FileExtractor::extract_object_preserving_comments(source, from_where, parsed).expect("Check?");
+        let check = FileExtractor::extract_object_preserving_comments(source, from_where, parsed)
+            .expect("Check?");
         assert_eq!(check, FUNCTION_BLOCK);
     }
     #[test]
@@ -205,7 +202,8 @@ trait MyTrait {
             if extension == "rs" {
                 println!("actual path: {}", path);
                 let str_src = fs::read_to_string(&path).expect("Failed to read file");
-                let parsed = RustItemParser::parse_all_rust_items(&str_src).expect("Failed to parse");
+                let parsed =
+                    RustItemParser::parse_all_rust_items(&str_src).expect("Failed to parse");
                 for each_parsed in parsed {
                     println!("{:?}", each_parsed);
                 }
@@ -236,7 +234,8 @@ trait MyTrait {
     fn test_match_patch_with_parse() {
         let src = "/home/yurii-sama/Desktop/patchdog/patch.patch";
         let patch_text = fs::read(src).expect("Failed to read patch file");
-        let read = read_non_repeting_functions(&patch_text, "/home/yurii-sama/Desktop/patchdog").expect("Failed to read");
+        let read = read_non_repeting_functions(&patch_text, "/home/yurii-sama/Desktop/patchdog")
+            .expect("Failed to read");
         let diff = Diff::from_buffer(&patch_text).unwrap();
         let changed = get_filenames(&diff).expect("Unwrap on get_filenames failed");
         let mut hunks = git_get_hunks(diff, changed).expect("Error?");
@@ -252,7 +251,8 @@ trait MyTrait {
                 let what_change_occured = match each.get_change() {
                     "Add" => {
                         println!("Added: \n {:?}", &read);
-                        FileExtractor::export_object(each.get_line(), &parsed, &file_vector).unwrap()
+                        FileExtractor::export_object(each.get_line(), &parsed, &file_vector)
+                            .unwrap()
                     }
 
                     "Remove" => {
@@ -261,7 +261,8 @@ trait MyTrait {
                     }
                     "Modify" => {
                         println!("Modified: \n {}", &each.filename());
-                        FileExtractor::export_object(each.get_line(), &parsed, &file_vector).expect("Error on Modify")
+                        FileExtractor::export_object(each.get_line(), &parsed, &file_vector)
+                            .expect("Error on Modify")
                     }
                     _ => "".to_string(),
                 };
@@ -273,7 +274,9 @@ trait MyTrait {
     }
     #[test]
     fn test_export_object() {
-        let file = fs::read_to_string("/home/yurii-sama/Desktop/patchdog/crates/git_parsing/src/lib.rs").expect("failed to read");
+        let file =
+            fs::read_to_string("/home/yurii-sama/Desktop/patchdog/crates/git_parsing/src/lib.rs")
+                .expect("failed to read");
         let parsed = RustItemParser::parse_all_rust_items(&file).expect("Failed to parse");
         for each in &parsed {
             println!("{:?}", each);
@@ -281,7 +284,8 @@ trait MyTrait {
         let check = FileExtractor::check_for_not_comment(&parsed, 45);
         println!("is there comment: {:?}", check);
         let file_vector = FileExtractor::string_to_vector(&file);
-        let what_change_occured = FileExtractor::export_object(45, &parsed, &file_vector).expect("Error on Modify");
+        let what_change_occured =
+            FileExtractor::export_object(45, &parsed, &file_vector).expect("Error on Modify");
 
         assert_eq!(what_change_occured, "");
     }
@@ -291,11 +295,12 @@ trait MyTrait {
         fn _match_patch_with_parse(src: &str, relative_path: &str) {
             let path = format!("{}{}", relative_path, src);
             let patch_text = fs::read(&path).expect("Failed to read patch file");
-            let read = read_non_repeting_functions(&patch_text, &relative_path).expect("Failed to read");
+            let read =
+                read_non_repeting_functions(&patch_text, &relative_path).expect("Failed to read");
             let diff = Diff::from_buffer(&patch_text).unwrap();
             let changed = get_filenames(&diff).expect("Unwrap on get_filenames failed");
             let mut hunks = git_get_hunks(diff, changed).expect("Error?");
-        
+
             hunks.sort_by(|a, b| a.filename().cmp(&b.filename()));
             for read in &read {
                 println!("READ: {:?}", &read);
@@ -303,27 +308,48 @@ trait MyTrait {
                     let path = read;
                     let file = fs::read_to_string(&path).expect("failed to read");
                     let file_vector = FileExtractor::string_to_vector(&file);
-                    let parsed = RustItemParser::parse_all_rust_items(&file).expect("failed to parse");
+                    let parsed =
+                        RustItemParser::parse_all_rust_items(&file).expect("failed to parse");
                     let what_change_occured = match each.get_change() {
                         "Add" => {
                             println!("Added: \n {:?}", &each);
-                           let exported_object = FileExtractor::export_object(each.get_line(), &parsed, &file_vector).unwrap();
-                           if FileExtractor::check_for_not_comment(&parsed, each.get_line()).unwrap() || exported_object.trim().is_empty() {
+                            let exported_object = FileExtractor::export_object(
+                                each.get_line(),
+                                &parsed,
+                                &file_vector,
+                            )
+                            .unwrap();
+                            if FileExtractor::check_for_not_comment(&parsed, each.get_line())
+                                .unwrap()
+                                || exported_object.trim().is_empty()
+                            {
                                 println!("SKIPPED ADD AT :{} {}", exported_object, each.get_line());
                                 continue;
-                           }
-                           exported_object
+                            }
+                            exported_object
                         }
-        
+
                         "Remove" => {
                             println!("Removed line number:\n{:?}", &each.filename());
                             "".to_string()
                         }
                         "Modify" => {
                             println!("Modified: \n {:?}", &each);
-                            let exported_object = FileExtractor::export_object(each.get_line(), &parsed, &file_vector).unwrap();
-                            if FileExtractor::check_for_not_comment(&parsed, each.get_line()).unwrap() || exported_object.trim().is_empty() {
-                                println!("SKIPPED MODIFY AT :{} {}", exported_object, each.get_line());
+                            let exported_object = FileExtractor::export_object(
+                                each.get_line(),
+                                &parsed,
+                                &file_vector,
+                            )
+                            .unwrap();
+                            if FileExtractor::check_for_not_comment(&parsed, each.get_line())
+                                .unwrap()
+                                || exported_object.trim().is_empty()
+                            {
+                                println!(
+                                    "SKIPPED MODIFY AT :{} {}",
+                                    exported_object,
+                                    each.get_line()
+                                );
                                 continue;
                             }
                             exported_object
@@ -337,34 +363,30 @@ trait MyTrait {
                 }
             }
         }
-        
     }
 
     #[test]
     fn test_quantity() {
-        let patch_text = fs::read("/home/yurii-sama/Desktop/patchdog/patch.patch").expect("Failed to read patch file");
-       // let mut vec_of_exports: Vec<String> = Vec::new();
+        let patch_text = fs::read("/home/yurii-sama/Desktop/patchdog/patch.patch")
+            .expect("Failed to read patch file");
+        // let mut vec_of_exports: Vec<String> = Vec::new();
         let matched = match_patch_with_parse("", &patch_text).unwrap();
         for change_line in matched {
             if change_line.quantity == 1 {
-            //println!("{:?}", change_line.change_at_hunk);
+                //println!("{:?}", change_line.change_at_hunk);
 
-            let path = "/home/yurii-sama/Desktop/patchdog/".to_string() + &change_line.change_at_hunk.filename();
-            let file = fs::read_to_string(path)
-                .expect("Failed to read file");
-            let parsed = RustItemParser::parse_all_rust_items(&file)
-            .expect("Failed to parse");
-        println!("{}", change_line.change_at_hunk.filename);
+                let path = "/home/yurii-sama/Desktop/patchdog/".to_string()
+                    + &change_line.change_at_hunk.filename();
+                let file = fs::read_to_string(path).expect("Failed to read file");
+                let parsed = RustItemParser::parse_all_rust_items(&file).expect("Failed to parse");
+                println!("{}", change_line.change_at_hunk.filename);
 
-            for each in parsed {
-                println!("{:?}", each);
+                for each in parsed {
+                    println!("{:?}", each);
+                }
             }
-        }            
         }
-            
-        assert_eq!(true,false);
 
+        assert_eq!(true, false);
     }
-
-
 }

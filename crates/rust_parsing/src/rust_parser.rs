@@ -1,14 +1,16 @@
-
-use crate::{ObjectRange, ErrorHandling, LineRange, Name, InvalidSynParsingSnafu};
-use syn::parse_str;
-use syn::Item;
+use crate::{ErrorHandling, InvalidSynParsingSnafu, LineRange, Name, ObjectRange};
 use snafu::ResultExt;
-use syn::spanned::Spanned;
 use std::path::PathBuf;
 use syn::File;
+use syn::Item;
+use syn::parse_str;
+use syn::spanned::Spanned;
 pub trait RustParser {
     fn parse_all_rust_items(src: &String) -> Result<Vec<ObjectRange>, ErrorHandling>;
-    fn find_module_file(base_path: PathBuf, mod_name: String) -> Result<Option<PathBuf>, ErrorHandling>;
+    fn find_module_file(
+        base_path: PathBuf,
+        mod_name: String,
+    ) -> Result<Option<PathBuf>, ErrorHandling>;
 }
 
 pub struct RustItemParser;
@@ -19,7 +21,10 @@ impl RustParser for RustItemParser {
         Ok(visit_items(&ast.items))
     }
 
-    fn find_module_file(base_path: PathBuf, mod_name: String) -> Result<Option<PathBuf>, ErrorHandling> {
+    fn find_module_file(
+        base_path: PathBuf,
+        mod_name: String,
+    ) -> Result<Option<PathBuf>, ErrorHandling> {
         let mut path = base_path;
         path.pop();
         let paths = [path.join(format!("{}.rs", mod_name))];
@@ -43,10 +48,7 @@ fn visit_items(items: &[Item]) -> Vec<ObjectRange> {
                         LineRange::Start(s.span().start().line),
                         LineRange::End(s.span().end().line),
                     ],
-                    names: vec![
-                        Name::TypeName("struct"),
-                        Name::Name(s.ident.to_string()),
-                    ],
+                    names: vec![Name::TypeName("struct"), Name::Name(s.ident.to_string())],
                 });
             }
             Item::Enum(e) => {
@@ -55,10 +57,7 @@ fn visit_items(items: &[Item]) -> Vec<ObjectRange> {
                         LineRange::Start(e.span().start().line),
                         LineRange::End(e.span().end().line),
                     ],
-                    names: vec![
-                        Name::TypeName("enum"),
-                        Name::Name(e.ident.to_string()),
-                    ],
+                    names: vec![Name::TypeName("enum"), Name::Name(e.ident.to_string())],
                 });
             }
             Item::Fn(f) => {
@@ -67,10 +66,7 @@ fn visit_items(items: &[Item]) -> Vec<ObjectRange> {
                         LineRange::Start(f.span().start().line),
                         LineRange::End(f.span().end().line),
                     ],
-                    names: vec![
-                        Name::TypeName("fn"),
-                        Name::Name(f.sig.ident.to_string()),
-                    ],
+                    names: vec![Name::TypeName("fn"), Name::Name(f.sig.ident.to_string())],
                 });
             }
             Item::Mod(m) => match m.content.clone() {
@@ -80,10 +76,7 @@ fn visit_items(items: &[Item]) -> Vec<ObjectRange> {
                             LineRange::Start(m.span().start().line),
                             LineRange::End(m.ident.span().end().line),
                         ],
-                        names: vec![
-                            Name::TypeName("mod"),
-                            Name::Name(m.ident.to_string()),
-                        ],
+                        names: vec![Name::TypeName("mod"), Name::Name(m.ident.to_string())],
                     });
                     object_line.extend(visit_items(&items));
                 }
@@ -93,10 +86,7 @@ fn visit_items(items: &[Item]) -> Vec<ObjectRange> {
                             LineRange::Start(m.ident.span().start().line),
                             LineRange::End(m.ident.span().end().line),
                         ],
-                        names: vec![
-                            Name::TypeName("mod"),
-                            Name::Name(m.ident.to_string()),
-                        ],
+                        names: vec![Name::TypeName("mod"), Name::Name(m.ident.to_string())],
                     });
                 }
             },
@@ -107,10 +97,7 @@ fn visit_items(items: &[Item]) -> Vec<ObjectRange> {
                             LineRange::Start(path.span().start().line),
                             LineRange::End(path.span().end().line),
                         ],
-                        names: vec![
-                            Name::TypeName("use"),
-                            Name::Name(path.ident.to_string()),
-                        ],
+                        names: vec![Name::TypeName("use"), Name::Name(path.ident.to_string())],
                     });
                 }
             }
@@ -124,10 +111,7 @@ fn visit_items(items: &[Item]) -> Vec<ObjectRange> {
                         LineRange::Start(i.span().start().line),
                         LineRange::End(i.span().end().line),
                     ],
-                    names: vec![
-                        Name::TypeName("impl"),
-                        Name::Name(trait_name),
-                    ],
+                    names: vec![Name::TypeName("impl"), Name::Name(trait_name)],
                 });
             }
             Item::Trait(t) => {
@@ -136,10 +120,7 @@ fn visit_items(items: &[Item]) -> Vec<ObjectRange> {
                         LineRange::Start(t.span().start().line),
                         LineRange::End(t.span().end().line),
                     ],
-                    names: vec![
-                        Name::TypeName("trait"),
-                        Name::Name(t.ident.to_string()),
-                    ],
+                    names: vec![Name::TypeName("trait"), Name::Name(t.ident.to_string())],
                 });
             }
             Item::Type(t) => {
@@ -148,10 +129,7 @@ fn visit_items(items: &[Item]) -> Vec<ObjectRange> {
                         LineRange::Start(t.span().start().line),
                         LineRange::End(t.span().end().line),
                     ],
-                    names: vec![
-                        Name::TypeName("type"),
-                        Name::Name(t.ident.to_string()),
-                    ],
+                    names: vec![Name::TypeName("type"), Name::Name(t.ident.to_string())],
                 });
             }
             Item::Union(u) => {
@@ -160,10 +138,7 @@ fn visit_items(items: &[Item]) -> Vec<ObjectRange> {
                         LineRange::Start(u.span().start().line),
                         LineRange::End(u.span().end().line),
                     ],
-                    names: vec![
-                        Name::TypeName("union"),
-                        Name::Name(u.ident.to_string()),
-                    ],
+                    names: vec![Name::TypeName("union"), Name::Name(u.ident.to_string())],
                 });
             }
             Item::Const(c) => {
@@ -172,10 +147,7 @@ fn visit_items(items: &[Item]) -> Vec<ObjectRange> {
                         LineRange::Start(c.span().start().line),
                         LineRange::End(c.span().end().line),
                     ],
-                    names: vec![
-                        Name::TypeName("const"),
-                        Name::Name(c.ident.to_string()),
-                    ],
+                    names: vec![Name::TypeName("const"), Name::Name(c.ident.to_string())],
                 });
             }
             Item::Macro(m) => {
@@ -208,10 +180,7 @@ fn visit_items(items: &[Item]) -> Vec<ObjectRange> {
                         LineRange::Start(s.span().start().line),
                         LineRange::End(s.span().end().line),
                     ],
-                    names: vec![
-                        Name::TypeName("static"),
-                        Name::Name(s.ident.to_string()),
-                    ],
+                    names: vec![Name::TypeName("static"), Name::Name(s.ident.to_string())],
                 });
             }
             _ => println!("Other item"),
