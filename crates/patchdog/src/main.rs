@@ -31,10 +31,7 @@ fn read_patch_export_change(path_to_patch: &str, relative_path: &str) {
                 continue;
             }
 
-            let extracted = FileExtractor::return_match(
-                each.get_line(), 
-                parsed.clone())
-                    .unwrap();
+            let extracted = FileExtractor::return_match(each.get_line(), parsed.clone()).unwrap();
 
             println!("{:?}", extracted);
         }
