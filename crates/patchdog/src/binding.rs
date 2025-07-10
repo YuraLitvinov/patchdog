@@ -19,7 +19,7 @@ pub fn store_objects(
     for change_line in &matched {
         if change_line.quantity == 1 {
             let list_of_unique_files =
-                get_easy_hunk(&patch_src, &change_line.change_at_hunk.filename())?;
+                get_easy_hunk(patch_src, &change_line.change_at_hunk.filename())?;
             let path = relative_path.to_string() + &change_line.change_at_hunk.filename();
             let file = fs::read_to_string(&path).expect("Failed read file");
             let parsed = RustItemParser::parse_all_rust_items(&file).unwrap();

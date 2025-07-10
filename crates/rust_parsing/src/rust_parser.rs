@@ -6,7 +6,7 @@ use syn::Item;
 use syn::parse_str;
 use syn::spanned::Spanned;
 pub trait RustParser {
-    fn parse_all_rust_items(src: &String) -> Result<Vec<ObjectRange>, ErrorHandling>;
+    fn parse_all_rust_items(src: &str) -> Result<Vec<ObjectRange>, ErrorHandling>;
     fn find_module_file(
         base_path: PathBuf,
         mod_name: String,
@@ -16,7 +16,7 @@ pub trait RustParser {
 pub struct RustItemParser;
 
 impl RustParser for RustItemParser {
-    fn parse_all_rust_items(src: &String) -> Result<Vec<ObjectRange>, ErrorHandling> {
+    fn parse_all_rust_items(src: &str) -> Result<Vec<ObjectRange>, ErrorHandling> {
         let ast: File = parse_str(src).context(InvalidSynParsingSnafu)?;
         Ok(visit_items(&ast.items))
     }

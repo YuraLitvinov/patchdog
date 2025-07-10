@@ -3,7 +3,7 @@ use snafu::ensure;
 pub struct FileExtractor;
 pub trait Files {
     fn check_for_not_comment(
-        parsed: &Vec<ObjectRange>,
+        parsed: &[ObjectRange],
         line_number: usize,
     ) -> Result<bool, ErrorHandling>;
     fn extract_object_preserving_comments(
@@ -21,12 +21,12 @@ pub trait Files {
     fn seeker(
         line_number: usize,
         item: &ObjectRange,
-        src: &Vec<String>,
+        src: &[String],
     ) -> Result<String, ErrorHandling>;
     fn export_object(
         from_line_number: usize,
-        visited: &Vec<ObjectRange>,
-        src: &Vec<String>,
+        visited: &[ObjectRange],
+        src: &[String],
     ) -> Result<String, ErrorHandling>;
     fn string_to_vector(str_source: &str) -> Vec<String>;
     fn return_match(
@@ -46,8 +46,8 @@ impl Files for FileExtractor {
     //the requested line number. If it finds no match, then LineOutOfBounds error is thrown
     fn export_object(
         line_number: usize,
-        visited: &Vec<ObjectRange>,
-        src: &Vec<String>,
+        visited: &[ObjectRange],
+        src: &[String],
     ) -> Result<String, ErrorHandling> {
         for item in visited {
             let found = Self::seeker(line_number, item, src);
@@ -57,7 +57,7 @@ impl Files for FileExtractor {
             return found;
         }
         Err(ErrorHandling::ExportObjectFailed {
-            line_number: line_number,
+            line_number,
             src: src[line_number].clone(),
         })
     }
@@ -73,7 +73,7 @@ impl Files for FileExtractor {
             return found;
         }
         Err(ErrorHandling::ExportObjectFailed {
-            line_number: line_number,
+            line_number,
             src: "refers to return_match".to_string(),
         })
     }
@@ -91,7 +91,7 @@ impl Files for FileExtractor {
     fn seeker(
         line_number: usize,
         item: &ObjectRange,
-        src: &Vec<String>,
+        src: &[String],
     ) -> Result<String, ErrorHandling> {
         let line_start = item.line_start().unwrap();
         let line_end = item.line_end().unwrap();
@@ -156,7 +156,7 @@ impl Files for FileExtractor {
         Err(ErrorHandling::LineOutOfBounds { line_number: 0 })
     }
     fn check_for_not_comment(
-        parsed: &Vec<ObjectRange>,
+        parsed: &[ObjectRange],
         line_number: usize,
     ) -> Result<bool, ErrorHandling> {
         for each in parsed {

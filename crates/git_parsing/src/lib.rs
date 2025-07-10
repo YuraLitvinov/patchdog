@@ -159,18 +159,19 @@ pub fn match_patch_with_parse(
     patch_src: &[u8],
 ) -> Result<Vec<Change>, Git2ErrorHandling> {
     let mut changes: Vec<Change> = Vec::new();
-    let list_of_unique_files = read_non_repeting_functions(&patch_src, relative_path)?;
-    let diff = Diff::from_buffer(&patch_src).context(Git2Snafu)?;
+    let list_of_unique_files = read_non_repeting_functions(patch_src, relative_path)?;
+    let diff = Diff::from_buffer(patch_src).context(Git2Snafu)?;
     let changed = get_filenames(&diff)?;
     let mut hunks = git_get_hunks(diff, changed)?;
-    hunks.sort_by(|a, b| a.filename().cmp(&b.filename()));
+    //hunks.sort_by(|a, b| a.filename().cmp(&b.filename()));
+    hunks.sort_by_key(|a| a.filename());
     for each_unique in list_of_unique_files.iter() {
         let mut count = 0;
         for each in hunks.clone().into_iter() {
             let full_path = relative_path.to_owned() + &each.filename();
             if full_path == *each_unique {
                 count += 1;
-                let _ = match each.change {
+                match each.change {
                     HunkChange::Add => {
                         changes.push(Change {
                             quantity: count,
