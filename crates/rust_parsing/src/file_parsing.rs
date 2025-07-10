@@ -1,4 +1,5 @@
-use crate::{ErrorHandling, LineOutOfBoundsSnafu, ObjectRange, SeekerFailedSnafu};
+use crate::error::{ErrorHandling, LineOutOfBoundsSnafu, SeekerFailedSnafu};
+use crate::object_range::ObjectRange;
 use snafu::ensure;
 pub struct FileExtractor;
 pub trait Files {

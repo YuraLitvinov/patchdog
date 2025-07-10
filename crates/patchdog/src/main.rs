@@ -1,5 +1,6 @@
 use std::fs;
 pub mod binding;
+#[cfg(test)]
 pub mod tests;
 
 use binding::store_objects;
