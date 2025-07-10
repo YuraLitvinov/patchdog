@@ -1,12 +1,28 @@
 #[cfg(test)]
 mod tests {
-    use git_parsing::{get_filenames, git_get_hunks, read_non_repeting_functions};
+    use git_parsing::
+    {
+        get_filenames,
+        git_get_hunks,
+        read_non_repeting_functions,
+        match_patch_with_parse
+    };
     use git2::Diff;
     use rust_parsing::{
-        InvalidIoOperationsSnafu, export_object, extract_by_line,
-        extract_object_preserving_comments, find_module_file, parse_all_rust_items,
-        rustc_parsing::comment_lexer, string_to_vector,
+        InvalidIoOperationsSnafu, 
+        object_parsing::parse_all_rust_items,
+        rustc_parsing::comment_lexer,
     };
+    use rust_parsing::
+    {
+        object_parsing::find_module_file, 
+        file_parsing::export_object, 
+        file_parsing::extract_by_line, 
+        file_parsing::extract_object_preserving_comments,
+        file_parsing::string_to_vector,
+        file_parsing::check_for_not_comment
+    };
+
     use snafu::ResultExt;
     use std::{ffi::OsStr, fs, path::Path};
     const PATH_BASE: &str = "../../tests/data.rs";
@@ -114,7 +130,7 @@ mod tests {
         let expected_behavior = "LineOutOfBounds { line_number: 0 }";
         assert_eq!(
             expected_behavior,
-            export_object(0, parsed, &source).expect("Failed to export object")
+            export_object(0, &parsed, &source).expect("Failed to export object")
         );
     }
     #[test]
@@ -126,7 +142,7 @@ mod tests {
         let expected_behavior: &'static str = "LineOutOfBounds { line_number: 999999 }";
         assert_eq!(
             expected_behavior,
-            export_object(999999, parsed, &source).expect("Failed to export object")
+            export_object(999999, &parsed, &source).expect("Failed to export object")
         );
     }
     const EXPECTED_BEHAVIOR: &str = "impl MyStruct {
@@ -147,7 +163,7 @@ mod tests {
         let str_src = fs::read_to_string(PATH_BASE).expect("Failed to read file");
         let source = string_to_vector(&str_src);
         let parsed = parse_all_rust_items(str_src).expect("Failed to parse");
-        let received = export_object(50, parsed, &source).expect("Failed to export object");
+        let received = export_object(50, &parsed, &source).expect("Failed to export object");
 
         assert_ne!(EXPECTED_BEHAVIOR, received);
     }
@@ -188,7 +204,7 @@ trait MyTrait {
         let diff = Diff::from_buffer(&patch_text).unwrap();
         let changed = get_filenames(&diff).expect("Unwrap on get_filenames failed");
         for each in changed {
-            let path = "../../".to_string() + &each.1;
+            let path = "../../".to_string() + &each;
             let extension = Path::new(&path)
                 .extension()
                 .and_then(OsStr::to_str)
@@ -210,7 +226,7 @@ trait MyTrait {
     fn test_combine_git() {
         let src = "../../patchfromlatest.patch";
         let patch_text = fs::read(src).expect("Failed to read patch file");
-        let read = read_non_repeting_functions(&patch_text).expect("Failed to read");
+        let read = read_non_repeting_functions(&patch_text, "../../").expect("Failed to read");
         for each in read {
             println!("{:?}", each);
             let file_src = fs::read_to_string(each).expect("failed to read");
@@ -225,33 +241,34 @@ trait MyTrait {
     }
     #[test]
     fn test_match_patch_with_parse() {
-        let src = "../../patchfromlatest.patch";
+        let src = "/home/yurii-sama/Desktop/patchdog/patch.patch";
         let patch_text = fs::read(src).expect("Failed to read patch file");
-        let read = read_non_repeting_functions(&patch_text).expect("Failed to read");
+        let read = read_non_repeting_functions(&patch_text, "/home/yurii-sama/Desktop/patchdog").expect("Failed to read");
         let diff = Diff::from_buffer(&patch_text).unwrap();
         let changed = get_filenames(&diff).expect("Unwrap on get_filenames failed");
         let mut hunks = git_get_hunks(diff, changed).expect("Error?");
 
-        hunks.sort_by(|a, b| a.2.cmp(&b.2));
+        hunks.sort_by(|a, b| a.get_line().cmp(&b.get_line()));
         for read in read {
             for each in hunks.clone().into_iter() {
-                let path = "../../".to_string() + &each.2;
+                println!("{:?}", each.filename());
+                let path = "/home/yurii-sama/Desktop/patchdog/".to_string() + &each.filename();
                 let file = fs::read_to_string(&path).expect("failed to read");
                 let file_vector = string_to_vector(&file);
                 let parsed = parse_all_rust_items(file).expect("failed to parse");
-                let what_change_occured = match each.0 {
+                let what_change_occured = match each.get_change() {
                     "Add" => {
-                        println!("Added: \n {}", &read);
-                        export_object(each.1, parsed, &file_vector).unwrap()
+                        println!("Added: \n {:?}", &read);
+                        export_object(each.get_line(), &parsed, &file_vector).unwrap()
                     }
 
                     "Remove" => {
-                        println!("Removed line number: {} \n{} ", each.1, &read);
+                        println!("Removed line number: {} \n{:?} ", each.get_line(), &read);
                         "".to_string()
                     }
                     "Modify" => {
-                        println!("Modified: \n {}", &each.2);
-                        export_object(each.1, parsed, &file_vector).expect("Error on Modify")
+                        println!("Modified: \n {}", &each.filename());
+                        export_object(each.get_line(), &parsed, &file_vector).expect("Error on Modify")
                     }
                     _ => "".to_string(),
                 };
@@ -261,4 +278,100 @@ trait MyTrait {
 
         assert_eq!(true, false);
     }
+    #[test]
+    fn test_export_object() {
+        let file = fs::read_to_string("/home/yurii-sama/Desktop/patchdog/crates/git_parsing/src/lib.rs").expect("failed to read");
+        let parsed = parse_all_rust_items(file.clone()).expect("Failed to parse");
+        for each in &parsed {
+            println!("{:?}", each);
+        }
+        let check = check_for_not_comment(&parsed, 45);
+        println!("is there comment: {:?}", check);
+        let file_vector = string_to_vector(&file);
+        let what_change_occured = export_object(45, &parsed, &file_vector).expect("Error on Modify");
+
+        assert_eq!(what_change_occured, "");
+    }
+
+    #[test]
+    fn testing_required() {
+        fn _match_patch_with_parse(src: &str, relative_path: &str) {
+            let path = format!("{}{}", relative_path, src);
+            let patch_text = fs::read(&path).expect("Failed to read patch file");
+            let read = read_non_repeting_functions(&patch_text, &relative_path).expect("Failed to read");
+            let diff = Diff::from_buffer(&patch_text).unwrap();
+            let changed = get_filenames(&diff).expect("Unwrap on get_filenames failed");
+            let mut hunks = git_get_hunks(diff, changed).expect("Error?");
+        
+            hunks.sort_by(|a, b| a.filename().cmp(&b.filename()));
+            for read in &read {
+                println!("READ: {:?}", &read);
+                for each in hunks.clone().into_iter() {
+                    let path = read;
+                    let file = fs::read_to_string(&path).expect("failed to read");
+                    let file_vector = string_to_vector(&file);
+                    let parsed = parse_all_rust_items(file).expect("failed to parse");
+                    let what_change_occured = match each.get_change() {
+                        "Add" => {
+                            println!("Added: \n {:?}", &each);
+                           let exported_object = export_object(each.get_line(), &parsed, &file_vector).unwrap();
+                           if check_for_not_comment(&parsed, each.get_line()).unwrap() || exported_object.trim().is_empty() {
+                                println!("SKIPPED ADD AT :{} {}", exported_object, each.get_line());
+                                continue;
+                           }
+                           exported_object
+                        }
+        
+                        "Remove" => {
+                            println!("Removed line number:\n{:?}", &each.filename());
+                            "".to_string()
+                        }
+                        "Modify" => {
+                            println!("Modified: \n {:?}", &each);
+                            let exported_object = export_object(each.get_line(), &parsed, &file_vector).unwrap();
+                            if check_for_not_comment(&parsed, each.get_line()).unwrap() || exported_object.trim().is_empty() {
+                                println!("SKIPPED MODIFY AT :{} {}", exported_object, each.get_line());
+                                continue;
+                            }
+                            exported_object
+                        }
+                        _ => "".to_string(),
+                    };
+                    if what_change_occured.trim().is_empty() {
+                        continue;
+                    }
+                    println!("{}", what_change_occured);
+                }
+            }
+        }
+        
+    }
+
+    #[test]
+    fn test_quantity() {
+        let patch_text = fs::read("/home/yurii-sama/Desktop/patchdog/patch.patch").expect("Failed to read patch file");
+       // let mut vec_of_exports: Vec<String> = Vec::new();
+        let matched = match_patch_with_parse("", &patch_text).unwrap();
+        for change_line in matched {
+            if change_line.quantity == 1 {
+            //println!("{:?}", change_line.change_at_hunk);
+
+            let path = "/home/yurii-sama/Desktop/patchdog/".to_string() + &change_line.change_at_hunk.filename();
+            let file = fs::read_to_string(path)
+                .expect("Failed to read file");
+            let parsed = parse_all_rust_items(file.clone())
+            .expect("Failed to parse");
+        println!("{}", change_line.change_at_hunk.filename);
+
+            for each in parsed {
+                println!("{:?}", each);
+            }
+        }            
+        }
+            
+        assert_eq!(true,false);
+
+    }
+
+
 }

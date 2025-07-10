@@ -1,0 +1,113 @@
+use snafu::ensure;
+use crate::
+{
+    ObjectRange,
+    ErrorHandling,
+    SeekerFailedSnafu,
+    LineOutOfBoundsSnafu
+};
+//Splits the string that is usually parsed from fs::read_to_string
+//split_inclusive method is necessary for preserving newline indentation.
+pub fn string_to_vector(str_source: &str) -> Vec<String> {
+    str_source
+        .lines()
+        .map(|line| line.to_string())
+        .collect()
+}
+//Main entry for seeker and extract_by_line, roams through Vec<ObjectRange> seeking for the object that fits
+//the requested line number. If it finds no match, then LineOutOfBounds error is thrown
+pub fn export_object(
+    from_line_number: usize,
+    visited: &Vec<ObjectRange>,
+    src: &Vec<String>,
+) -> Result<String, ErrorHandling> {
+    for item in visited {
+        let found = seeker(from_line_number, item, src);
+        if found.is_err() {
+            continue;
+        }
+        return found;
+    }
+    Err(ErrorHandling::ExportObjectFailed {
+        line_number: from_line_number,
+        src: src[from_line_number].clone(),
+    })
+}
+//Finds an object, justifying whether the said line number belongs to the range of the object.
+//If it does, then object is printed with extract_by_line
+pub fn seeker(
+    line_number: usize,
+    item: &ObjectRange,
+    src: &Vec<String>,
+) -> Result<String, ErrorHandling> {
+    let line_start = item.line_start().unwrap();
+    let line_end = item.line_end().unwrap();
+    ensure!(
+        line_start <= line_number && line_end >= line_number,
+        SeekerFailedSnafu { line_number }
+    );
+    Ok(extract_by_line(src, &line_start, &line_end))
+}
+fn seeker_for_comments(
+    line_number: usize,
+    line_start: usize,
+    line_end: usize,
+    src: Vec<String>,
+) -> Result<String, ErrorHandling> {
+    ensure!(
+        line_start <= line_number && line_end >= line_number,
+        LineOutOfBoundsSnafu { line_number }
+    );
+    Ok(extract_by_line(&src, &line_start, &line_end))
+}
+//Extracts a snippet from a file in regard to the snippet boundaries
+pub fn extract_by_line(from: &[String], line_start: &usize, line_end: &usize) -> String {
+    let line_start = line_start - 1;
+
+    from[line_start..*line_end].join("\n")
+}
+pub fn extract_object_preserving_comments(
+    src: Vec<String>,
+    from_line: usize,
+    parsed: Vec<ObjectRange>,
+) -> Result<String, ErrorHandling> {
+    let mut new_previous: Vec<usize> = Vec::new();
+    new_previous.push(1);
+    let mut i = 0;
+    for each in parsed {
+        //println!("{} {}", new_previous[i], each.line_end().unwrap());
+        let found = seeker_for_comments(
+            from_line,
+            new_previous[i],
+            each.line_end().unwrap(),
+            src.clone(),
+        );
+        if found.is_err() {
+            i += 1;
+            let previous_end_line = each
+                .line_end()
+                .expect("Failed to unwrap ObjectRange for line end")
+                + 1;
+            new_previous.push(previous_end_line);
+            continue;
+        }
+        let extracted = extract_by_line(
+            &src,
+            &new_previous[i],
+            &each
+                .line_end()
+                .expect("Failed to unwrap ObjectRange for line end"),
+        );
+        return Ok(extracted);
+    }
+    Err(ErrorHandling::LineOutOfBounds { line_number: 0 })
+}
+pub fn check_for_not_comment(parsed: &Vec<ObjectRange>, line_number: usize) -> Result<bool, ErrorHandling> { 
+    println!("LEN OF CHECK: {}", parsed.len());
+    for each in parsed {
+        if each.line_start().unwrap() <= line_number && line_number <= each.line_end().unwrap()  {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
