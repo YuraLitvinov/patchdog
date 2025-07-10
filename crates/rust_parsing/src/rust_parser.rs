@@ -1,4 +1,5 @@
-use crate::{ErrorHandling, InvalidSynParsingSnafu, LineRange, Name, ObjectRange};
+use crate::error::{ErrorHandling, InvalidSynParsingSnafu};
+use crate::object_range::{LineRange, Name, ObjectRange};
 use snafu::ResultExt;
 use std::path::PathBuf;
 use syn::File;
