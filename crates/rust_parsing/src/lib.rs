@@ -6,11 +6,11 @@
 //! string type variable.
 //! Syn crate itself provides functionality to pull out objects from a file, albeit it loses very helpful //comments, so instead
 //! it was chosen as best practice to only get line numbers and from there pull out the whole object.
+pub mod error;
 pub mod file_parsing;
+pub mod object_range;
 pub mod rust_parser;
 pub mod rustc_parsing;
-pub mod error;
-pub mod object_range;
 
 pub use error::ErrorHandling;
 pub use object_range::ObjectRange;
