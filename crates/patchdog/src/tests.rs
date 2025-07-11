@@ -281,7 +281,7 @@ trait MyTrait {
         for each in &parsed {
             println!("{:?}", each);
         }
-        let check = FileExtractor::check_for_not_comment(&parsed, 45);
+        let check = FileExtractor::check_for_valid_object(&parsed, 45);
         println!("is there comment: {:?}", check);
         let file_vector = FileExtractor::string_to_vector(&file);
         let what_change_occured =
@@ -319,7 +319,7 @@ trait MyTrait {
                                 &file_vector,
                             )
                             .unwrap();
-                            if FileExtractor::check_for_not_comment(&parsed, each.get_line())
+                            if FileExtractor::check_for_valid_object(&parsed, each.get_line())
                                 .unwrap()
                                 || exported_object.trim().is_empty()
                             {
@@ -341,7 +341,7 @@ trait MyTrait {
                                 &file_vector,
                             )
                             .unwrap();
-                            if FileExtractor::check_for_not_comment(&parsed, each.get_line())
+                            if FileExtractor::check_for_valid_object(&parsed, each.get_line())
                                 .unwrap()
                                 || exported_object.trim().is_empty()
                             {

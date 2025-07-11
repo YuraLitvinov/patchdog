@@ -3,7 +3,7 @@ use crate::object_range::ObjectRange;
 use snafu::ensure;
 pub struct FileExtractor;
 pub trait Files {
-    fn check_for_not_comment(
+    fn check_for_valid_object(
         parsed: &[ObjectRange],
         line_number: usize,
     ) -> Result<bool, ErrorHandling>;
@@ -156,7 +156,8 @@ impl Files for FileExtractor {
         }
         Err(ErrorHandling::LineOutOfBounds { line_number: 0 })
     }
-    fn check_for_not_comment(
+
+    fn check_for_valid_object(
         parsed: &[ObjectRange],
         line_number: usize,
     ) -> Result<bool, ErrorHandling> {
