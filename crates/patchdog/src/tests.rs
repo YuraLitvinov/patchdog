@@ -3,9 +3,9 @@ mod tests {
         get_filenames, git_get_hunks, match_patch_with_parse, read_non_repeting_functions,
     };
     use git2::Diff;
-    use rust_parsing::rust_parser::{RustItemParser, RustParser};
-    use rust_parsing::error::InvalidIoOperationsSnafu;
     use rust_parsing::comment_lexer;
+    use rust_parsing::error::InvalidIoOperationsSnafu;
+    use rust_parsing::rust_parser::{RustItemParser, RustParser};
 
     use rust_parsing::file_parsing::{FileExtractor, Files};
 

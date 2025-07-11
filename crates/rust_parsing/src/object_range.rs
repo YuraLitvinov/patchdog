@@ -1,4 +1,3 @@
-
 #[derive(Debug, Clone, Copy)]
 pub enum LineRange {
     Start(usize),

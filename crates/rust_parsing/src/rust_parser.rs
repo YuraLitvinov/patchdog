@@ -3,9 +3,10 @@ use crate::object_range::{LineRange, Name, ObjectRange};
 use snafu::ResultExt;
 use std::path::PathBuf;
 use syn::File;
-use syn::Item;
 use syn::parse_str;
 use syn::spanned::Spanned;
+use syn::{ImplItem, Item};
+
 pub trait RustParser {
     fn parse_all_rust_items(src: &str) -> Result<Vec<ObjectRange>, ErrorHandling>;
     fn find_module_file(
@@ -114,6 +115,68 @@ fn visit_items(items: &[Item]) -> Vec<ObjectRange> {
                     ],
                     names: vec![Name::TypeName("impl"), Name::Name(trait_name)],
                 });
+                for each_block in &i.items {
+                    match each_block {
+                        ImplItem::Fn(f) => {
+                            object_line.push(ObjectRange {
+                                line_ranges: vec![
+                                    LineRange::Start(f.span().start().line),
+                                    LineRange::End(f.span().end().line),
+                                ],
+                                names: vec![
+                                    Name::TypeName("fn"),
+                                    Name::Name(f.sig.ident.to_string()),
+                                ],
+                            });
+                        }
+                        ImplItem::Const(c) => {
+                            object_line.push(ObjectRange {
+                                line_ranges: vec![
+                                    LineRange::Start(c.span().start().line),
+                                    LineRange::End(c.span().end().line),
+                                ],
+                                names: vec![
+                                    Name::TypeName("const"),
+                                    Name::Name(c.ident.to_string()),
+                                ],
+                            });
+                        }
+                        ImplItem::Type(t) => {
+                            object_line.push(ObjectRange {
+                                line_ranges: vec![
+                                    LineRange::Start(t.span().start().line),
+                                    LineRange::End(t.span().end().line),
+                                ],
+                                names: vec![
+                                    Name::TypeName("type"),
+                                    Name::Name(t.ident.to_string()),
+                                ],
+                            });
+                        }
+                        ImplItem::Macro(m) => {
+                            object_line.push(ObjectRange {
+                                line_ranges: vec![
+                                    LineRange::Start(m.span().start().line),
+                                    LineRange::End(m.span().end().line),
+                                ],
+                                names: vec![
+                                    Name::TypeName("macro"),
+                                    Name::Name(format!("{:?}", m.mac.path)),
+                                ],
+                            });
+                        }
+                        ImplItem::Verbatim(v) => {
+                            object_line.push(ObjectRange {
+                                line_ranges: vec![
+                                    LineRange::Start(v.span().start().line),
+                                    LineRange::End(v.span().end().line),
+                                ],
+                                names: vec![Name::TypeName("verbatim"), Name::Name(v.to_string())],
+                            });
+                        }
+                        _ => println!("Other impl object"),
+                    }
+                }
             }
             Item::Trait(t) => {
                 object_line.push(ObjectRange {
