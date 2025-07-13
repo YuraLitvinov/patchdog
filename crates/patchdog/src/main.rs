@@ -1,10 +1,10 @@
 pub mod binding;
 #[cfg(test)]
 pub mod tests;
-use crate::binding::patch_interface;
+use crate::binding::get_patch_data;
 #[tokio::main]
 async fn main() {
-    let a = patch_interface("/home/yurii-sama/patchdog/patch.patch", "/home/yurii-sama/patchdog/"); 
+    let a = get_patch_data("/home/yurii-sama/patchdog/patch.patch", "/home/yurii-sama/patchdog/").expect("msg"); 
     for each in a {
         println!("{:?}", each);
     }

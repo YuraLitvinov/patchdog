@@ -75,7 +75,7 @@ mod tests {
                 .expect("Unwrapping ObjectRange to name failed");
             if obj_type == "mod".to_string() {
                 let module_location =
-                    RustItemParser::find_module_file(path.to_path_buf(), obj_name.clone())
+                    RustItemParser::find_module_file(path.to_path_buf(), obj_name.to_owned())
                         .expect("Couldn't find mod file");
                 obj_vector.push(module_location.unwrap().to_string_lossy().to_string());
             }
@@ -196,7 +196,7 @@ mod tests {
 
         hunks.sort_by(|a, b| a.get_line().cmp(&b.get_line()));
         for read in read {
-            for each in hunks.clone().into_iter() {
+            for each in hunks.to_owned().into_iter() {
                 println!("{:?}", each.filename());
                 let path = "/home/yurii-sama/Desktop/patchdog/".to_string() + &each.filename();
                 let file = fs::read_to_string(&path).expect("failed to read");

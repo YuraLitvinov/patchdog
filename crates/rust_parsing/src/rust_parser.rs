@@ -71,7 +71,7 @@ fn visit_items(items: &[Item]) -> Vec<ObjectRange> {
                     names: vec![Name::TypeName("fn"), Name::Name(f.sig.ident.to_string())],
                 });
             }
-            Item::Mod(m) => match m.content.clone() {
+            Item::Mod(m) => match &m.content {
                 Some((_, items)) => {
                     object_line.push(ObjectRange {
                         line_ranges: vec![

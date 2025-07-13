@@ -1,6 +1,6 @@
-use crate::error::{ErrorHandling, LineOutOfBoundsSnafu, SeekerFailedSnafu};
+use crate::error::{CouldNotGetLineSnafu, ErrorHandling, LineOutOfBoundsSnafu, SeekerFailedSnafu};
 use crate::object_range::ObjectRange;
-use snafu::ensure;
+use snafu::{ensure, OptionExt};
 pub struct FileExtractor;
 pub trait Files {
     fn check_for_valid_object(
@@ -26,7 +26,9 @@ impl Files for FileExtractor {
         line_number: usize,
     ) -> Result<bool, ErrorHandling> {
         for each in parsed {
-            if each.line_start().unwrap() <= line_number && line_number <= each.line_end().unwrap()
+            if each.line_start().context(CouldNotGetLineSnafu)? <= line_number 
+            && 
+            line_number <= each.line_end().context(CouldNotGetLineSnafu)?
             {
                 return Ok(false);
             }
@@ -54,7 +56,7 @@ impl Files for FileExtractor {
         }
         Err(ErrorHandling::ExportObjectFailed {
             line_number,
-            src: src[line_number].clone(),
+            src: format!("{:?}", visited),
         })
     }
     fn export_object_preserving_comments(
@@ -69,14 +71,14 @@ impl Files for FileExtractor {
             let found = seeker_for_comments(
                 from_line,
                 new_previous[i],
-                each.line_end().unwrap(),
-                src.clone(),
+                each.line_end().context(CouldNotGetLineSnafu)?,
+                &src,
             );
             if found.is_err() {
                 i += 1;
                 let previous_end_line = each
                     .line_end()
-                    .expect("Failed to unwrap ObjectRange for line end")
+                    .context(CouldNotGetLineSnafu)?
                     + 1;
                 new_previous.push(previous_end_line);
                 continue;
@@ -86,7 +88,7 @@ impl Files for FileExtractor {
                 &new_previous[i],
                 &each
                     .line_end()
-                    .expect("Failed to unwrap ObjectRange for line end"),
+                    .context(CouldNotGetLineSnafu)?
             );
             return Ok(extracted);
         }
@@ -100,8 +102,8 @@ impl Files for FileExtractor {
         item: &ObjectRange,
         src: &[String],
     ) -> Result<String, ErrorHandling> {
-        let line_start = item.line_start().unwrap();
-        let line_end = item.line_end().unwrap();
+        let line_start = item.line_start().context(CouldNotGetLineSnafu)?;
+        let line_end = item.line_end().context(CouldNotGetLineSnafu)?;
         ensure!(
             line_start <= line_number && line_end >= line_number,
             SeekerFailedSnafu { line_number }
@@ -112,7 +114,7 @@ impl Files for FileExtractor {
         line_number: usize,
         line_start: usize,
         line_end: usize,
-        src: Vec<String>,
+        src: &Vec<String>,
     ) -> Result<String, ErrorHandling> {
         ensure!(
             line_start <= line_number && line_end >= line_number,

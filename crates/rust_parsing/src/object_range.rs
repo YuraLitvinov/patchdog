@@ -1,14 +1,14 @@
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug)]
 pub enum LineRange {
     Start(usize),
     End(usize),
 }
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum Name {
     TypeName(&'static str),
     Name(String),
 }
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct ObjectRange {
     //There is an ample interface for interaction with this structure, hence, I believe there is no reason to change it
     pub(crate) line_ranges: Vec<LineRange>, // Has to stay, as a lot of functionality is bound to this field

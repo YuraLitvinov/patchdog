@@ -34,4 +34,6 @@ pub enum ErrorHandling {
         line_number: usize,
         src: String,
     },
+    CouldNotGetName,
+    CouldNotGetLine,
 }
