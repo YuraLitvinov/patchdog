@@ -1,7 +1,5 @@
 mod tests {
-    use git_parsing::{
-        get_filenames, match_patch_with_parse
-    };
+    use git_parsing::{get_filenames, match_patch_with_parse};
     use git2::Diff;
     use rust_parsing::comment_lexer;
     use rust_parsing::error::InvalidIoOperationsSnafu;
@@ -165,7 +163,7 @@ mod tests {
                 assert_eq!("../../crates/patchdog/Cargo/toml".to_string(), path);
             }
         }
-    }  
+    }
     #[test]
     fn test_quantity() {
         let patch_text = fs::read("/home/yurii-sama/Desktop/patchdog/patch.patch")

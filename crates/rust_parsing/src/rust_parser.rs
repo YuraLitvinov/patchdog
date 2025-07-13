@@ -80,7 +80,7 @@ fn visit_items(items: &[Item]) -> Vec<ObjectRange> {
                         ],
                         names: vec![Name::TypeName("mod"), Name::Name(m.ident.to_string())],
                     });
-                    object_line.extend(visit_items(&items));
+                    object_line.extend(visit_items(items));
                 }
                 None => {
                     object_line.push(ObjectRange {

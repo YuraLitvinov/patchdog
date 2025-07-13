@@ -5,8 +5,10 @@ use std::{collections::HashSet, ffi::OsStr, path::Path};
 #[snafu(visibility(pub))]
 pub enum Git2ErrorHandling {
     #[snafu(display("Unable to read {source}"))]
-    Git2Error { source: git2::Error },
-    PatchExportError 
+    Git2Error {
+        source: git2::Error,
+    },
+    PatchExportError,
 }
 #[derive(Clone, Hash, Eq, PartialEq, Debug)]
 pub enum HunkChange {
@@ -70,18 +72,11 @@ pub fn git_get_hunks(
 ) -> Result<Vec<Hunk>, Git2ErrorHandling> {
     let mut hunk_tuple: Vec<Hunk> = Vec::new();
     for i in diff.deltas().enumerate() {
-        let patch = Patch::from_diff(&diff, i.0)
-            .context(Git2Snafu)?;
-        let patch_ref = patch
-                .as_ref()
-                .context(PatchExportSnafu)?;
+        let patch = Patch::from_diff(&diff, i.0).context(Git2Snafu)?;
+        let patch_ref = patch.as_ref().context(PatchExportSnafu)?;
         for hunk_idx in 0..patch_ref.num_hunks() {
-            let (_hunk, _) = patch_ref.hunk(hunk_idx)
-                .context(Git2Snafu)?;
-            for line_idx in 0..patch_ref
-                .num_lines_in_hunk(hunk_idx)
-                .context(Git2Snafu)?
-            {
+            let (_hunk, _) = patch_ref.hunk(hunk_idx).context(Git2Snafu)?;
+            for line_idx in 0..patch_ref.num_lines_in_hunk(hunk_idx).context(Git2Snafu)? {
                 let line = patch_ref
                     .line_in_hunk(hunk_idx, line_idx)
                     .context(Git2Snafu)?;

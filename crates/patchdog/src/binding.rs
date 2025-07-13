@@ -1,9 +1,9 @@
+use crate::binding::rust_parsing::error::CouldNotGetLineSnafu;
 use git_parsing::{Git2ErrorHandling, Hunk, get_easy_hunk, match_patch_with_parse};
-use rust_parsing::{self, ErrorHandling};
 use rust_parsing::ObjectRange;
 use rust_parsing::file_parsing::{FileExtractor, Files};
 use rust_parsing::rust_parser::{RustItemParser, RustParser};
-use crate::binding::rust_parsing::error::CouldNotGetLineSnafu;
+use rust_parsing::{self, ErrorHandling};
 use snafu::OptionExt;
 use std::fs;
 use std::ops::Range;
@@ -20,27 +20,28 @@ pub struct Difference {
 pub struct Export {
     pub filename: String,
     pub range: Vec<Range<usize>>,
-
 }
-pub fn get_patch_data(path_to_patch: &str, relative_path: &str) -> Result<Vec<Export>, ErrorHandling> {
-    let export = patch_export_change(
-        path_to_patch,
-        relative_path,
-    )?;
+pub fn get_patch_data(
+    path_to_patch: &str,
+    relative_path: &str,
+) -> Result<Vec<Export>, ErrorHandling> {
+    let export = patch_export_change(path_to_patch, relative_path)?;
     let mut export_difference: Vec<Export> = Vec::new();
-    let mut vector_of_changed:  Vec<Range<usize>> = Vec::new();
+    let mut vector_of_changed: Vec<Range<usize>> = Vec::new();
     for difference in export {
-        let file = fs::read_to_string(&difference.filename)
-            .expect("Failed to read file");
-        let parsed = RustItemParser::parse_all_rust_items(&file)
-            .expect("Failed to parse");
+        let file = fs::read_to_string(&difference.filename).expect("Failed to read file");
+        let parsed = RustItemParser::parse_all_rust_items(&file).expect("Failed to parse");
         for each_parsed in &parsed {
-            let range = each_parsed.line_start().context(CouldNotGetLineSnafu)?..each_parsed.line_end().context(CouldNotGetLineSnafu)?;
+            let range = each_parsed.line_start().context(CouldNotGetLineSnafu)?
+                ..each_parsed.line_end().context(CouldNotGetLineSnafu)?;
             if difference.line.iter().any(|line| range.contains(line)) {
                 vector_of_changed.push(range);
             }
         }
-        export_difference.push(Export { range: vector_of_changed.to_owned(), filename: difference.filename });
+        export_difference.push(Export {
+            range: vector_of_changed.to_owned(),
+            filename: difference.filename,
+        });
         vector_of_changed.clear();
     }
     Ok(export_difference)
@@ -58,8 +59,7 @@ fn store_objects(
                 get_easy_hunk(patch_src, &change_line.change_at_hunk.filename())?;
             let path = relative_path.to_string() + &change_line.change_at_hunk.filename();
             let file = fs::read_to_string(&path).expect("Failed read file");
-            let parsed = RustItemParser::parse_all_rust_items(&file)
-                .expect("Failed to parse");
+            let parsed = RustItemParser::parse_all_rust_items(&file).expect("Failed to parse");
             vec_of_surplus.push(FullDiffInfo {
                 name: change_line.change_at_hunk.filename(),
                 object_range: parsed,
@@ -71,7 +71,10 @@ fn store_objects(
     Ok(vec_of_surplus)
 }
 //Absolute path is suggested, as there is some issue with relative
-fn patch_export_change(path_to_patch: &str, relative_path: &str) -> Result<Vec<Difference>, ErrorHandling> {
+fn patch_export_change(
+    path_to_patch: &str,
+    relative_path: &str,
+) -> Result<Vec<Difference>, ErrorHandling> {
     let mut change_in_line: Vec<usize> = Vec::new();
     let mut line_and_file: Vec<Difference> = Vec::new();
     let patch_text = fs::read(path_to_patch).expect("Failed to read patch file");
@@ -84,8 +87,7 @@ fn patch_export_change(path_to_patch: &str, relative_path: &str) -> Result<Vec<D
 
         for each in &diff_hunk.hunk {
             let parsed_in_diff = &parsed;
-            if FileExtractor::check_for_valid_object(&parsed_in_diff, each.get_line())?
-            {
+            if FileExtractor::check_for_valid_object(parsed_in_diff, each.get_line())? {
                 continue;
             }
             change_in_line.push(each.get_line());

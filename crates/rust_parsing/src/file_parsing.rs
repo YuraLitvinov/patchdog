@@ -1,6 +1,6 @@
 use crate::error::{CouldNotGetLineSnafu, ErrorHandling, LineOutOfBoundsSnafu, SeekerFailedSnafu};
 use crate::object_range::ObjectRange;
-use snafu::{ensure, OptionExt};
+use snafu::{OptionExt, ensure};
 pub struct FileExtractor;
 pub trait Files {
     fn check_for_valid_object(
@@ -26,9 +26,8 @@ impl Files for FileExtractor {
         line_number: usize,
     ) -> Result<bool, ErrorHandling> {
         for each in parsed {
-            if each.line_start().context(CouldNotGetLineSnafu)? <= line_number 
-            && 
-            line_number <= each.line_end().context(CouldNotGetLineSnafu)?
+            if each.line_start().context(CouldNotGetLineSnafu)? <= line_number
+                && line_number <= each.line_end().context(CouldNotGetLineSnafu)?
             {
                 return Ok(false);
             }
@@ -76,57 +75,46 @@ impl Files for FileExtractor {
             );
             if found.is_err() {
                 i += 1;
-                let previous_end_line = each
-                    .line_end()
-                    .context(CouldNotGetLineSnafu)?
-                    + 1;
+                let previous_end_line = each.line_end().context(CouldNotGetLineSnafu)? + 1;
                 new_previous.push(previous_end_line);
                 continue;
             }
             let extracted = extract_by_line(
                 &src,
                 &new_previous[i],
-                &each
-                    .line_end()
-                    .context(CouldNotGetLineSnafu)?
+                &each.line_end().context(CouldNotGetLineSnafu)?,
             );
             return Ok(extracted);
         }
         Err(ErrorHandling::LineOutOfBounds { line_number: 0 })
     }
 }
-    //Finds an object, justifying whether the said line number belongs to the range of the object.
-    //If it does, then object is printed with extract_by_line
-    fn seeker(
-        line_number: usize,
-        item: &ObjectRange,
-        src: &[String],
-    ) -> Result<String, ErrorHandling> {
-        let line_start = item.line_start().context(CouldNotGetLineSnafu)?;
-        let line_end = item.line_end().context(CouldNotGetLineSnafu)?;
-        ensure!(
-            line_start <= line_number && line_end >= line_number,
-            SeekerFailedSnafu { line_number }
-        );
-        Ok(extract_by_line(src, &line_start, &line_end))
-    }
-    fn seeker_for_comments(
-        line_number: usize,
-        line_start: usize,
-        line_end: usize,
-        src: &Vec<String>,
-    ) -> Result<String, ErrorHandling> {
-        ensure!(
-            line_start <= line_number && line_end >= line_number,
-            LineOutOfBoundsSnafu { line_number }
-        );
-        Ok(extract_by_line(&src, &line_start, &line_end))
-    }
-    //Extracts a snippet from a file in regard to the snippet boundaries
-    fn extract_by_line(from: &[String], line_start: &usize, line_end: &usize) -> String {
-        let line_start = line_start - 1;
+//Finds an object, justifying whether the said line number belongs to the range of the object.
+//If it does, then object is printed with extract_by_line
+fn seeker(line_number: usize, item: &ObjectRange, src: &[String]) -> Result<String, ErrorHandling> {
+    let line_start = item.line_start().context(CouldNotGetLineSnafu)?;
+    let line_end = item.line_end().context(CouldNotGetLineSnafu)?;
+    ensure!(
+        line_start <= line_number && line_end >= line_number,
+        SeekerFailedSnafu { line_number }
+    );
+    Ok(extract_by_line(src, &line_start, &line_end))
+}
+fn seeker_for_comments(
+    line_number: usize,
+    line_start: usize,
+    line_end: usize,
+    src: &Vec<String>,
+) -> Result<String, ErrorHandling> {
+    ensure!(
+        line_start <= line_number && line_end >= line_number,
+        LineOutOfBoundsSnafu { line_number }
+    );
+    Ok(extract_by_line(src, &line_start, &line_end))
+}
+//Extracts a snippet from a file in regard to the snippet boundaries
+fn extract_by_line(from: &[String], line_start: &usize, line_end: &usize) -> String {
+    let line_start = line_start - 1;
 
-        from[line_start..*line_end].join("\n")
-    }
-
-
+    from[line_start..*line_end].join("\n")
+}
