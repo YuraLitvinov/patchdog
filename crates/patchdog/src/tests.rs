@@ -1,6 +1,6 @@
 mod tests {
     use git_parsing::{
-        get_filenames, git_get_hunks, match_patch_with_parse, read_non_repeting_functions,
+        get_filenames, match_patch_with_parse
     };
     use git2::Diff;
     use rust_parsing::comment_lexer;
@@ -165,68 +165,7 @@ mod tests {
                 assert_eq!("../../crates/patchdog/Cargo/toml".to_string(), path);
             }
         }
-    }
-
-    #[test]
-    fn test_combine_git() {
-        let src = "../../patchfromlatest.patch";
-        let patch_text = fs::read(src).expect("Failed to read patch file");
-        let read = read_non_repeting_functions(&patch_text, "../../").expect("Failed to read");
-        for each in read {
-            println!("{:?}", each);
-            let file_src = fs::read_to_string(each).expect("failed to read");
-            let parsed = RustItemParser::parse_all_rust_items(&file_src).expect("failed parse");
-            for each in parsed {
-                if each.object_type().unwrap() == "fn" {
-                    println!("{:?}", each);
-                }
-            }
-        }
-        assert_eq!(true, false);
-    }
-    #[test]
-    fn test_match_patch_with_parse() {
-        let src = "/home/yurii-sama/Desktop/patchdog/patch.patch";
-        let patch_text = fs::read(src).expect("Failed to read patch file");
-        let read = read_non_repeting_functions(&patch_text, "/home/yurii-sama/Desktop/patchdog")
-            .expect("Failed to read");
-        let diff = Diff::from_buffer(&patch_text).unwrap();
-        let changed = get_filenames(&diff).expect("Unwrap on get_filenames failed");
-        let mut hunks = git_get_hunks(diff, changed).expect("Error?");
-
-        hunks.sort_by(|a, b| a.get_line().cmp(&b.get_line()));
-        for read in read {
-            for each in hunks.to_owned().into_iter() {
-                println!("{:?}", each.filename());
-                let path = "/home/yurii-sama/Desktop/patchdog/".to_string() + &each.filename();
-                let file = fs::read_to_string(&path).expect("failed to read");
-                let file_vector = FileExtractor::string_to_vector(&file);
-                let parsed = RustItemParser::parse_all_rust_items(&file).expect("failed to parse");
-                let what_change_occured = match each.get_change() {
-                    "Add" => {
-                        println!("Added: \n {:?}", &read);
-                        FileExtractor::export_object(each.get_line(), &parsed, &file_vector)
-                            .unwrap()
-                    }
-
-                    "Remove" => {
-                        println!("Removed line number: {} \n{:?} ", each.get_line(), &read);
-                        "".to_string()
-                    }
-                    "Modify" => {
-                        println!("Modified: \n {}", &each.filename());
-                        FileExtractor::export_object(each.get_line(), &parsed, &file_vector)
-                            .expect("Error on Modify")
-                    }
-                    _ => "".to_string(),
-                };
-                println!("{}", what_change_occured);
-            }
-        }
-
-        assert_eq!(true, false);
-    }
-
+    }  
     #[test]
     fn test_quantity() {
         let patch_text = fs::read("/home/yurii-sama/Desktop/patchdog/patch.patch")
