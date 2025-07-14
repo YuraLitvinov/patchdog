@@ -8,7 +8,7 @@ members = [
     "crates/rust_parsing",
     "crates/patchdog",
     "crates/git_parsing"
-]
+, ]
 
 [workspace.dependencies]
 syn = { version = "2.0.104", features = ["full", "extra-traits"] }

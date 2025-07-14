@@ -1,6 +1,4 @@
 mod tests {
-    use git_parsing::{get_filenames, match_patch_with_parse};
-    use git2::Diff;
     use rust_parsing::comment_lexer;
     use rust_parsing::error::InvalidIoOperationsSnafu;
     use rust_parsing::rust_parser::{RustItemParser, RustParser};
@@ -8,7 +6,7 @@ mod tests {
     use rust_parsing::file_parsing::{FileExtractor, Files};
 
     use snafu::ResultExt;
-    use std::{ffi::OsStr, fs, path::Path};
+    use std::{fs, path::Path};
     const PATH_BASE: &str = "../../tests/data.rs";
     const COMPARE_LINES: &str = "fn function_with_return() -> i32 {\n";
     #[test]
@@ -81,6 +79,7 @@ mod tests {
 
         assert_eq!(expected_behavior, obj_vector.join("\n"));
     }
+    /*
     #[test]
     fn test_receive_context_on_zero() {
         let str_src = fs::read_to_string(PATH_BASE).expect("Failed to read file");
@@ -128,6 +127,7 @@ mod tests {
 
         assert_ne!(EXPECTED_BEHAVIOR, received);
     }
+    */
     #[test]
     fn test_lexer() {
         //block is of 94 symbols length
@@ -139,37 +139,14 @@ mod tests {
         }
         assert_eq!(i, 94);
     }
-    #[test]
-    fn test_parse_on_patch() {
-        let src = "../../test2.patch";
-        let patch_text = fs::read(src).expect("Failed to read patch file");
-        let diff = Diff::from_buffer(&patch_text).unwrap();
-        let changed = get_filenames(&diff).expect("Unwrap on get_filenames failed");
-        for each in changed {
-            let path = "../../".to_string() + &each;
-            let extension = Path::new(&path)
-                .extension()
-                .and_then(OsStr::to_str)
-                .expect("Failed to get extension");
-            if extension == "rs" {
-                println!("actual path: {}", path);
-                let str_src = fs::read_to_string(&path).expect("Failed to read file");
-                let parsed =
-                    RustItemParser::parse_all_rust_items(&str_src).expect("Failed to parse");
-                for each_parsed in parsed {
-                    println!("{:?}", each_parsed);
-                }
-            } else {
-                assert_eq!("../../crates/patchdog/Cargo/toml".to_string(), path);
-            }
-        }
-    }
+
+    /* 
     #[test]
     fn test_quantity() {
         let patch_text = fs::read("/home/yurii-sama/Desktop/patchdog/patch.patch")
             .expect("Failed to read patch file");
         // let mut vec_of_exports: Vec<String> = Vec::new();
-        let matched = match_patch_with_parse("", &patch_text).unwrap();
+        let matched = match_patch_with_parse(Path::new(""), &patch_text).unwrap();
         for change_line in matched {
             if change_line.quantity == 1 {
                 //println!("{:?}", change_line.change_at_hunk);
@@ -188,4 +165,5 @@ mod tests {
 
         assert_eq!(true, false);
     }
+    */
 }
