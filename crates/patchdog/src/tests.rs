@@ -90,31 +90,8 @@ mod tests {
         }
         assert_eq!(i, 94);
     }
-
-    /* 
     #[test]
-    fn test_quantity() {
-        let patch_text = fs::read("/home/yurii-sama/Desktop/patchdog/patch.patch")
-            .expect("Failed to read patch file");
-        // let mut vec_of_exports: Vec<String> = Vec::new();
-        let matched = match_patch_with_parse(Path::new(""), &patch_text).unwrap();
-        for change_line in matched {
-            if change_line.quantity == 1 {
-                //println!("{:?}", change_line.change_at_hunk);
-
-                let path = "/home/yurii-sama/Desktop/patchdog/".to_string()
-                    + &change_line.change_at_hunk.filename();
-                let file = fs::read_to_string(path).expect("Failed to read file");
-                let parsed = RustItemParser::parse_all_rust_items(&file).expect("Failed to parse");
-                println!("{}", change_line.change_at_hunk.filename);
-
-                for each in parsed {
-                    println!("{:?}", each);
-                }
-            }
-        }
-
-        assert_eq!(true, false);
+    fn test_read_from_patch() {
+        
     }
-    */
 }
