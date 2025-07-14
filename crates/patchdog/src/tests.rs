@@ -1,10 +1,10 @@
 mod tests {
-    use rust_parsing::comment_lexer;
+    use rust_parsing::{comment_lexer, ErrorHandling};
     use rust_parsing::error::InvalidIoOperationsSnafu;
     use rust_parsing::rust_parser::{RustItemParser, RustParser};
-
+    use std::env;
     use rust_parsing::file_parsing::{FileExtractor, Files};
-
+    use crate::binding::get_patch_data;
     use snafu::ResultExt;
     use std::{fs, path::Path};
     const PATH_BASE: &str = "../../tests/data.rs";
@@ -91,7 +91,33 @@ mod tests {
         assert_eq!(i, 94);
     }
     #[test]
-    fn test_read_from_patch() {
-        
+    fn test_read_argument() {
+         let mut path = env::current_dir().expect("couldn't get path");
+         path.pop();
+         path.pop();
+         let path_to_patch = path.join("patch.patch");
+         
+        assert_eq!(path_to_patch, Path::new("/home/runner/patchdog/patchdog/patch.patch"));
+    }
+    #[test]
+    fn test_read_file(){
+    let mut path = env::current_dir().expect("couldn't get path");
+         path.pop();
+         path.pop();
+        let path_to_patch = path.join("patch.patch");
+    fs::read_to_string(path_to_patch)
+        .expect("Couldn't read");
+    }
+    #[test]
+    fn test_read_patch() -> Result<(), ErrorHandling>{
+            let mut path = env::current_dir()
+        .context(InvalidIoOperationsSnafu)?;
+    path.pop();
+    path.pop();
+    let _patch = get_patch_data(
+        path.join("patch.patch"),
+        path,
+    )?;
+    Ok(())
     }
 }
