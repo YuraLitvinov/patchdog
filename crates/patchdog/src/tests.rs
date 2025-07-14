@@ -79,55 +79,6 @@ mod tests {
 
         assert_eq!(expected_behavior, obj_vector.join("\n"));
     }
-    /*
-    #[test]
-    fn test_receive_context_on_zero() {
-        let str_src = fs::read_to_string(PATH_BASE).expect("Failed to read file");
-        let source = FileExtractor::string_to_vector(&str_src);
-        let parsed = RustItemParser::parse_all_rust_items(&str_src).expect("Failed to parse");
-        let expected_behavior = "LineOutOfBounds { line_number: 0 }";
-        assert_eq!(
-            expected_behavior,
-            FileExtractor::export_object(0, &parsed, &source).expect("Failed to export object")
-        );
-    }
-    #[test]
-    fn test_receive_context_on_exceed() {
-        let str_src = fs::read_to_string(PATH_BASE).expect("Failed to read file");
-        let source = FileExtractor::string_to_vector(&str_src);
-        let parsed = RustItemParser::parse_all_rust_items(&str_src).expect("Failed to parse");
-
-        let expected_behavior: &'static str = "LineOutOfBounds { line_number: 999999 }";
-        assert_eq!(
-            expected_behavior,
-            FileExtractor::export_object(999999, &parsed, &source)
-                .expect("Failed to export object")
-        );
-    }
-    const EXPECTED_BEHAVIOR: &str = "impl MyStruct {
-    fn method(&self) {}
-
-    pub fn public_method(&self) {}
-
-    fn static_method() {}
-
-    fn method_with_lifetime<'a>(&'a self, input: &'a str) -> &'a str {
-        input
-    }
-
-    fn method_with_generic<T>(&self, value: T) {}
-}\n";
-    #[test]
-    fn test_receive_context_on_true() {
-        let str_src = fs::read_to_string(PATH_BASE).expect("Failed to read file");
-        let source = FileExtractor::string_to_vector(&str_src);
-        let parsed = RustItemParser::parse_all_rust_items(&str_src).expect("Failed to parse");
-        let received =
-            FileExtractor::export_object(50, &parsed, &source).expect("Failed to export object");
-
-        assert_ne!(EXPECTED_BEHAVIOR, received);
-    }
-    */
     #[test]
     fn test_lexer() {
         //block is of 94 symbols length

@@ -1,6 +1,7 @@
 use git2::{Diff, Patch};
 use snafu::{OptionExt, ResultExt, Snafu};
 use std::{collections::HashSet, ffi::OsStr, path::{Path, PathBuf}};
+
 #[derive(Debug, Snafu)]
 #[snafu(visibility(pub))]
 pub enum Git2ErrorHandling {
@@ -10,6 +11,7 @@ pub enum Git2ErrorHandling {
     },
     PatchExportError,
 }
+
 #[derive(Clone, Hash, Eq, PartialEq, Debug)]
 pub enum HunkChange {
     Add,

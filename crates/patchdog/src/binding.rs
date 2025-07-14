@@ -1,5 +1,5 @@
 use crate::binding::rust_parsing::error::CouldNotGetLineSnafu;
-use git_parsing::{Git2ErrorHandling, Hunk, get_easy_hunk, match_patch_with_parse};
+use git_parsing::{get_easy_hunk, match_patch_with_parse, Git2ErrorHandling, Hunk};
 use rust_parsing::ObjectRange;
 use rust_parsing::file_parsing::{FileExtractor, Files};
 use rust_parsing::rust_parser::{RustItemParser, RustParser};
@@ -8,7 +8,7 @@ use snafu::OptionExt;
 use std::fs;
 use std::ops::Range;
 use std::path::PathBuf;
-use rust_parsing::error::{InvalidIoOperationsSnafu};
+use rust_parsing::error::InvalidIoOperationsSnafu;
 use snafu::ResultExt;
 use std::env;
 pub struct FullDiffInfo {
@@ -35,15 +35,14 @@ pub fn patch_data_argument() -> Result<(), ErrorHandling> {
     )?;
     for each in patch {
         let file = fs::read_to_string(&each.filename)
-            .unwrap();
+            .context(InvalidIoOperationsSnafu)?;
         println!("each: {:?}", &each.filename);
         let to_vec = FileExtractor::string_to_vector(&file);
 
         for obj in each.range{ 
             let item = &to_vec[obj.start-1..obj.end].join("\n");
-            let parsed = &RustItemParser::parse_all_rust_items(item)
-                .unwrap()[0];
-            if parsed.object_type().unwrap() == "fn" { 
+            let parsed = &RustItemParser::parse_all_rust_items(item)?[0]; //Calling at index 0 because item consists of a single object type
+            if parsed.object_type().expect("couldn't get type") == "fn" { 
                 println!("range at lines: {:?} object:\n{}", obj, item);
             }
         }
@@ -107,11 +106,11 @@ fn patch_export_change(
 ) -> Result<Vec<Difference>, ErrorHandling> {
     let mut change_in_line: Vec<usize> = Vec::new();
     let mut line_and_file: Vec<Difference> = Vec::new();
-    let patch_text = fs::read(path_to_patch).expect("Failed to read patch file");
-    let each_diff = store_objects(&relative_path, &patch_text).unwrap();
+    let patch_text = fs::read(path_to_patch).context(InvalidIoOperationsSnafu)?;
+    let each_diff = store_objects(&relative_path, &patch_text).expect("Line 110");
     for diff_hunk in &each_diff {
         let path_to_file = relative_path.to_owned().join(&diff_hunk.name);
-        let file = fs::read_to_string(&path_to_file).expect("couldn't read file");
+        let file = fs::read_to_string(&path_to_file).context(InvalidIoOperationsSnafu)?;
         let parsed = RustItemParser::parse_all_rust_items(&file)?;
         let path = path_to_file;
 

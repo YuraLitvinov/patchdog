@@ -105,7 +105,7 @@ fn visit_items(items: &[Item]) -> Vec<ObjectRange> {
             }
             Item::Impl(i) => {
                 let trait_name = match &i.trait_ {
-                    Some((_, path, _)) => path.segments.last().unwrap().ident.to_string(),
+                    Some((_, path, _)) => path.segments.last().expect("at 108").ident.to_string(),
                     None => "matches struct".to_string(),
                 };
                 object_line.push(ObjectRange {
