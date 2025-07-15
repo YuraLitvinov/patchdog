@@ -12,17 +12,43 @@ pub trait Files {
         from_line: usize,
         parsed: Vec<ObjectRange>,
     ) -> Result<String, ErrorHandling>;
-     
+
     fn export_object(
         from_line_number: usize,
         visited: &[ObjectRange],
         src: &[String],
     ) -> Result<String, ErrorHandling>;
-    
+
     fn string_to_vector(str_source: &str) -> Vec<String>;
+    fn push_to_vector(
+        str_source: &[String],
+        push: String,
+        push_path: bool,
+    ) -> Result<Vec<String>, ErrorHandling>;
 }
 
 impl Files for FileExtractor {
+    //Assuming str_source can be of different size at runtime, there is sense to only include pushing at begin, represented by true and end, represented by false
+    fn push_to_vector(
+        str_source: &[String],
+        push: String,
+        push_where: bool,
+    ) -> Result<Vec<String>, ErrorHandling> {
+        let mut source_clone = str_source.to_owned(); //We do this, so the str_source stays immutable
+        let whitespace = &source_clone[0]
+            .chars()
+            .take_while(|w| w.is_whitespace())
+            .collect::<String>();
+        //whitespace variable preserves formatting, push is the value that has to be inserted
+        let push_preserving = whitespace.to_owned() + &push;
+        if push_where {
+            source_clone.insert(0_usize, push_preserving);
+        } else {
+            source_clone.insert(source_clone.len(), push_preserving);
+        }
+        Ok(source_clone)
+    }
+
     fn check_for_valid_object(
         parsed: &[ObjectRange],
         line_number: usize,
@@ -41,7 +67,7 @@ impl Files for FileExtractor {
     fn string_to_vector(str_source: &str) -> Vec<String> {
         str_source.lines().map(|line| line.to_string()).collect()
     }
-     
+
     //Main entry for seeker and extract_by_line, roams through Vec<ObjectRange> seeking for the object that fits
     //the requested line number. If it finds no match, then LineOutOfBounds error is thrown
     fn export_object(
@@ -61,7 +87,7 @@ impl Files for FileExtractor {
             src: format!("{:?}", visited),
         })
     }
-    
+
     fn export_object_preserving_comments(
         src: Vec<String>,
         from_line: usize,
@@ -96,7 +122,6 @@ impl Files for FileExtractor {
 //Finds an object, justifying whether the said line number belongs to the range of the object.
 //If it does, then object is printed with extract_by_line
 
-
 fn seeker(line_number: usize, item: &ObjectRange, src: &[String]) -> Result<String, ErrorHandling> {
     let line_start = item.line_start().context(CouldNotGetLineSnafu)?;
     let line_end = item.line_end().context(CouldNotGetLineSnafu)?;
@@ -111,7 +136,7 @@ fn seeker_for_comments(
     line_number: usize,
     line_start: usize,
     line_end: usize,
-    src: &Vec<String>,
+    src: &[String],
 ) -> Result<String, ErrorHandling> {
     ensure!(
         line_start <= line_number && line_end >= line_number,

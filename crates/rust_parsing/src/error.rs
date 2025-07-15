@@ -1,6 +1,5 @@
 use snafu::Snafu;
 use syn;
-
 #[derive(Debug, Snafu)]
 #[snafu(visibility(pub))]
 pub enum ErrorHandling {

@@ -1,15 +1,15 @@
 mod tests {
+    use crate::binding::get_patch_data;
     use rust_parsing::comment_lexer;
     use rust_parsing::error::InvalidIoOperationsSnafu;
+    use rust_parsing::file_parsing::{FileExtractor, Files};
     use rust_parsing::rust_parser::{RustItemParser, RustParser};
-    use tempfile::NamedTempFile;
+    use snafu::ResultExt;
     use std::env;
     use std::io::Write;
-    use rust_parsing::file_parsing::{FileExtractor, Files};
-    use crate::binding::get_patch_data;
-    use snafu::ResultExt;
-    use std::{fs, path::Path};
     use std::process::Command;
+    use std::{fs, path::Path};
+    use tempfile::NamedTempFile;
     const PATH_BASE: &str = "../../tests/data.rs";
     const COMPARE_LINES: &str = "fn function_with_return() -> i32 {\n";
     #[test]
@@ -21,7 +21,7 @@ mod tests {
             .expect("File read failed");
         let vectored_file = FileExtractor::string_to_vector(&source);
         let line_eight_from_vector = &vectored_file[7]; //Count in vec! starts from 0 
-        assert_eq!(COMPARE_LINES, line_eight_from_vector.to_owned() +"\n"); //This test has passed
+        assert_eq!(COMPARE_LINES, line_eight_from_vector.to_owned() + "\n"); //This test has passed
     }
     #[test]
     fn test_parse() {
@@ -94,46 +94,48 @@ mod tests {
     }
     #[test]
     fn test_read_argument() {
-         let mut path = env::current_dir().expect("couldn't get path");
-         path.pop();
-         path.pop();
-         let path_to_patch = path.join("patch.patch");
-         
-        assert_eq!(path_to_patch, Path::new("/home/runner/work/patchdog/patchdog/patch.patch"));
+        let mut path = env::current_dir().expect("couldn't get path");
+        path.pop();
+        path.pop();
+        let path_to_patch = path.join("patch.patch");
+
+        assert_eq!(
+            path_to_patch,
+            Path::new("/home/runner/work/patchdog/patchdog/patch.patch")
+        );
     }
     #[test]
-    fn test_read_file(){
-    let mut path = env::current_dir().expect("couldn't get path");
-         path.pop();
-         path.pop();
+    fn test_read_file() {
+        let mut path = env::current_dir().expect("couldn't get path");
+        path.pop();
+        path.pop();
         let path_to_patch = path.join("patch.patch");
-    fs::read_to_string(path_to_patch)
-        .expect("Couldn't read");
+        fs::read_to_string(path_to_patch).expect("Couldn't read");
     }
     #[test]
     fn test_read_patch() {
-            let mut path = env::current_dir()
-        .context(InvalidIoOperationsSnafu)
-        .expect("couldn't get current dir");
-    path.pop();
-    path.pop();
-    let output = 
-    Command::new("git")
-        .args(["format-patch", "--output=patch.patch", "--stdout", "-1", "HEAD"])
-        .output()
-        .expect("failed to execute process");
-    
-    let mut patch_file = NamedTempFile::new().context(InvalidIoOperationsSnafu).expect("couldn't make temp file");
-    patch_file.write_all(&output.stdout)
-        .expect("couldn't write output to tempfile");
-    println!("{:?}",patch_file.path());
-    let patch = get_patch_data(
-        patch_file.path().to_path_buf(),
-        path,
-    ).expect("couldn't get patch");
-    for each in patch {
-        println!("{:?}", each);
+        let mut path = env::current_dir()
+            .context(InvalidIoOperationsSnafu)
+            .expect("couldn't get current dir");
+        path.pop();
+        path.pop();
+        let output = Command::new("git")
+            .args(["format-patch", "--stdout", "-1", "HEAD"])
+            .output()
+            .expect("failed to execute process");
+
+        let mut patch_file = NamedTempFile::new()
+            .context(InvalidIoOperationsSnafu)
+            .expect("couldn't make temp file");
+        patch_file
+            .write_all(&output.stdout)
+            .expect("couldn't write output to tempfile");
+        println!("{:?}", patch_file.path());
+        let patch =
+            get_patch_data(patch_file.path().to_path_buf(), path).expect("couldn't get patch");
+        for each in patch {
+            println!("{:?}", each);
+        }
+        assert_eq!(true, false);
     }
-        assert_eq!(true,false);
-}
 }
