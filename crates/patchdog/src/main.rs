@@ -1,12 +1,12 @@
+use crate::binding::{make_export};
 pub mod binding;
 #[cfg(test)]
 pub mod tests;
-use crate::binding::patch_interface;
 #[tokio::main]
 async fn main() {
-    let a = patch_interface("/home/yurii-sama/patchdog/patch.patch", "/home/yurii-sama/patchdog/"); 
-    for each in a {
-        println!("{:?}", each);
-    }
-}
+    //let _call = patch_data_argument();
+    let make = make_export(&["/home/yurii-sama/patchdog/crates/patchdog/src/main.rs"])
+        .expect("err");
+    println!("{:?}", make);
 
+}

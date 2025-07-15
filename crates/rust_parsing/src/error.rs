@@ -1,6 +1,5 @@
 use snafu::Snafu;
 use syn;
-
 #[derive(Debug, Snafu)]
 #[snafu(visibility(pub))]
 pub enum ErrorHandling {
@@ -34,4 +33,6 @@ pub enum ErrorHandling {
         line_number: usize,
         src: String,
     },
+    CouldNotGetName,
+    CouldNotGetLine,
 }

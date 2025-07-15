@@ -71,7 +71,7 @@ fn visit_items(items: &[Item]) -> Vec<ObjectRange> {
                     names: vec![Name::TypeName("fn"), Name::Name(f.sig.ident.to_string())],
                 });
             }
-            Item::Mod(m) => match m.content.clone() {
+            Item::Mod(m) => match &m.content {
                 Some((_, items)) => {
                     object_line.push(ObjectRange {
                         line_ranges: vec![
@@ -80,7 +80,7 @@ fn visit_items(items: &[Item]) -> Vec<ObjectRange> {
                         ],
                         names: vec![Name::TypeName("mod"), Name::Name(m.ident.to_string())],
                     });
-                    object_line.extend(visit_items(&items));
+                    object_line.extend(visit_items(items));
                 }
                 None => {
                     object_line.push(ObjectRange {
@@ -105,7 +105,12 @@ fn visit_items(items: &[Item]) -> Vec<ObjectRange> {
             }
             Item::Impl(i) => {
                 let trait_name = match &i.trait_ {
-                    Some((_, path, _)) => path.segments.last().unwrap().ident.to_string(),
+                    Some((_, path, _)) => path
+                        .segments
+                        .last()
+                        .expect("failed to get impl name")
+                        .ident
+                        .to_string(),
                     None => "matches struct".to_string(),
                 };
                 object_line.push(ObjectRange {

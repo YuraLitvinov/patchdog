@@ -1,4 +1,4 @@
-name: Rust
+name: Run tests
 
 on:
   push:
@@ -15,8 +15,5 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    - name: Make patch
-      run: git format-patch --output=latest_commit.patch -1 HEAD
-    - name: Run try
-      run: cargo run -- latest_commit.patch
-    
+    - name: Run tests
+      run: cargo test --verbose
