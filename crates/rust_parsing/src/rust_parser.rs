@@ -76,7 +76,7 @@ fn visit_items(items: &[Item]) -> Vec<ObjectRange> {
                     object_line.push(ObjectRange {
                         line_ranges: vec![
                             LineRange::Start(m.span().start().line),
-                            LineRange::End(m.ident.span().end().line),
+                            LineRange::End(m.span().end().line),
                         ],
                         names: vec![Name::TypeName("mod"), Name::Name(m.ident.to_string())],
                     });
@@ -85,8 +85,8 @@ fn visit_items(items: &[Item]) -> Vec<ObjectRange> {
                 None => {
                     object_line.push(ObjectRange {
                         line_ranges: vec![
-                            LineRange::Start(m.ident.span().start().line),
-                            LineRange::End(m.ident.span().end().line),
+                            LineRange::Start(m.span().start().line),
+                            LineRange::End(m.span().end().line),
                         ],
                         names: vec![Name::TypeName("mod"), Name::Name(m.ident.to_string())],
                     });
