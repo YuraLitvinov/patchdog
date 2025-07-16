@@ -42,31 +42,46 @@ impl From<ErrorHandling> for ErrorBinding {
         ErrorBinding::RustParsing(rust)
     }
 }
-/*Demonstrational function that allows to push some change to any function that has been 
-in the scope of the patch file without changing the originals
-*/
-pub fn patch_data_argument() -> Result<(), ErrorBinding> {
+
+pub fn patch_data_argument(path_to_patch: PathBuf) -> Result<Vec<Export>, ErrorBinding> {
     let path = env::current_dir().context(InvalidIoOperationsSnafu)?;
-    let args: Vec<String> = env::args().collect();
-    let patch = get_patch_data(path.join(&args[1]), path)?;
-    for each in patch {
+    let patch = get_patch_data(path.join(path_to_patch), path)?;
+    Ok(patch)
+}
+
+pub fn export_arguments(
+    exported_from_file: Vec<Export>,
+    rust_type: Vec<String>,
+    rust_name: Vec<String>,
+) -> Result<(), ErrorBinding> {
+    for each in exported_from_file {
+        println!("{:?}", &each.filename);
         let file = fs::read_to_string(&each.filename).context(InvalidIoOperationsSnafu)?;
-        println!("each: {:?}", &each.filename);
         let vectorized = FileExtractor::string_to_vector(&file);
         for obj in each.range {
             let item = &vectorized[obj.start - 1..obj.end];
-            let catch: Vec<String> =
+            let _catch: Vec<String> =
                 FileExtractor::push_to_vector(item, "#[derive(Debug)]".to_string(), true)?;
             //Calling at index 0 because parsed_file consists of a single object
+            //Does a recursive check, whether the item is still a valid Rust code
             let parsed_file = &RustItemParser::parse_all_rust_items(&item.join("\n"))?[0];
-            if parsed_file.object_type().context(CouldNotGetLineSnafu)? == "fn" {
-                println!("{}", catch.join("\n"));
+            let obj_type_to_compare = &parsed_file.object_type().context(CouldNotGetLineSnafu)?;
+            let obj_name_to_compare = &parsed_file.object_name().context(CouldNotGetLineSnafu)?;
+            if rust_type
+                .iter()
+                .any(|obj_type| obj_type_to_compare == obj_type)
+                || rust_name
+                    .iter()
+                    .any(|obj_name| obj_name_to_compare == obj_name)
+            {
+                println!("{}", item.join("\n"));
             }
         }
     }
 
     Ok(())
 }
+
 /*Pushes information from a patch into vector that contains lines
 at where there are unique changed objects reprensented with range<usize>
 and an according path each those ranges that has to be iterated only once
@@ -98,11 +113,12 @@ pub fn get_patch_data(
 }
 //Makes an export structure from files
 //It takes list of files and processes them into objects that could be worked with
-pub fn make_export(filenames: &[&str]) -> Result<Vec<Export>, ErrorHandling> {
+pub fn make_export(filenames: Vec<PathBuf>) -> Result<Vec<Export>, ErrorHandling> {
     let mut output_vec: Vec<Export> = Vec::new();
     let mut vector_of_changed: Vec<Range<usize>> = Vec::new();
     for filename in filenames {
-        let as_string = fs::read_to_string(&filename).context(InvalidIoOperationsSnafu)?;
+        let path = env::current_dir().context(InvalidIoOperationsSnafu)?.join(filename);
+        let as_string = fs::read_to_string(&path).context(InvalidIoOperationsSnafu)?;
         let parsed_file = RustItemParser::parse_all_rust_items(&as_string)?;
         for each_object in parsed_file {
             let range = each_object.line_start().context(CouldNotGetLineSnafu)?
@@ -111,7 +127,7 @@ pub fn make_export(filenames: &[&str]) -> Result<Vec<Export>, ErrorHandling> {
         }
         output_vec.push({
             Export {
-                filename: filename.into(),
+                filename: path,
                 range: vector_of_changed.to_owned(),
             }
         });
