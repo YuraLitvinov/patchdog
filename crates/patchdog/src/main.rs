@@ -1,3 +1,4 @@
+//Signed commit
 use crate::binding::ErrorBinding;
 use crate::cli::{cli_search_mode};
 pub mod binding;
