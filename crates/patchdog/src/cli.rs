@@ -51,3 +51,4 @@ fn find_rust_files(dir: &Path, rust_files: &mut Vec<PathBuf>) {
         }
     }
 }
+

@@ -77,6 +77,7 @@ pub fn export_arguments(
                 let parsed = RustItemParser::rust_function_parser(&item.join("\n"))?;
                 println!("{:?}", parsed);
                 //println!("{:?}", parsed_file);
+
             }
         }
     }
@@ -122,6 +123,7 @@ pub fn make_export(filenames: &Vec<PathBuf>) -> Result<Vec<Export>, ErrorHandlin
         let path = env::current_dir()
             .context(InvalidIoOperationsSnafu)?
             .join(filename);
+
         let as_string = fs::read_to_string(&path).context(InvalidIoOperationsSnafu)?;
         let parsed_file = RustItemParser::parse_all_rust_items(&as_string)?;
         for each_object in parsed_file {
