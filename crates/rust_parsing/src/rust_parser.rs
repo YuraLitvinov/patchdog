@@ -1,11 +1,36 @@
 use crate::error::{ErrorHandling, InvalidSynParsingSnafu};
 use crate::object_range::{LineRange, Name, ObjectRange};
+use proc_macro2::TokenStream;
+use proc_macro2::{Spacing, TokenTree};
+use quote::ToTokens;
 use snafu::ResultExt;
 use std::path::PathBuf;
-use syn::File;
-use syn::parse_str;
+use std::vec;
+use syn::{parse_str, FnArg};
 use syn::spanned::Spanned;
+use syn::{AngleBracketedGenericArguments, PathArguments, Type, TypePath};
+use syn::{File, ReturnType};
 use syn::{ImplItem, Item};
+
+#[allow(dead_code)]
+#[derive(Debug)]
+pub struct FunctionSignature {
+    fn_input: Vec<FnInputToken>,
+    fn_out: FnOutputToken,
+}
+#[derive(Debug)]
+#[allow(dead_code)]
+struct FnInputToken {
+    input_name: String,
+    input_type: String,
+}
+#[derive(Debug)]
+#[allow(dead_code)]
+struct FnOutputToken {
+    kind: String,
+    output_type: String,
+    error_type: Option<String>,
+}
 
 pub trait RustParser {
     fn parse_all_rust_items(src: &str) -> Result<Vec<ObjectRange>, ErrorHandling>;
@@ -13,6 +38,7 @@ pub trait RustParser {
         base_path: PathBuf,
         mod_name: String,
     ) -> Result<Option<PathBuf>, ErrorHandling>;
+    fn rust_function_parser(src: &str) -> Result<Vec<FunctionSignature>, ErrorHandling>;
 }
 
 pub struct RustItemParser;
@@ -20,7 +46,11 @@ pub struct RustItemParser;
 impl RustParser for RustItemParser {
     fn parse_all_rust_items(src: &str) -> Result<Vec<ObjectRange>, ErrorHandling> {
         let ast: File = parse_str(src).context(InvalidSynParsingSnafu)?;
-        Ok(visit_items(&ast.items))
+        Ok(visit_items(&ast.items)?)
+    }
+    fn rust_function_parser(src: &str) -> Result<Vec<FunctionSignature>, ErrorHandling> {
+        let ast: File = parse_str(src).context(InvalidSynParsingSnafu)?;
+        Ok(function_parse(&ast.items)?)
     }
 
     fn find_module_file(
@@ -38,8 +68,116 @@ impl RustParser for RustItemParser {
         Ok(None)
     }
 }
+fn function_parse(items: &[Item]) -> Result<Vec<FunctionSignature>,ErrorHandling> {
+    let mut fn_sig: Vec<FunctionSignature> = Vec::new();
+    let mut vec_token_inputs: Vec<TokenStream> = Vec::new();
+    if let Item::Fn(f) = &items[0] {
+        //let input_tokens =  f.sig.inputs.clone().into_token_stream();
+        let input_tokens =  f.sig.inputs.iter();
+        for each in input_tokens {
+        match each {
+            FnArg::Receiver(_) => {},
+            FnArg::Typed(pat_type) => {
+               let input_tokens = pat_type.to_token_stream();
+               vec_token_inputs.push(input_tokens);
+            }
 
-fn visit_items(items: &[Item]) -> Vec<ObjectRange> {
+        }
+    }
+        let output = &f.sig.output;
+        if let ReturnType::Type(_, boxed_ty) = &output {
+        fn_sig.push(FunctionSignature {
+        fn_input: fn_input(vec_token_inputs)?,
+        fn_out: analyze_return_type(boxed_ty)?,
+        });
+    }
+}
+Ok(fn_sig)
+}
+
+fn fn_input(input_vector_stream: Vec<TokenStream>) -> Result<Vec<FnInputToken>, ErrorHandling> {
+    let mut input_tokens: Vec<FnInputToken> = Vec::new();
+    for input in input_vector_stream {
+        let tokens: Vec<TokenTree> = input.into_iter().collect();
+        for (i, token) in tokens.iter().enumerate() {
+            if let TokenTree::Punct(punct) = token {
+                if punct.as_char() == ':' && punct.spacing() != Spacing::Joint {
+                    let before = tokens.get(i.wrapping_sub(1));
+                    let after_tokens: Vec<TokenTree> = tokens.iter().skip(i + 1).cloned().collect();
+                    let after_stream: TokenStream = after_tokens.into_iter().collect();
+                    if let Some(before_token) = before {
+                        let rm_space_from_before = remove_whitespace(before_token.to_string());
+                        let rm_space_from_after = remove_whitespace(after_stream.to_string());
+                        input_tokens.push({
+                            FnInputToken {
+                                input_name: rm_space_from_before?,
+                                input_type: rm_space_from_after?,
+                            }
+                        });
+                    }
+                }
+            }
+        }
+}
+    Ok(input_tokens)
+}
+
+fn remove_whitespace(s: String) -> Result<String, ErrorHandling> {
+    Ok(s.chars().filter(|c| !c.is_whitespace()).collect())
+}
+fn analyze_return_type(ty: &Type) -> Result<FnOutputToken, ErrorHandling> {
+    let mut kind = "Other".to_string();
+    let mut output_type = ty.to_token_stream().to_string();
+    let mut error_type = None;
+    if let Type::Path(TypePath { path, .. }) = ty {
+        if let Some(segment) = path.segments.last() {
+            let ident_str = segment.ident.to_string();
+            match ident_str.as_str() {
+                "Result" => {
+                    kind = "Result".to_string();
+
+                    if let PathArguments::AngleBracketed(AngleBracketedGenericArguments {
+                        args,
+                        ..
+                    }) = &segment.arguments
+                    {
+                        let mut args = args.iter();
+                        if let Some(ok_ty) = args.next() {
+                            output_type = remove_whitespace(ok_ty.to_token_stream().to_string())?;
+                        }
+                        if let Some(err_ty) = args.next() {
+                            error_type = Some(err_ty.to_token_stream().to_string());
+                        }
+                    }
+                }
+                "Option" => {
+                    kind = "Option".to_string();
+
+                    if let PathArguments::AngleBracketed(AngleBracketedGenericArguments {
+                        args,
+                        ..
+                    }) = &segment.arguments
+                    {
+                        if let Some(inner_ty) = args.first() {
+                            output_type = remove_whitespace(inner_ty.to_token_stream().to_string())?;
+                        }
+                    }
+                }
+                _ => {
+                    kind = "Other".to_string();
+                    output_type = ty.to_token_stream().to_string();
+                }
+            }
+        }
+    }
+    Ok(FnOutputToken {
+        kind,
+        output_type,
+        error_type,
+    })
+}
+
+fn visit_items(items: &[Item]) -> Result<Vec<ObjectRange>, ErrorHandling> {
     let mut object_line: Vec<ObjectRange> = Vec::new();
 
     for item in items {
@@ -80,7 +218,7 @@ fn visit_items(items: &[Item]) -> Vec<ObjectRange> {
                         ],
                         names: vec![Name::TypeName("mod"), Name::Name(m.ident.to_string())],
                     });
-                    object_line.extend(visit_items(items));
+                    object_line.extend(visit_items(items)?);
                 }
                 None => {
                     object_line.push(ObjectRange {
@@ -256,5 +394,5 @@ fn visit_items(items: &[Item]) -> Vec<ObjectRange> {
         }
     }
 
-    object_line
+    Ok(object_line)
 }

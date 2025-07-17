@@ -1,39 +1,53 @@
-use clap::CommandFactory;
+use clap::ArgGroup;
 //Unlike Path, PathBuf size is known at compile time and doesn't require lifetime specifier
+use crate::binding::{ErrorBinding, export_arguments, make_export};
 #[allow(unused)]
 use clap::{Arg, ArgAction, Command, Parser};
-use rust_parsing::error::InvalidIoOperationsSnafu;
-use snafu::ResultExt;
-use std::path::{PathBuf, Path};
 
-use crate::binding::{ErrorBinding, export_arguments, make_export, patch_data_argument};
+use std::fs;
+use std::path::{Path, PathBuf};
 const EMPTY_VALUE: &str = " ";
 #[derive(Parser, Debug)]
-#[command(version, about, long_about = None)]
-struct Args {
-    //patch_path only receives one positional argument containing path to patch
+#[command(version, about, long_about = None, group(
+    ArgGroup::new("path")
+        .args(["dir_path", "file_patch"])
+        .required(true)
+)
+)]
+pub struct Mode {
+    #[arg(long, short, default_value = EMPTY_VALUE)]
+    pub dir_path: PathBuf,
     #[arg(long, default_value = EMPTY_VALUE)]
-    patch_path: PathBuf,
-    #[arg(long, num_args=1..14, default_value = EMPTY_VALUE)]
+    file_patch: PathBuf,
+    #[arg(long, num_args=1..14, requires = "file_patch", default_value = "fn")]
     type_rust: Vec<String>,
-    #[arg(long, num_args=1.., default_value = EMPTY_VALUE)]
+    #[arg(long, num_args=1..,  requires = "file_patch")]
     name_rust: Vec<String>,
-    #[arg(long, num_args=1..)]
-    rust_path: Vec<PathBuf>,
+
 }
 
-pub fn cli_patch_mode() -> Result<(), ErrorBinding> {
-    let commands = Args::parse();
-    if !commands.rust_path.is_empty() {
-        let file_export = make_export(commands.rust_path)?;
-        export_arguments(file_export, commands.type_rust, commands.name_rust)?;
-    } else if commands.patch_path == Path::new(EMPTY_VALUE) {
-        Args::command().print_help().context(InvalidIoOperationsSnafu)?;
-    }
-    else  {
-        let patch_data = patch_data_argument(commands.patch_path)?;
-        export_arguments(patch_data, commands.type_rust, commands.name_rust)?;
-    }
-
+pub async fn cli_search_mode() -> Result<(), ErrorBinding>  {
+    let mut rust_files: Vec<PathBuf> = Vec::new();
+    let commands = Mode::parse();
+    find_rust_files(&commands.dir_path, &mut rust_files);
+    let file_export = make_export(&rust_files)?;
+    export_arguments(file_export, commands.type_rust, commands.name_rust)?;
+    println!("rust files len {}", &rust_files.len());
     Ok(())
+}
+
+
+fn find_rust_files(dir: &Path, rust_files: &mut Vec<PathBuf>) {
+    if let Ok(entries) = fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                find_rust_files(&path, rust_files); // Recurse into subdirectory
+            } else if let Some(ext) = path.extension() {
+                if ext == "rs" {
+                    rust_files.push(path);
+                }
+            }
+        }
+    }
 }
