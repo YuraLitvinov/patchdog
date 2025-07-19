@@ -1,6 +1,6 @@
 use clap::ArgGroup;
 //Unlike Path, PathBuf size is known at compile time and doesn't require lifetime specifier
-use crate::binding::{ErrorBinding, export_arguments, make_export};
+use crate::binding::{export_arguments, make_export, patch_data_argument, ErrorBinding};
 #[allow(unused)]
 use clap::{Arg, ArgAction, Command, Parser};
 
@@ -36,6 +36,13 @@ pub async fn cli_search_mode() -> Result<(), ErrorBinding>  {
     Ok(())
 }
 
+pub async fn cli_search_patch() -> Result<(), ErrorBinding>  {
+    let commands = Mode::parse();
+    let patch = patch_data_argument(commands.file_patch)?;
+    println!("type: {:?}", commands.type_rust);
+    export_arguments(patch, commands.type_rust, commands.name_rust)?;
+    Ok(())
+}
 
 fn find_rust_files(dir: &Path, rust_files: &mut Vec<PathBuf>) {
     if let Ok(entries) = fs::read_dir(dir) {

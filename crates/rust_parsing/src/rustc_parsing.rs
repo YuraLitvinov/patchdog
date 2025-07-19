@@ -1,33 +1,29 @@
 use rustc_lexer::TokenKind;
 use rustc_lexer::tokenize;
-use std::fs;
-
-pub fn comment_lexer(src: &str) {
-    let source = match fs::read_to_string(src) {
-        Ok(source) => source,
-        Err(err) => format!("{:?}", err),
-    };
+///Comment lexer parses a single string, requiring it to be into iterator of vecstrings created by string_to_vector
+///This allows to justify whether a line contains a single-line comment or not
+pub fn comment_lexer(source: String, line_number: usize) {
     let tokenized = tokenize(&source);
     for each in tokenized {
         match each.kind {
             TokenKind::BlockComment { terminated } => {
                 println!(
-                    "terminated: {:?} kind: {:?} len: {:?}",
-                    terminated, each.kind, each.len
+                    "line {} terminated: {:?} kind: {:?} len: {:?}",
+                    line_number, terminated, each.kind, each.len
                 );
             }
             TokenKind::LineComment => {
-                println!("kind: {:?} len: {:?}", each.kind, each.len);
+                println!("line: {} kind: {:?} len: {:?}", line_number, each.kind, each.len);
             }
 
             TokenKind::Lifetime { starts_with_number } => {
                 println!(
-                    "Lifetime starts_with_number: {:?} kind: {:?} len: {:?}",
-                    starts_with_number, each.kind, each.len
+                    "line {} Lifetime starts_with_number: {:?} kind: {:?} len: {:?}",
+                    line_number, starts_with_number, each.kind, each.len
                 );
             }
             TokenKind::Slash => {
-                println!("kind: {:?} len: {:?}", each.kind, each.len);
+                println!("line {} kind: {:?} len: {:?}", line_number, each.kind, each.len);
             }
             _ => {}
         }

@@ -18,6 +18,7 @@ impl GoogleGemini {
             .with_user_message(file_content)
             .execute()
             .await?;
+        println!("{}", res.text());
         Ok(res.text())
     }
 }

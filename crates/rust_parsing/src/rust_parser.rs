@@ -1,11 +1,11 @@
-use crate::error::{ErrorHandling, InvalidSynParsingSnafu};
+use crate::error::{ErrorHandling, InvalidIoOperationsSnafu, InvalidItemParsingSnafu};
 use crate::object_range::{LineRange, Name, ObjectRange};
 use proc_macro2::TokenStream;
 use proc_macro2::{Spacing, TokenTree};
 use quote::ToTokens;
 use snafu::ResultExt;
 use std::path::PathBuf;
-use std::vec;
+use std::{vec, fs};
 use syn::{parse_str, FnArg};
 use syn::spanned::Spanned;
 use syn::{AngleBracketedGenericArguments, PathArguments, Type, TypePath};
@@ -39,19 +39,35 @@ pub trait RustParser {
         mod_name: String,
     ) -> Result<Option<PathBuf>, ErrorHandling>;
     fn rust_function_parser(src: &str) -> Result<Vec<FunctionSignature>, ErrorHandling>;
+    fn parse_rust_file(src: &PathBuf) -> Result<Vec<ObjectRange>, ErrorHandling>;
+    fn rust_ast(src: &str) -> Result<File, ErrorHandling>;
 }
 
 pub struct RustItemParser;
 
 impl RustParser for RustItemParser {
+    fn parse_rust_file(src: &PathBuf) -> Result<Vec<ObjectRange>, ErrorHandling> {
+        let file = fs::read_to_string(&src).context(InvalidIoOperationsSnafu)?;
+        let ast: File = parse_str(&file).context(InvalidItemParsingSnafu {str_source: src})?;
+        Ok(visit_items(&ast.items)?)   
+    }
+
     fn parse_all_rust_items(src: &str) -> Result<Vec<ObjectRange>, ErrorHandling> {
-        let ast: File = parse_str(src).context(InvalidSynParsingSnafu)?;
+        let src_format_error = format!("{:#?}", &src);
+        let ast: File = parse_str(src).context(InvalidItemParsingSnafu {str_source: src_format_error})?;
         Ok(visit_items(&ast.items)?)
     }
     fn rust_function_parser(src: &str) -> Result<Vec<FunctionSignature>, ErrorHandling> {
-        let ast: File = parse_str(src).context(InvalidSynParsingSnafu)?;
+        let src_format_error = format!("{}", &src);
+        let ast: File = parse_str(src).context(InvalidItemParsingSnafu {str_source: src_format_error})?;
         Ok(function_parse(&ast.items)?)
     }
+        fn rust_ast(src: &str) -> Result<File, ErrorHandling> {
+        let src_format_error = format!("{}", &src);
+        let ast: File = parse_str(src).context(InvalidItemParsingSnafu {str_source: src_format_error})?;
+        Ok(ast)
+    }
+
 
     fn find_module_file(
         base_path: PathBuf,

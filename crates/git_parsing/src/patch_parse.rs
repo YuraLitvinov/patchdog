@@ -67,8 +67,8 @@ pub fn match_patch_with_parse(
             }
         }
     }
-    //println!("Quantity of hunks: {}", hunks.len());
-    //println!("Quantity of changes: {}", changes.len());
+    println!("Quantity of hunks: {}", hunks.len());
+    println!("Quantity of changes: {}", changes.len());
     Ok(changes)
 }
 
