@@ -44,7 +44,9 @@ impl From<ErrorHandling> for ErrorBinding {
 }
 
 pub fn patch_data_argument(path_to_patch: PathBuf) -> Result<Vec<Export>, ErrorBinding> {
-    let path = env::current_dir().context(InvalidReadFileOperationSnafu {file_path: &path_to_patch})?;
+    let path = env::current_dir().context(InvalidReadFileOperationSnafu {
+        file_path: &path_to_patch,
+    })?;
     let patch = get_patch_data(path.join(path_to_patch), path)?;
     Ok(patch)
 }
@@ -75,9 +77,8 @@ pub fn export_arguments(
                     .any(|obj_name| obj_name_to_compare == obj_name)
             {
                 //let parsed = RustItemParser::rust_function_parser(&item.join("\n"))?;
-                let parsed= RustItemParser::rust_ast(&item.join("\n"))?;
-                println!("{:?}", parsed);
-
+                let parsed = RustItemParser::rust_ast(&item.join("\n"))?;
+                println!("{parsed:?}");
             }
         }
     }
@@ -85,7 +86,7 @@ pub fn export_arguments(
     Ok(())
 }
 /*
-Pushes information from a patch into vector that contains lines 
+Pushes information from a patch into vector that contains lines
 at where there are unique changed objects reprensented with range<usize>
 and an according path each those ranges that has to be iterated only once
 */
@@ -97,7 +98,7 @@ pub fn get_patch_data(
     let mut export_difference: Vec<Export> = Vec::new();
     let mut vector_of_changed: Vec<Range<usize>> = Vec::new();
     for difference in export {
-        let parsed= RustItemParser::parse_rust_file(&difference.filename)?;
+        let parsed = RustItemParser::parse_rust_file(&difference.filename)?;
         for each_parsed in &parsed {
             let range = each_parsed.line_start().context(CouldNotGetLineSnafu)?
                 ..each_parsed.line_end().context(CouldNotGetLineSnafu)?;
@@ -138,14 +139,12 @@ pub fn make_export(filenames: &Vec<PathBuf>) -> Result<Vec<Export>, ErrorHandlin
                     }
                 });
                 vector_of_changed.clear();
-                    },
+            }
             Err(e) => {
-                println!("WARNING!\nSKIPPING {:?} PLEASE REFER TO ERROR LOG", e);
+                println!("WARNING!\nSKIPPING {e:?} PLEASE REFER TO ERROR LOG");
                 continue;
             }
-            
         }
-        
     }
     Ok(output_vec)
 }
@@ -161,7 +160,8 @@ fn store_objects(
             let list_of_unique_files =
                 get_easy_hunk(patch_src, &change_line.change_at_hunk.filename())?;
             let path = relative_path.join(change_line.change_at_hunk.filename());
-            let file = fs::read_to_string(&path).context(InvalidReadFileOperationSnafu{file_path: &path})?;
+            let file = fs::read_to_string(&path)
+                .context(InvalidReadFileOperationSnafu { file_path: &path })?;
             let parsed = RustItemParser::parse_all_rust_items(&file)?;
             vec_of_surplus.push(FullDiffInfo {
                 name: change_line.change_at_hunk.filename(),
@@ -179,7 +179,9 @@ fn patch_export_change(
 ) -> Result<Vec<Difference>, ErrorBinding> {
     let mut change_in_line: Vec<usize> = Vec::new();
     let mut line_and_file: Vec<Difference> = Vec::new();
-    let patch_text = fs::read(&path_to_patch).context(InvalidReadFileOperationSnafu {file_path: path_to_patch})?;
+    let patch_text = fs::read(&path_to_patch).context(InvalidReadFileOperationSnafu {
+        file_path: path_to_patch,
+    })?;
     let each_diff = store_objects(&relative_path, &patch_text)?;
     for diff_hunk in &each_diff {
         let path_to_file = relative_path.to_owned().join(&diff_hunk.name);

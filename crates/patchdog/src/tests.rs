@@ -5,10 +5,10 @@ mod tests {
     use rust_parsing::file_parsing::{FileExtractor, Files};
     use rust_parsing::rust_parser::{RustItemParser, RustParser};
     use snafu::ResultExt;
-    use std::{env};
+    use std::env;
     use std::io::Write;
     use std::process::Command;
-    use std::{path::Path, fs};
+    use std::{fs, path::Path};
     use tempfile::NamedTempFile;
     const PATH_BASE: &str = "../../tests/data.rs";
     const COMPARE_LINES: &str = "fn function_with_return() -> i32 {\n";
@@ -88,13 +88,13 @@ mod tests {
         path.pop();
         path.pop();
         let _path_to_patch = path.join("patch.patch");
-        /* 
+        /*
         assert_eq!(
             path_to_patch,
             Path::new("/home/runner/work/patchdog/patchdog/patch.patch")
         );
         */
-        assert_eq!(true,true);
+        assert_eq!(true, true);
     }
 
     #[test]
@@ -125,41 +125,41 @@ mod tests {
     }
     #[test]
     fn test_write() -> Result<(), ErrorHandling> {
-    let file = fs::read_to_string("/home/yurii-sama/patchdog/crates/patchdog/src/cli.rs")
-        .expect("err");
-    let stringvec  = FileExtractor::string_to_vector(&file);
-    //write_to_vecstring should replace line 21
-    FileExtractor::write_to_vecstring(
-        Path::new("src/cli.rs"),
-        stringvec, 
-        20, 
-        "//TEST TEST TEST
+        let file = fs::read_to_string("/home/yurii-sama/patchdog/crates/patchdog/src/cli.rs")
+            .expect("err");
+        let stringvec = FileExtractor::string_to_vector(&file);
+        //write_to_vecstring should replace line 21
+        FileExtractor::write_to_vecstring(
+            Path::new("src/cli.rs"),
+            stringvec,
+            20,
+            "//TEST TEST TEST
         //TEST
         //TEST
-        //TEST".to_string()
-    )?;
+        //TEST"
+                .to_string(),
+        )?;
         //assert_eq!(true,true);
         Ok(())
     }
 
     #[test]
-    fn test_cover_empty_object(){
-        /* 
+    fn test_cover_empty_object() {
+        /*
         let mut name: Vec<Name> = Vec::new();
         let mut ranges: Vec<LineRange> = Vec::new();
         let mut _objectrange: Vec<ObjectRange> = Vec::new();
         */
-        }
+    }
 
     #[test]
     fn find_comments() {
-    //block is of 94 symbols length
-    let file = fs::read_to_string("../../crates/patchdog/src/binding.rs")
-        .expect("err on 159");
-    let parsed = RustItemParser::parse_all_rust_items(&file).expect("err");
+        //block is of 94 symbols length
+        let file = fs::read_to_string("../../crates/patchdog/src/binding.rs").expect("err on 159");
+        let parsed = RustItemParser::parse_all_rust_items(&file).expect("err");
         for each in parsed {
-            println!("{:?}",each);
+            println!("{:?}", each);
         }
-        assert_eq!(true,false);
+        assert_eq!(true, false);
     }
 }

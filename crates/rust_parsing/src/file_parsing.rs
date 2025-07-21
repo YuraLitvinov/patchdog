@@ -1,7 +1,10 @@
-use crate::error::{CouldNotGetLineSnafu, ErrorHandling, LineOutOfBoundsSnafu, SeekerFailedSnafu, InvalidIoOperationsSnafu};
+use crate::error::{
+    CouldNotGetLineSnafu, ErrorHandling, InvalidIoOperationsSnafu, LineOutOfBoundsSnafu,
+    SeekerFailedSnafu,
+};
 use crate::object_range::ObjectRange;
-use std::{path::Path, fs::File, io::Write};
-use snafu::{OptionExt, ensure, ResultExt};
+use snafu::{OptionExt, ResultExt, ensure};
+use std::{fs::File, io::Write, path::Path};
 pub struct FileExtractor;
 pub trait Files {
     fn check_for_valid_object(
@@ -27,25 +30,26 @@ pub trait Files {
         push_path: bool,
     ) -> Result<Vec<String>, ErrorHandling>;
     //Representing file as a vector of lines is generally the most effective practise
-    fn write_to_vecstring(path: &Path, source: Vec<String>, line_index: usize, changed_element: String) -> Result<(), ErrorHandling>;
+    fn write_to_vecstring(
+        path: &Path,
+        source: Vec<String>,
+        line_index: usize,
+        changed_element: String,
+    ) -> Result<(), ErrorHandling>;
 }
 
 impl Files for FileExtractor {
-
     fn write_to_vecstring(
         path: &Path,
         mut source: Vec<String>,
-        line_index: usize, 
-        changed_element: String
-    ) 
-    -> Result<(), ErrorHandling>{
+        line_index: usize,
+        changed_element: String,
+    ) -> Result<(), ErrorHandling> {
         source.insert(line_index, changed_element);
-        let mut file = File::create(path)
-            .context(InvalidIoOperationsSnafu)?;
+        let mut file = File::create(path).context(InvalidIoOperationsSnafu)?;
         for each in &source {
-           write!(file, "{}\n", each)
-            .context(InvalidIoOperationsSnafu)?;
-        }     
+            writeln!(file, "{each}").context(InvalidIoOperationsSnafu)?;
+        }
         Ok(())
     }
 
@@ -57,7 +61,7 @@ impl Files for FileExtractor {
     ) -> Result<Vec<String>, ErrorHandling> {
         let mut source_clone = str_source.to_owned(); //We do this, so the str_source stays immutable
         let whitespace = &source_clone
-            .get(0)
+            .first()
             .ok_or(ErrorHandling::LineOutOfBounds { line_number: 0 })?
             .chars()
             .take_while(|w| w.is_whitespace())
@@ -107,7 +111,7 @@ impl Files for FileExtractor {
         }
         Err(ErrorHandling::ExportObjectFailed {
             line_number,
-            src: format!("{:?}", visited),
+            src: format!("{visited:?}"),
         })
     }
 

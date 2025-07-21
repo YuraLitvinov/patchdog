@@ -1,6 +1,6 @@
 use clap::ArgGroup;
 //Unlike Path, PathBuf size is known at compile time and doesn't require lifetime specifier
-use crate::binding::{export_arguments, make_export, patch_data_argument, ErrorBinding};
+use crate::binding::{ErrorBinding, export_arguments, make_export, patch_data_argument};
 #[allow(unused)]
 use clap::{Arg, ArgAction, Command, Parser};
 
@@ -23,10 +23,9 @@ pub struct Mode {
     type_rust: Vec<String>,
     #[arg(long, num_args=1..,  requires = "file_patch")]
     name_rust: Vec<String>,
-
 }
 
-pub async fn cli_search_mode() -> Result<(), ErrorBinding>  {
+pub async fn cli_search_mode() -> Result<(), ErrorBinding> {
     let mut rust_files: Vec<PathBuf> = Vec::new();
     let commands = Mode::parse();
     find_rust_files(&commands.dir_path, &mut rust_files);
@@ -36,7 +35,7 @@ pub async fn cli_search_mode() -> Result<(), ErrorBinding>  {
     Ok(())
 }
 
-pub async fn cli_search_patch() -> Result<(), ErrorBinding>  {
+pub async fn cli_search_patch() -> Result<(), ErrorBinding> {
     let commands = Mode::parse();
     let patch = patch_data_argument(commands.file_patch)?;
     println!("type: {:?}", commands.type_rust);
@@ -58,4 +57,3 @@ fn find_rust_files(dir: &Path, rust_files: &mut Vec<PathBuf>) {
         }
     }
 }
-

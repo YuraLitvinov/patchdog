@@ -54,7 +54,4 @@ impl ObjectRange {
         }
         None
     }
-
-
-
 }

@@ -25,9 +25,9 @@ pub enum ErrorHandling {
     InvalidIoOperations {
         source: std::io::Error,
     },
-      InvalidReadFileOperation {
+    InvalidReadFileOperation {
         source: std::io::Error,
-        file_path: PathBuf
+        file_path: PathBuf,
     },
     InvalidItemParsing {
         source: syn::Error,
