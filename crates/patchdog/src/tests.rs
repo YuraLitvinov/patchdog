@@ -1,6 +1,6 @@
 mod tests {
     use crate::binding::get_patch_data;
-    use rust_parsing::{comment_lexer, ErrorHandling};
+    use rust_parsing::ErrorHandling;
     use rust_parsing::error::InvalidIoOperationsSnafu;
     use rust_parsing::file_parsing::{FileExtractor, Files};
     use rust_parsing::rust_parser::{RustItemParser, RustParser};
@@ -156,13 +156,10 @@ mod tests {
     //block is of 94 symbols length
     let file = fs::read_to_string("../../crates/patchdog/src/binding.rs")
         .expect("err on 159");
-    let vectorizedstring = FileExtractor::string_to_vector(&file);
-    let mut i = 0;
-    for eachstring in vectorizedstring {
-        i += 1;
-        let _ = comment_lexer(eachstring, i);
-       
-    }
+    let parsed = RustItemParser::parse_all_rust_items(&file).expect("err");
+        for each in parsed {
+            println!("{:?}",each);
+        }
         assert_eq!(true,false);
     }
 }
