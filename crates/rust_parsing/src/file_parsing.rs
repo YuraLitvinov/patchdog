@@ -1,6 +1,10 @@
-use crate::error::{CouldNotGetLineSnafu, ErrorHandling, LineOutOfBoundsSnafu, SeekerFailedSnafu};
+use crate::error::{
+    CouldNotGetLineSnafu, ErrorHandling, InvalidIoOperationsSnafu, LineOutOfBoundsSnafu,
+    SeekerFailedSnafu,
+};
 use crate::object_range::ObjectRange;
-use snafu::{OptionExt, ensure};
+use snafu::{OptionExt, ResultExt, ensure};
+use std::{fs::File, io::Write, path::Path};
 pub struct FileExtractor;
 pub trait Files {
     fn check_for_valid_object(
@@ -25,9 +29,30 @@ pub trait Files {
         push: String,
         push_path: bool,
     ) -> Result<Vec<String>, ErrorHandling>;
+    //Representing file as a vector of lines is generally the most effective practise
+    fn write_to_vecstring(
+        path: &Path,
+        source: Vec<String>,
+        line_index: usize,
+        changed_element: String,
+    ) -> Result<(), ErrorHandling>;
 }
 
 impl Files for FileExtractor {
+    fn write_to_vecstring(
+        path: &Path,
+        mut source: Vec<String>,
+        line_index: usize,
+        changed_element: String,
+    ) -> Result<(), ErrorHandling> {
+        source.insert(line_index, changed_element);
+        let mut file = File::create(path).context(InvalidIoOperationsSnafu)?;
+        for each in &source {
+            writeln!(file, "{each}").context(InvalidIoOperationsSnafu)?;
+        }
+        Ok(())
+    }
+
     //Assuming str_source can be of different size at runtime, there is sense to only include pushing at begin, represented by true and end, represented by false
     fn push_to_vector(
         str_source: &[String],
@@ -35,7 +60,9 @@ impl Files for FileExtractor {
         push_where: bool,
     ) -> Result<Vec<String>, ErrorHandling> {
         let mut source_clone = str_source.to_owned(); //We do this, so the str_source stays immutable
-        let whitespace = &source_clone[0]
+        let whitespace = &source_clone
+            .first()
+            .ok_or(ErrorHandling::LineOutOfBounds { line_number: 0 })?
             .chars()
             .take_while(|w| w.is_whitespace())
             .collect::<String>();
@@ -84,7 +111,7 @@ impl Files for FileExtractor {
         }
         Err(ErrorHandling::ExportObjectFailed {
             line_number,
-            src: format!("{:?}", visited),
+            src: format!("{visited:?}"),
         })
     }
 

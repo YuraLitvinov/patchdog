@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use snafu::Snafu;
 use syn;
 #[derive(Debug, Snafu)]
@@ -23,8 +25,13 @@ pub enum ErrorHandling {
     InvalidIoOperations {
         source: std::io::Error,
     },
-    InvalidSynParsing {
+    InvalidReadFileOperation {
+        source: std::io::Error,
+        file_path: PathBuf,
+    },
+    InvalidItemParsing {
         source: syn::Error,
+        str_source: PathBuf,
     },
     SeekerFailed {
         line_number: usize,

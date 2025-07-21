@@ -11,8 +11,7 @@ pub mod error;
 pub mod file_parsing;
 pub mod object_range;
 pub mod rust_parser;
-pub mod rustc_parsing;
 
 pub use error::ErrorHandling;
 pub use object_range::ObjectRange;
-pub use rustc_parsing::comment_lexer;
+pub use rust_parser::comment_lexer;

@@ -2,8 +2,6 @@ name: Rust
 
 on:
   push:
-  pull_request:
-    branches: [ "main" ]
 
 env:
   CARGO_TERM_COLOR: always
@@ -15,8 +13,5 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    - name: Make patch
-      run: git format-patch --output=latest_commit.patch -1 HEAD
     - name: Run try
-      run: cargo run -- latest_commit.patch
-    
+      run: cargo run -- --dir-path ./

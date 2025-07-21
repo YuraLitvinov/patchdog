@@ -5,7 +5,7 @@ pub enum LineRange {
 }
 #[derive(Debug)]
 pub enum Name {
-    TypeName(&'static str),
+    TypeName(String),
     Name(String),
 }
 #[derive(Debug)]
