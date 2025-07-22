@@ -42,7 +42,7 @@ pub trait RustParser {
         base_path: PathBuf,
         mod_name: String,
     ) -> Result<Option<PathBuf>, ErrorHandling>;
-    fn rust_function_parser(src: &str) -> Result<Vec<FunctionSignature>, ErrorHandling>;
+    fn rust_function_parser(src: &str) -> Result<FunctionSignature, ErrorHandling>;
     fn parse_rust_file(src: &Path) -> Result<Vec<ObjectRange>, ErrorHandling>;
     fn rust_ast(src: &str) -> Result<File, ErrorHandling>;
     fn rust_item_parser(src: &str, range: Range<usize>) -> Result<Vec<ObjectRange>, ErrorHandling>;
@@ -83,7 +83,7 @@ impl RustParser for RustItemParser {
         Ok(visited)
     }
 
-    fn rust_function_parser(src: &str) -> Result<Vec<FunctionSignature>, ErrorHandling> {
+    fn rust_function_parser(src: &str) -> Result<FunctionSignature, ErrorHandling> {
         let ast: File = parse_str(src).context(InvalidItemParsingSnafu {
             str_source: &src.to_string(),
         })?;
@@ -240,8 +240,7 @@ pub fn comment_lexer(source_vector: &str) -> Result<Vec<ObjectRange>, ErrorHandl
     Ok(comment_vector)
 }
 
-fn function_parse(items: &[Item]) -> Result<Vec<FunctionSignature>, ErrorHandling> {
-    let mut fn_sig: Vec<FunctionSignature> = Vec::new();
+fn function_parse(items: &[Item]) -> Result<FunctionSignature, ErrorHandling> {
     let mut vec_token_inputs: Vec<TokenStream> = Vec::new();
     if let Item::Fn(f) = &items[0] {
         //let input_tokens =  f.sig.inputs.clone().into_token_stream();
@@ -257,13 +256,20 @@ fn function_parse(items: &[Item]) -> Result<Vec<FunctionSignature>, ErrorHandlin
         }
         let output = &f.sig.output;
         if let ReturnType::Type(_, boxed_ty) = &output {
-            fn_sig.push(FunctionSignature {
+            let func = FunctionSignature {
                 fn_input: fn_input(vec_token_inputs)?,
                 fn_out: analyze_return_type(boxed_ty)?,
-            });
+            };
+                Ok(func)
+
+        } else {
+            Err(ErrorHandling::CouldNotGetLine)
         }
-    }
-    Ok(fn_sig)
+
+} else {
+    Err(ErrorHandling::CouldNotGetLine)
+}
+
 }
 
 fn fn_input(input_vector_stream: Vec<TokenStream>) -> Result<Vec<FnInputToken>, ErrorHandling> {

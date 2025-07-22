@@ -3,7 +3,7 @@ use git_parsing::{Git2ErrorHandling, Hunk, get_easy_hunk, match_patch_with_parse
 use rust_parsing::ObjectRange;
 use rust_parsing::error::{InvalidIoOperationsSnafu, InvalidReadFileOperationSnafu};
 use rust_parsing::file_parsing::{FileExtractor, Files};
-use rust_parsing::rust_parser::{RustItemParser, RustParser};
+use rust_parsing::rust_parser::{FunctionSignature, RustItemParser, RustParser};
 use rust_parsing::{self, ErrorHandling};
 use snafu::OptionExt;
 use snafu::ResultExt;
@@ -11,6 +11,8 @@ use std::env;
 use std::fs;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
+use std::mem::size_of_val;
+
 pub struct FullDiffInfo {
     pub name: String,
     pub object_range: Vec<ObjectRange>,
@@ -56,6 +58,7 @@ pub fn export_arguments(
     rust_type: Vec<String>,
     rust_name: Vec<String>,
 ) -> Result<(), ErrorBinding> {
+    let mut fnsig: Vec<FunctionSignature> = Vec::new();
     for each in exported_from_file {
         println!("{:?}", &each.filename);
         let file = fs::read_to_string(&each.filename).context(InvalidIoOperationsSnafu)?;
@@ -72,16 +75,17 @@ pub fn export_arguments(
             if rust_type
                 .iter()
                 .any(|obj_type| obj_type_to_compare == obj_type)
-                && rust_name
+                || rust_name
                     .iter()
                     .any(|obj_name| obj_name_to_compare == obj_name)
             {
-                //let parsed = RustItemParser::rust_function_parser(&item.join("\n"))?;
-                let parsed = RustItemParser::rust_ast(&item.join("\n"))?;
-                println!("{parsed:?}");
+                let parsed = RustItemParser::rust_function_parser(&item.join("\n"))?;
+                fnsig.push(parsed);
+                //let parsed = RustItemParser::rust_ast(&item.join("\n"))?;
             }
         }
     }
+    println!("{:?}", size_of_val(&fnsig));
 
     Ok(())
 }
