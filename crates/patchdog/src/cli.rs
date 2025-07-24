@@ -1,10 +1,11 @@
 use clap::ArgGroup;
 //Unlike Path, PathBuf size is known at compile time and doesn't require lifetime specifier
-use crate::binding::{changes_from_patch, make_export, patch_data_argument};
+use crate::binding::{changes_from_patch, patch_data_argument};
+use ai_interactions::parse_json::make_export;
 use rust_parsing::error::ErrorBinding;
 #[allow(unused)]
-use clap::{Arg, ArgAction, Command, Parser};
-use gemini::{GoogleGemini, REQUESTS_PER_MIN};
+use clap::Parser;
+use gemini::gemini::{GoogleGemini, REQUESTS_PER_MIN};
 use std::fs;
 use std::path::{Path, PathBuf};
 const EMPTY_VALUE: &str = " ";

@@ -1,17 +1,18 @@
+use rust_parsing;
 use crate::binding::rust_parsing::error::CouldNotGetLineSnafu;
-use git_parsing::{Git2ErrorHandling, Hunk, get_easy_hunk, match_patch_with_parse};
+use git_parsing::{Hunk, get_easy_hunk, match_patch_with_parse};
 use rust_parsing::ObjectRange;
 use rust_parsing::error::{InvalidIoOperationsSnafu, InvalidReadFileOperationSnafu, ErrorBinding};
 use rust_parsing::file_parsing::{FileExtractor, Files};
 use rust_parsing::rust_parser::{RustItemParser, RustParser};
-use rust_parsing::{self, ErrorHandling};
 use snafu::OptionExt;
 use snafu::ResultExt;
 use std::env;
 use std::fs;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
-use gemini::{GoogleGemini, SingleRequestData, PreparingRequests};
+use gemini::gemini::SingleRequestData;
+use ai_interactions::parse_json::Export;
 
 
 pub struct FullDiffInfo {
@@ -23,11 +24,7 @@ pub struct Difference {
     pub filename: PathBuf,
     pub line: Vec<usize>,
 }
-#[derive(Debug)]
-pub struct Export {
-    pub filename: PathBuf,
-    pub range: Vec<Range<usize>>,
-}
+
 
 
 pub fn patch_data_argument(path_to_patch: PathBuf) -> Result<Vec<Export>, ErrorBinding> {
@@ -108,40 +105,6 @@ pub fn get_patch_data(
         vector_of_changed.clear();
     }
     Ok(export_difference)
-}
-//Makes an export structure from files
-//It takes list of files and processes them into objects that could be worked with
-pub fn make_export(filenames: &Vec<PathBuf>) -> Result<Vec<Export>, ErrorHandling> {
-    let mut output_vec: Vec<Export> = Vec::new();
-    let mut vector_of_changed: Vec<Range<usize>> = Vec::new();
-    for filename in filenames {
-        let path = env::current_dir()
-            .context(InvalidIoOperationsSnafu)?
-            .join(filename);
-
-        let parsed_file = RustItemParser::parse_rust_file(&path);
-        match parsed_file {
-            Ok(value) => {
-                for each_object in value {
-                    let range = each_object.line_start().context(CouldNotGetLineSnafu)?
-                        ..each_object.line_end().context(CouldNotGetLineSnafu)?;
-                    vector_of_changed.push(range);
-                }
-                output_vec.push({
-                    Export {
-                        filename: path,
-                        range: vector_of_changed.to_owned(),
-                    }
-                });
-                vector_of_changed.clear();
-            }
-            Err(e) => {
-                println!("WARNING!\nSKIPPING {e:?} PLEASE REFER TO ERROR LOG");
-                continue;
-            }
-        }
-    }
-    Ok(output_vec)
 }
 
 fn store_objects(
