@@ -1,5 +1,5 @@
 use std::{env::VarError, path::PathBuf};
-
+use git_parsing::Git2ErrorHandling;
 use snafu::Snafu;
 use syn;
 #[derive(Debug, Snafu)]
@@ -26,10 +26,10 @@ pub enum ErrorHandling {
         source: std::io::Error,
     },
     StdVarError {
-        source: VarError
+        source: VarError,
     },
     GeminiRustError {
-        source: gemini_rust::Error
+        source: gemini_rust::Error,
     },
     InvalidReadFileOperation {
         source: std::io::Error,
@@ -48,5 +48,25 @@ pub enum ErrorHandling {
     },
     NotFunction,
     CouldNotGetLine,
-    CouldNotGetObject {err_kind: String },
+    CouldNotGetObject {
+        err_kind: String,
+    },
+}
+
+#[derive(Debug)]
+pub enum ErrorBinding {
+    GitParsing(Git2ErrorHandling),
+    RustParsing(ErrorHandling),
+}
+
+impl From<Git2ErrorHandling> for ErrorBinding {
+    fn from(git: Git2ErrorHandling) -> Self {
+        ErrorBinding::GitParsing(git)
+    }
+}
+
+impl From<ErrorHandling> for ErrorBinding {
+    fn from(rust: ErrorHandling) -> Self {
+        ErrorBinding::RustParsing(rust)
+    }
 }

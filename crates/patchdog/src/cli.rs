@@ -1,12 +1,10 @@
 use clap::ArgGroup;
 //Unlike Path, PathBuf size is known at compile time and doesn't require lifetime specifier
-use crate::binding::{ErrorBinding, changes_from_patch, make_export, patch_data_argument};
-use serde_json::json;
-use gemini::{GoogleGemini, REQUESTS_PER_MIN};
-use crate::parse_json::{FileFn, FnDataEntry};
-use rust_parsing::rust_parser::{RustItemParser, RustParser};
+use crate::binding::{changes_from_patch, make_export, patch_data_argument};
+use rust_parsing::error::ErrorBinding;
 #[allow(unused)]
 use clap::{Arg, ArgAction, Command, Parser};
+use gemini::{GoogleGemini, REQUESTS_PER_MIN};
 use std::fs;
 use std::path::{Path, PathBuf};
 const EMPTY_VALUE: &str = " ";
@@ -54,14 +52,14 @@ pub async fn cli_patch_to_agent(cut_exceeding_batch: bool) -> Result<(), ErrorBi
     }
     println!("{:#?}", batch);
     GoogleGemini::send_batch(batch).await;
-    
+
     //Attempt to form JSON from functions
     //let mut functions: Vec<FnDataEntry> = Vec::new();
     //let mut fn_body: Vec<String> = Vec::new();
     /*
     for each in &new_buffer.preparing_requests.data {
         let foo = &each.function_text;
-        let information = FnDataEntry { 
+        let information = FnDataEntry {
         generic_information: RustItemParser::rust_item_parser(&foo).unwrap(),
         fn_top_block: RustItemParser::rust_function_parser(&foo).unwrap(),
         comment: String::new(),
@@ -69,11 +67,11 @@ pub async fn cli_patch_to_agent(cut_exceeding_batch: bool) -> Result<(), ErrorBi
         fn_body.push(foo.to_string());
         functions.push(information);
     }
-     
+
     println!("{:#?}", functions[0]);
     let file: FileFn = FileFn { filename: "placeholder".to_string(), types: functions };
     let json = json!(file);
-    let file_as_json = json!(file).to_string() + 
+    let file_as_json = json!(file).to_string() +
         "\nThe provided data aside from JSON is valid Rust code. Instruction: Locate each function with it's
         correspondent in JSON, generate /// comment for it and fill it in the types-comment block.
         Return same JSON structure with filled in comment block for each function. Dismiss.";

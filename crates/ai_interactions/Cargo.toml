@@ -1,0 +1,10 @@
+[package]
+name = "ai_interactions"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rust_parsing = { path = "../rust_parsing" }
+snafu = { workspace = true }
+serde_json = { workspace = true }
+serde = { workspace = true } 

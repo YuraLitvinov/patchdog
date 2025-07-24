@@ -1,14 +1,12 @@
-use std::fmt::{self, Display};
-
 use async_trait::async_trait;
 use gemini_rust::Gemini;
-use rust_parsing::{error::{GeminiRustSnafu, InvalidIoOperationsSnafu, StdVarSnafu}, ErrorHandling};
+use rust_parsing::{ErrorHandling, error::GeminiRustSnafu};
 use snafu::ResultExt;
-use serde_json::json;
+use std::fmt::Display;
 
 const TOKENS_PER_MIN: usize = 250_000;
 pub const REQUESTS_PER_MIN: usize = 5;
-const TOKENS_PER_REQUEST: usize = TOKENS_PER_MIN/REQUESTS_PER_MIN;
+const TOKENS_PER_REQUEST: usize = TOKENS_PER_MIN / REQUESTS_PER_MIN;
 #[derive(Debug)]
 pub struct SingleRequestData {
     pub function_text: String,
@@ -18,21 +16,19 @@ pub struct SingleRequestData {
 }
 impl SingleRequestData {
     pub fn size(&self) -> usize {
-        (&self.context.len() +
-        &self.function_text.len())/3 //One token is approx. 3 symbols
+        (&self.context.len() + &self.function_text.len()) / 3 //One token is approx. 3 symbols
     }
 }
 #[derive(Debug)]
 pub struct PreparingRequests {
     pub remaining_capacity: usize,
-    pub data: Vec<SingleRequestData> 
-
+    pub data: Vec<SingleRequestData>,
 }
 impl PreparingRequests {
     pub fn new() -> PreparingRequests {
-        PreparingRequests { 
-            remaining_capacity: TOKENS_PER_REQUEST - GoogleGemini::return_prompt().len(), 
-            data: vec![] 
+        PreparingRequests {
+            remaining_capacity: TOKENS_PER_REQUEST - GoogleGemini::return_prompt().len(),
+            data: vec![],
         }
     }
     pub fn function_add(&mut self, request_data: SingleRequestData) -> bool {
@@ -40,9 +36,8 @@ impl PreparingRequests {
             self.remaining_capacity = self.remaining_capacity - &request_data.size();
             self.data.push(request_data);
             //println!("capacity left: {}", &self.remaining_capacity);
-           return true;
-        }
-        else{
+            return true;
+        } else {
             println!("exceeded buffer");
             return false;
         }
@@ -54,23 +49,22 @@ impl Display for PreparingRequests {
     }
 }
 
-
 #[async_trait]
 pub trait ReqRes {
     async fn req_res(file_content: String) -> Result<String, ErrorHandling>;
 }
 #[derive(Debug)]
 pub struct GoogleGemini {
-    pub preparing_requests: PreparingRequests
+    pub preparing_requests: PreparingRequests,
 } //Req Res = Request Response
 #[allow(async_fn_in_trait)]
 impl GoogleGemini {
     pub fn new() -> GoogleGemini {
-        GoogleGemini { 
-            preparing_requests: PreparingRequests { 
-                remaining_capacity: TOKENS_PER_MIN/REQUESTS_PER_MIN, 
-                data: vec![] 
-            } 
+        GoogleGemini {
+            preparing_requests: PreparingRequests {
+                remaining_capacity: TOKENS_PER_MIN / REQUESTS_PER_MIN,
+                data: vec![],
+            },
         }
     }
 
@@ -90,38 +84,38 @@ impl GoogleGemini {
     pub fn return_prompt() -> String {
         "The provided data aside from JSON is valid Rust code. Instruction: Locate each function with it's correspondent in JSON, generate /// comment for it and fill it in the types-comment block. Return same JSON structure with filled in comment block for each function. Dismiss.".to_string()
     }
-    pub async fn send_batch(batch: Vec<PreparingRequests>)  {
+    pub async fn send_batch(batch: Vec<PreparingRequests>) {
         println!("batch len: {}", batch.len());
         for request in batch {
-            let response= GoogleGemini::req_res(request.to_string(), "".to_string()).await.unwrap();
+            let response = GoogleGemini::req_res(request.to_string(), "".to_string())
+                .await
+                .unwrap();
             println!("{:#?}", response);
         }
     }
 
-    // The idea as I see it is: we provide AI Agent with filled out JSON where all the function names are already mapped and 
-    // the only goal there is to actually to turn in the JSON and receive it back with written in comments 
-    pub fn prepare_batches(&mut self, request: Vec<SingleRequestData>) -> Vec<PreparingRequests>{
-        let mut res = Vec::new(); 
+    // The idea as I see it is: we provide AI Agent with filled out JSON where all the function names are already mapped and
+    // the only goal there is to actually to turn in the JSON and receive it back with written in comments
+    pub fn prepare_batches(&mut self, request: Vec<SingleRequestData>) -> Vec<PreparingRequests> {
+        let mut res = Vec::new();
         let mut preparing_requests = PreparingRequests::new();
         for data in request {
-            if !preparing_requests.function_add(data) {
+            if preparing_requests.function_add(data) {
                 //If exceeded remaining capacity
                 //Send check if have anything to send
                 if preparing_requests.data.len() > 0 {
-                    //Send data                 
+                    //Send data
                     res.push(preparing_requests);
                     preparing_requests = PreparingRequests::new();
                 }
             }
-
         }
+        /*
         if preparing_requests.data.len() > 0 {
             res.push(preparing_requests);
         }
 
-
+        */
         res
-        
-
     }
 }

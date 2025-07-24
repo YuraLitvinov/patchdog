@@ -8,7 +8,7 @@ use rustc_lexer::TokenKind;
 use rustc_lexer::tokenize;
 use serde::Serialize;
 use snafu::ResultExt;
-use std::path::{PathBuf, Path};
+use std::path::{Path, PathBuf};
 use std::{fs, vec};
 use syn::spanned::Spanned;
 use syn::{AngleBracketedGenericArguments, PathArguments, Type, TypePath};
@@ -17,8 +17,7 @@ use syn::{FnArg, parse_str};
 use syn::{ImplItem, Item};
 
 #[allow(dead_code)]
-#[derive(Debug, Clone)]
-#[derive(serde::Deserialize, Serialize)]
+#[derive(Debug, Clone, serde::Deserialize, Serialize)]
 pub struct FunctionSignature {
     fn_input: Vec<FnInputToken>,
     fn_out: FnOutputToken,
@@ -103,7 +102,10 @@ impl RustParser for RustItemParser {
             .first()
             .ok_or(ErrorHandling::LineOutOfBounds { line_number: 0 })?;
         Ok(ObjectRange {
-            line_ranges: vec![LineRange::Start(visited.line_start().unwrap()), LineRange::End(visited.line_end().unwrap())],
+            line_ranges: vec![
+                LineRange::Start(visited.line_start().unwrap()),
+                LineRange::End(visited.line_end().unwrap()),
+            ],
             names: vec![
                 Name::TypeName(visited.object_type().unwrap()),
                 Name::Name(visited.object_name().unwrap()),
@@ -220,7 +222,6 @@ pub fn comment_lexer(source_vector: &str) -> Result<Vec<ObjectRange>, ErrorHandl
     }) {
         excess_index_pos = pos;
     } else {
-        
     }
     if let Some(pos) = comment_vector.iter().position(|obj| {
         obj.names
@@ -236,7 +237,6 @@ pub fn comment_lexer(source_vector: &str) -> Result<Vec<ObjectRange>, ErrorHandl
             .push(LineRange::End(*borrow));
         comment_vector.remove(excess_index_pos);
     } else {
-
     }
     Ok(comment_vector)
 }
@@ -244,10 +244,10 @@ pub fn comment_lexer(source_vector: &str) -> Result<Vec<ObjectRange>, ErrorHandl
 fn function_parse(items: &[Item]) -> Result<FunctionSignature, ErrorHandling> {
     let mut vec_token_inputs: Vec<TokenStream> = Vec::new();
     let default_return = FnOutputToken {
-                kind: "Default".to_string(),
-                output_type: "()".to_string(),
-                error_type: Some("None".to_string()),
-            };
+        kind: "Default".to_string(),
+        output_type: "()".to_string(),
+        error_type: Some("None".to_string()),
+    };
     if let Item::Fn(f) = &items[0] {
         let input_tokens = f.sig.inputs.iter();
         for each in input_tokens {
@@ -265,23 +265,23 @@ fn function_parse(items: &[Item]) -> Result<FunctionSignature, ErrorHandling> {
                 fn_input: fn_input(vec_token_inputs)?,
                 fn_out: analyze_return_type(boxed_ty)?,
             };
-                Ok(func)
-
+            Ok(func)
         } else {
             if let ReturnType::Default = &output {
                 let func = FunctionSignature {
-                fn_input: fn_input(vec_token_inputs)?,
-                fn_out: default_return,
-            };
+                    fn_input: fn_input(vec_token_inputs)?,
+                    fn_out: default_return,
+                };
                 return Ok(func);
             }
-            Err(ErrorHandling::CouldNotGetObject { err_kind: format!("{:?} Name: {}", output, f.sig.ident.to_string()) })
+            Err(ErrorHandling::CouldNotGetObject {
+                err_kind: format!("{:?} Name: {}", output, f.sig.ident.to_string()),
+            })
         }
-
-} else {
-    println!("{:#?}",items);
-    Err(ErrorHandling::NotFunction)
-}
+    } else {
+        println!("{:#?}", items);
+        Err(ErrorHandling::NotFunction)
+    }
 }
 
 fn fn_input(input_vector_stream: Vec<TokenStream>) -> Result<Vec<FnInputToken>, ErrorHandling> {

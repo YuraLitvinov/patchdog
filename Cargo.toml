@@ -7,12 +7,12 @@ members = [
     "crates/chatgpt",
     "crates/rust_parsing",
     "crates/patchdog",
-    "crates/git_parsing"
-, ]
+    "crates/git_parsing",
+    "crates/ai_interactions" 
+]
 
 [workspace.dependencies]
 syn = { version = "2.0.104", features = ["full", "extra-traits"] }
-
 dotenv = "0.15.0"
 env = "1.0.1"
 gemini-rust = "0.4.2"

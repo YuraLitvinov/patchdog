@@ -1,8 +1,7 @@
-use crate::binding::ErrorBinding;
+use rust_parsing::error::ErrorBinding;
 use crate::cli::cli_patch_to_agent;
 pub mod binding;
 pub mod cli;
-pub mod parse_json;
 
 #[cfg(test)]
 pub mod tests;
@@ -10,6 +9,6 @@ pub mod tests;
 /*Accepts relative path from inside folder
 */
 async fn main() -> Result<(), ErrorBinding> {
-    cli_patch_to_agent().await?;
+    cli_patch_to_agent(true).await?;
     Ok(())
 }
