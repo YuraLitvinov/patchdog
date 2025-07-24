@@ -3,7 +3,7 @@ use git_parsing::{Git2ErrorHandling, Hunk, get_easy_hunk, match_patch_with_parse
 use rust_parsing::ObjectRange;
 use rust_parsing::error::{InvalidIoOperationsSnafu, InvalidReadFileOperationSnafu};
 use rust_parsing::file_parsing::{FileExtractor, Files};
-use rust_parsing::rust_parser::{FunctionSignature, RustItemParser, RustParser};
+use rust_parsing::rust_parser::{RustItemParser, RustParser};
 use rust_parsing::{self, ErrorHandling};
 use snafu::OptionExt;
 use snafu::ResultExt;
@@ -11,7 +11,8 @@ use std::env;
 use std::fs;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
-use std::mem::size_of_val;
+use gemini::{GoogleGemini, SingleRequestData, PreparingRequests};
+
 
 pub struct FullDiffInfo {
     pub name: String,
@@ -52,13 +53,47 @@ pub fn patch_data_argument(path_to_patch: PathBuf) -> Result<Vec<Export>, ErrorB
     let patch = get_patch_data(path.join(path_to_patch), path)?;
     Ok(patch)
 }
-
-pub fn export_arguments(
+pub fn justify_presence(
     exported_from_file: Vec<Export>,
     rust_type: Vec<String>,
     rust_name: Vec<String>,
-) -> Result<(), ErrorBinding> {
-    let mut fnsig: Vec<FunctionSignature> = Vec::new();
+) -> Result<Vec<bool>, ErrorBinding> {
+    let mut vecbool: Vec<bool> = Vec::new();
+    for each_item in exported_from_file {
+        let file = fs::read_to_string(&each_item.filename).context(InvalidIoOperationsSnafu)?;
+        let vectorized = FileExtractor::string_to_vector(&file);
+        for object in each_item.range {
+            //object.start - 1 is a relatively safe operation, as line number never starts with 0
+            let item = &vectorized[object.start - 1..object.end];
+            let _catch: Vec<String> =
+                FileExtractor::push_to_vector(item, "#[derive(Debug)]".to_string(), true)?;
+            //Calling at index 0 because parsed_file consists of a single object
+            //Does a recursive check, whether the item is still a valid Rust code
+            let parsed_file = &RustItemParser::parse_all_rust_items(&item.join("\n"))?[0];
+            let obj_type_to_compare = &parsed_file.object_type().context(CouldNotGetLineSnafu)?;
+            let obj_name_to_compare = &parsed_file.object_name().context(CouldNotGetLineSnafu)?;
+            if rust_type
+                .iter()
+                .any(|obj_type| obj_type_to_compare == obj_type)
+                && rust_name
+                    .iter()
+                    .any(|obj_name| obj_name_to_compare == obj_name)
+            {
+                vecbool.push(true) //present
+
+            }else {
+            }
+        }
+    }
+        Ok(vecbool)
+    }
+
+pub fn changes_from_patch(
+    exported_from_file: Vec<Export>,
+    rust_type: Vec<String>,
+    rust_name: Vec<String>,
+) -> Result<Vec<SingleRequestData>, ErrorBinding> {
+    let mut singlerequestdata: Vec<SingleRequestData> = Vec::new();
     for each in exported_from_file {
         println!("{:?}", &each.filename);
         let file = fs::read_to_string(&each.filename).context(InvalidIoOperationsSnafu)?;
@@ -79,15 +114,20 @@ pub fn export_arguments(
                     .iter()
                     .any(|obj_name| obj_name_to_compare == obj_name)
             {
-                let parsed = RustItemParser::rust_function_parser(&item.join("\n"))?;
-                fnsig.push(parsed);
-                //let parsed = RustItemParser::rust_ast(&item.join("\n"))?;
+                let as_string = item.join("\n");
+                singlerequestdata.push(SingleRequestData { 
+                    function_text: as_string,
+                    context: "".to_string(), 
+                    comment: "".to_string(),
+                    filepath: format!("{:?}", each.filename)
+
+                });
+
             }
+        
         }
     }
-    println!("{:?}", size_of_val(&fnsig));
-
-    Ok(())
+    Ok(singlerequestdata)
 }
 /*
 Pushes information from a patch into vector that contains lines

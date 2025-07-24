@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{env::VarError, path::PathBuf};
 
 use snafu::Snafu;
 use syn;
@@ -25,6 +25,12 @@ pub enum ErrorHandling {
     InvalidIoOperations {
         source: std::io::Error,
     },
+    StdVarError {
+        source: VarError
+    },
+    GeminiRustError {
+        source: gemini_rust::Error
+    },
     InvalidReadFileOperation {
         source: std::io::Error,
         file_path: PathBuf,
@@ -40,6 +46,7 @@ pub enum ErrorHandling {
         line_number: usize,
         src: String,
     },
-    CouldNotGetName,
+    NotFunction,
     CouldNotGetLine,
+    CouldNotGetObject {err_kind: String },
 }

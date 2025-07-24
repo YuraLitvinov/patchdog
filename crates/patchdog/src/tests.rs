@@ -1,5 +1,6 @@
 mod tests {
-    use crate::binding::get_patch_data;
+    use crate::binding::{get_patch_data, ErrorBinding};
+    use crate::parse_json::{assess_correct_output, Assess, FnDataEntry};
     use rust_parsing::ErrorHandling;
     use rust_parsing::error::InvalidIoOperationsSnafu;
     use rust_parsing::file_parsing::{FileExtractor, Files};
@@ -161,5 +162,56 @@ mod tests {
             println!("{:?}", each);
         }
         assert_eq!(true, false);
+    }
+            const JSON: &str = r#"{
+  "files": [
+    {
+      "filename": "/home/yurii-sama/patchdog/crates/gemini/src/lib.rs",
+      "types": {
+        "fn": [
+          {
+            "name": "req_res",
+            "comment": "/// Sends the given file content to the Gemini model and returns the generated response.\n/// \n/// # Arguments\n/// \n/// * `file_content` - A string representation of the file to send to the model.\n/// \n/// # Returns\n/// \n/// A `Result` containing the model's response as a `String`, or an error if the request fails."
+          }
+        ],
+        "impl": [
+          {
+            "name": "GoogleGemini",
+            "comment": "/// Implementation of the Gemini API interaction logic."
+          }
+        ],
+        "const": [],
+        "struct": [],
+        "enum": [],
+        "trait": [],
+        "type": []
+      }
+}]}"#;
+    #[test]
+    fn test_agent_out() -> Result<(), ErrorBinding>{
+        /*
+        1. We need to assess whether the JSON given by the AI Agent is valid first-hand. If it's not, then we recursively call 
+        function to run again and again until there is a proper response. 
+        serde_json(json) is_err(): retry
+        2. Filename is_err(): retry
+        3. search function is.err(): retry */
+        //call_agent - using it as mock for calling AI Agent again
+
+        let assessed = assess_correct_output(JSON.to_string())?;
+        let expected  = Assess {
+            filename: "/home/yurii-sama/patchdog/crates/gemini/src/lib.rs".to_string(), 
+            names: vec!["req_res".to_string()] 
+        };        
+        assert_eq!(assessed[0],expected);
+        Ok(())
+    }
+    #[test]
+    fn test_form_json(){
+        let file = fs::read_to_string(PATH_BASE).unwrap();
+        let function =  FnDataEntry { 
+            generic_information: RustItemParser::rust_item_parser(&file).unwrap(),
+            fn_top_block: RustItemParser::rust_function_parser(&file).unwrap(),
+            comment: String::new(),
+        };
     }
 }

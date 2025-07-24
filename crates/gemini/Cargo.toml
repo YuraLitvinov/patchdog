@@ -6,3 +6,6 @@ edition = "2024"
 [dependencies]
 gemini-rust = "0.4.2"
 async-trait = "0.1.54"
+rust_parsing = { path = "../rust_parsing" }
+snafu = { workspace = true }
+serde_json = { workspace = true }

@@ -1,14 +1,19 @@
-#[derive(Debug)]
+use serde::Serialize;
+
+#[derive(Debug, Clone)]
+#[derive(serde::Deserialize, Serialize)]
 pub enum LineRange {
     Start(usize),
     End(usize),
 }
-#[derive(Debug)]
+#[derive(Debug, Clone)]
+#[derive(serde::Deserialize, Serialize)]
 pub enum Name {
     TypeName(String),
     Name(String),
 }
-#[derive(Debug)]
+#[derive(Debug, Clone)]
+#[derive(serde::Deserialize, Serialize)]
 pub struct ObjectRange {
     //There is an ample interface for interaction with this structure, hence, I believe there is no reason to change it
     pub(crate) line_ranges: Vec<LineRange>, // Has to stay, as a lot of functionality is bound to this field

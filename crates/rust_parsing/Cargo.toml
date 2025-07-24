@@ -13,3 +13,4 @@ serde_json = { workspace = true }
 snafu = { workspace = true }
 git_parsing = { path = "../git_parsing" }
 rustc_lexer = "0.1.0"
+gemini-rust = "0.4.2"

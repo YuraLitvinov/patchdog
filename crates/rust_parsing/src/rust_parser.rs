@@ -6,8 +6,8 @@ use proc_macro2::{Spacing, TokenTree};
 use quote::ToTokens;
 use rustc_lexer::TokenKind;
 use rustc_lexer::tokenize;
+use serde::Serialize;
 use snafu::ResultExt;
-use std::ops::Range;
 use std::path::{PathBuf, Path};
 use std::{fs, vec};
 use syn::spanned::Spanned;
@@ -17,19 +17,22 @@ use syn::{FnArg, parse_str};
 use syn::{ImplItem, Item};
 
 #[allow(dead_code)]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
+#[derive(serde::Deserialize, Serialize)]
 pub struct FunctionSignature {
     fn_input: Vec<FnInputToken>,
     fn_out: FnOutputToken,
 }
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[allow(dead_code)]
+#[derive(serde::Deserialize, Serialize)]
 struct FnInputToken {
     input_name: String,
     input_type: String,
 }
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[allow(dead_code)]
+#[derive(serde::Deserialize, Serialize)]
 struct FnOutputToken {
     kind: String,
     output_type: String,
@@ -45,7 +48,7 @@ pub trait RustParser {
     fn rust_function_parser(src: &str) -> Result<FunctionSignature, ErrorHandling>;
     fn parse_rust_file(src: &Path) -> Result<Vec<ObjectRange>, ErrorHandling>;
     fn rust_ast(src: &str) -> Result<File, ErrorHandling>;
-    fn rust_item_parser(src: &str, range: Range<usize>) -> Result<Vec<ObjectRange>, ErrorHandling>;
+    fn rust_item_parser(src: &str) -> Result<ObjectRange, ErrorHandling>;
 }
 
 pub struct RustItemParser;
@@ -90,8 +93,7 @@ impl RustParser for RustItemParser {
         function_parse(&ast.items)
     }
 
-    fn rust_item_parser(src: &str, range: Range<usize>) -> Result<Vec<ObjectRange>, ErrorHandling> {
-        let mut visit: Vec<ObjectRange> = Vec::new();
+    fn rust_item_parser(src: &str) -> Result<ObjectRange, ErrorHandling> {
         let src_format_error = format!("{:#?}", &src);
         let ast: File = parse_str(src).context(InvalidItemParsingSnafu {
             str_source: src_format_error,
@@ -100,14 +102,13 @@ impl RustParser for RustItemParser {
         let visited: &ObjectRange = binding
             .first()
             .ok_or(ErrorHandling::LineOutOfBounds { line_number: 0 })?;
-        visit.push(ObjectRange {
-            line_ranges: vec![LineRange::Start(range.start), LineRange::End(range.end)],
+        Ok(ObjectRange {
+            line_ranges: vec![LineRange::Start(visited.line_start().unwrap()), LineRange::End(visited.line_end().unwrap())],
             names: vec![
                 Name::TypeName(visited.object_type().unwrap()),
                 Name::Name(visited.object_name().unwrap()),
             ],
-        });
-        Ok(visit)
+        })
     }
 
     fn rust_ast(src: &str) -> Result<File, ErrorHandling> {
@@ -219,7 +220,7 @@ pub fn comment_lexer(source_vector: &str) -> Result<Vec<ObjectRange>, ErrorHandl
     }) {
         excess_index_pos = pos;
     } else {
-        println!("No matching object found.");
+        
     }
     if let Some(pos) = comment_vector.iter().position(|obj| {
         obj.names
@@ -235,15 +236,19 @@ pub fn comment_lexer(source_vector: &str) -> Result<Vec<ObjectRange>, ErrorHandl
             .push(LineRange::End(*borrow));
         comment_vector.remove(excess_index_pos);
     } else {
-        println!("No matching object found.");
+
     }
     Ok(comment_vector)
 }
 
 fn function_parse(items: &[Item]) -> Result<FunctionSignature, ErrorHandling> {
     let mut vec_token_inputs: Vec<TokenStream> = Vec::new();
+    let default_return = FnOutputToken {
+                kind: "Default".to_string(),
+                output_type: "()".to_string(),
+                error_type: Some("None".to_string()),
+            };
     if let Item::Fn(f) = &items[0] {
-        //let input_tokens =  f.sig.inputs.clone().into_token_stream();
         let input_tokens = f.sig.inputs.iter();
         for each in input_tokens {
             match each {
@@ -263,13 +268,20 @@ fn function_parse(items: &[Item]) -> Result<FunctionSignature, ErrorHandling> {
                 Ok(func)
 
         } else {
-            Err(ErrorHandling::CouldNotGetLine)
+            if let ReturnType::Default = &output {
+                let func = FunctionSignature {
+                fn_input: fn_input(vec_token_inputs)?,
+                fn_out: default_return,
+            };
+                return Ok(func);
+            }
+            Err(ErrorHandling::CouldNotGetObject { err_kind: format!("{:?} Name: {}", output, f.sig.ident.to_string()) })
         }
 
 } else {
-    Err(ErrorHandling::CouldNotGetLine)
+    println!("{:#?}",items);
+    Err(ErrorHandling::NotFunction)
 }
-
 }
 
 fn fn_input(input_vector_stream: Vec<TokenStream>) -> Result<Vec<FnInputToken>, ErrorHandling> {
@@ -299,7 +311,7 @@ fn fn_input(input_vector_stream: Vec<TokenStream>) -> Result<Vec<FnInputToken>, 
     Ok(input_tokens)
 }
 
-fn remove_whitespace(s: String) -> Result<String, ErrorHandling> {
+pub fn remove_whitespace(s: String) -> Result<String, ErrorHandling> {
     Ok(s.chars().filter(|c| !c.is_whitespace()).collect())
 }
 fn analyze_return_type(ty: &Type) -> Result<FnOutputToken, ErrorHandling> {

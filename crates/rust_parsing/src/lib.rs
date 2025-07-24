@@ -15,3 +15,4 @@ pub mod rust_parser;
 pub use error::ErrorHandling;
 pub use object_range::ObjectRange;
 pub use rust_parser::comment_lexer;
+pub use rust_parser::remove_whitespace;

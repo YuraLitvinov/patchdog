@@ -117,7 +117,6 @@ fn git_get_hunks(
                 let line_processed: usize = line.new_lineno().unwrap_or(0) as usize;
                 let change = match line.origin() {
                     '+' => HunkChange::Add,
-                    '-' => HunkChange::Remove,
                     ' ' => HunkChange::Modify,
                     _ => continue,
                 };
