@@ -1,7 +1,8 @@
-use std::{env::VarError, path::PathBuf};
 use git_parsing::Git2ErrorHandling;
 use snafu::Snafu;
+use std::{env::VarError, path::PathBuf};
 use syn;
+
 #[derive(Debug, Snafu)]
 #[snafu(visibility(pub))]
 pub enum ErrorHandling {
@@ -50,6 +51,9 @@ pub enum ErrorHandling {
     CouldNotGetLine,
     CouldNotGetObject {
         err_kind: String,
+    },
+    SerdeError {
+        source: serde_json::error::Error,
     },
 }
 

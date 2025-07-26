@@ -1,17 +1,17 @@
-use rust_parsing::{ErrorHandling, ObjectRange};
+use rust_parsing::error::{CouldNotGetLineSnafu, ErrorBinding, InvalidIoOperationsSnafu};
 use rust_parsing::file_parsing::{FileExtractor, Files};
 use rust_parsing::rust_parser::FunctionSignature;
+use rust_parsing::rust_parser::{RustItemParser, RustParser};
+use rust_parsing::{ErrorHandling, ObjectRange};
 use serde::de::Deserializer;
 use serde::ser::Serializer;
 use serde::{Deserialize, Serialize};
-use std::{env, fs};
+use snafu::{OptionExt, ResultExt};
 use std::ops::Range;
-use std::path::{Path, PathBuf};
-use rust_parsing::error::{CouldNotGetLineSnafu, InvalidIoOperationsSnafu, ErrorBinding};
-use rust_parsing::rust_parser::{RustItemParser, RustParser};
-use snafu::{ResultExt, OptionExt};
-#[derive(Debug)]
-pub struct Export {
+use std::path::PathBuf;
+use std::{env, fs};
+#[derive(Debug, Clone)]
+pub struct ChangeFromPatch {
     pub filename: PathBuf,
     pub range: Vec<Range<usize>>,
 }
@@ -115,57 +115,47 @@ impl Serialize for Types {
     }
 }
 
-pub fn assess_correct_output(response: String) -> Result<bool, ErrorBinding> {
-    let mut stripped = FileExtractor::string_to_vector(&response);
-    stripped.remove(0).remove(stripped.len());
-    println!("{}", stripped.join(""));
-    let parsed: Result<Root, serde_json::Error> = serde_json::from_str(&response);
-    match parsed {
-        Ok(p) => {
-            for each in &p.files {
-                let path = Path::new(&each.filename);
-                if path.exists() {
-                    let mut rust_files: Vec<PathBuf> = Vec::new();
-                    let mut fn_names: Vec<String> = Vec::new();
-                    rust_files.push(path.to_path_buf());
-                    let file_export = make_export(&rust_files)?;
-                    println!("valid path: {:?}", &each.filename);
-                    let types = &each.types;
-                    for funcs in &types.fn_ {
-                        fn_names.push(funcs.generic_information.object_name().expect("err"));
-                    }
-                    let exported =
-                        justify_presence(file_export, vec!["fn".to_string()], fn_names.clone())?;
-
-                    if &types.fn_.len() == &exported.len() {
-                        println!("PASS: amount of matches: {}", exported.len());
-                    } else {
-                        let err = format!(
-                            "JSON count: {} actual count: {}",
-                            &types.fn_.len(),
-                            &exported.len()
-                        );
-                        call_agent(err);
-                    }
-                } else {
-                    let err = format!("Path: {:?} exists: {}", path, path.exists());
-                    call_agent(err);
-                }
-            }
-        }
-        Err(e) => {
-            let err = format!("{:?}", e);
-            call_agent(err);
-        }
-    }
-    Ok(true)
-}
 pub fn call_agent(err: String) {
     println!("called call_agent with outcome\n{err}");
 }
 
-fn justify_presence(
-    exported_from_file: Vec<Export>,
+//Makes an export structure from files
+//It takes list of files and processes them into objects that could be worked with
+pub fn make_export(filenames: &Vec<PathBuf>) -> Result<Vec<ChangeFromPatch>, ErrorHandling> {
+    let mut output_vec: Vec<ChangeFromPatch> = Vec::new();
+    let mut vector_of_changed: Vec<Range<usize>> = Vec::new();
+    for filename in filenames {
+        let path = env::current_dir()
+            .context(InvalidIoOperationsSnafu)?
+            .join(filename);
+
+        let parsed_file = RustItemParser::parse_rust_file(&path);
+        match parsed_file {
+            Ok(value) => {
+                for each_object in value {
+                    let range = each_object.line_start().context(CouldNotGetLineSnafu)?
+                        ..each_object.line_end().context(CouldNotGetLineSnafu)?;
+                    vector_of_changed.push(range);
+                }
+                output_vec.push({
+                    ChangeFromPatch {
+                        filename: path,
+                        range: vector_of_changed.to_owned(),
+                    }
+                });
+                vector_of_changed.clear();
+            }
+            Err(e) => {
+                println!("WARNING!\nSKIPPING {e:?} PLEASE REFER TO ERROR LOG");
+                continue;
+            }
+        }
+    }
+    Ok(output_vec)
+}
+
+pub fn justify_presence(
+    exported_from_file: Vec<ChangeFromPatch>,
     rust_type: Vec<String>,
     rust_name: Vec<String>,
 ) -> Result<Vec<bool>, ErrorBinding> {
@@ -196,39 +186,4 @@ fn justify_presence(
         }
     }
     Ok(vecbool)
-}
-
-//Makes an export structure from files
-//It takes list of files and processes them into objects that could be worked with
-pub fn make_export(filenames: &Vec<PathBuf>) -> Result<Vec<Export>, ErrorHandling> {
-    let mut output_vec: Vec<Export> = Vec::new();
-    let mut vector_of_changed: Vec<Range<usize>> = Vec::new();
-    for filename in filenames {
-        let path = env::current_dir()
-            .context(InvalidIoOperationsSnafu)?
-            .join(filename);
-
-        let parsed_file = RustItemParser::parse_rust_file(&path);
-        match parsed_file {
-            Ok(value) => {
-                for each_object in value {
-                    let range = each_object.line_start().context(CouldNotGetLineSnafu)?
-                        ..each_object.line_end().context(CouldNotGetLineSnafu)?;
-                    vector_of_changed.push(range);
-                }
-                output_vec.push({
-                    Export {
-                        filename: path,
-                        range: vector_of_changed.to_owned(),
-                    }
-                });
-                vector_of_changed.clear();
-            }
-            Err(e) => {
-                println!("WARNING!\nSKIPPING {e:?} PLEASE REFER TO ERROR LOG");
-                continue;
-            }
-        }
-    }
-    Ok(output_vec)
 }

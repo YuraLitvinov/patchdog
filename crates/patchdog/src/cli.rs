@@ -1,11 +1,12 @@
 use clap::ArgGroup;
+use rust_parsing::error::ErrorBinding;
 //Unlike Path, PathBuf size is known at compile time and doesn't require lifetime specifier
 use crate::binding::{changes_from_patch, patch_data_argument};
 use ai_interactions::parse_json::make_export;
-use rust_parsing::error::ErrorBinding;
 #[allow(unused)]
-use clap::Parser;
-use gemini::gemini::{GoogleGemini, REQUESTS_PER_MIN};
+use clap::{Arg, ArgAction, Command, Parser};
+use gemini::gemini::{GoogleGemini, json_to};
+use serde_json::json;
 use std::fs;
 use std::path::{Path, PathBuf};
 const EMPTY_VALUE: &str = " ";
@@ -38,21 +39,15 @@ pub async fn cli_search_mode() -> Result<(), ErrorBinding> {
     Ok(())
 }
 
-pub async fn cli_patch_to_agent(cut_exceeding_batch: bool) -> Result<(), ErrorBinding> {
+pub async fn cli_patch_to_agent() -> Result<(), ErrorBinding> {
     let commands = Mode::parse();
     let patch = patch_data_argument(commands.file_patch)?;
     println!("type: {:?}", commands.type_rust);
-    let request = changes_from_patch(patch, commands.type_rust, commands.name_rust)?;
+    let request = changes_from_patch(patch.clone(), commands.type_rust, commands.name_rust)?;
     let mut new_buffer = GoogleGemini::new();
-    println!("{}", &request.len());
     let batch = new_buffer.prepare_batches(request);
-    if batch.len() > REQUESTS_PER_MIN {
-        println!("REQUEST HANDLE EXCEEDING REQUEST PER MINUTE COUNT");
-        //We should wait 1 min for response before sending next batch
-        //Use sleep()
-    }
-    println!("{:#?}", batch);
-    GoogleGemini::send_batch(batch).await;
+    let prepared = GoogleGemini::assess_batch_readiness(batch).await?;
+    
 
     //Attempt to form JSON from functions
     //let mut functions: Vec<FnDataEntry> = Vec::new();
@@ -72,12 +67,7 @@ pub async fn cli_patch_to_agent(cut_exceeding_batch: bool) -> Result<(), ErrorBi
     println!("{:#?}", functions[0]);
     let file: FileFn = FileFn { filename: "placeholder".to_string(), types: functions };
     let json = json!(file);
-    let file_as_json = json!(file).to_string() +
-        "\nThe provided data aside from JSON is valid Rust code. Instruction: Locate each function with it's
-        correspondent in JSON, generate /// comment for it and fill it in the types-comment block.
-        Return same JSON structure with filled in comment block for each function. Dismiss.";
-    let response= GoogleGemini::req_res(fn_body.join(""), file_as_json).await?;
-    println!("{:#?}", response);
+
     */
 
     Ok(())

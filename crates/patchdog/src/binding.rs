@@ -1,19 +1,16 @@
-use rust_parsing;
 use crate::binding::rust_parsing::error::CouldNotGetLineSnafu;
+use ai_interactions::parse_json::ChangeFromPatch;
+use gemini::gemini::SingleRequestData;
 use git_parsing::{Hunk, get_easy_hunk, match_patch_with_parse};
+use rust_parsing;
 use rust_parsing::ObjectRange;
-use rust_parsing::error::{InvalidIoOperationsSnafu, InvalidReadFileOperationSnafu, ErrorBinding};
+use rust_parsing::error::{ErrorBinding, InvalidIoOperationsSnafu, InvalidReadFileOperationSnafu};
 use rust_parsing::file_parsing::{FileExtractor, Files};
 use rust_parsing::rust_parser::{RustItemParser, RustParser};
-use snafu::OptionExt;
-use snafu::ResultExt;
-use std::env;
+use snafu::{OptionExt, ResultExt};
 use std::fs;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
-use gemini::gemini::SingleRequestData;
-use ai_interactions::parse_json::Export;
-
 
 pub struct FullDiffInfo {
     pub name: String,
@@ -25,19 +22,19 @@ pub struct Difference {
     pub line: Vec<usize>,
 }
 
-
-
-pub fn patch_data_argument(path_to_patch: PathBuf) -> Result<Vec<Export>, ErrorBinding> {
+pub fn patch_data_argument(path_to_patch: PathBuf) -> Result<Vec<ChangeFromPatch>, ErrorBinding> {
+    /*
     let path = env::current_dir().context(InvalidReadFileOperationSnafu {
         file_path: &path_to_patch,
     })?;
+    */
+    let path = Path::new("/home/yurii-sama/embucket").to_path_buf();
     let patch = get_patch_data(path.join(path_to_patch), path)?;
     Ok(patch)
 }
 
-
 pub fn changes_from_patch(
-    exported_from_file: Vec<Export>,
+    exported_from_file: Vec<ChangeFromPatch>,
     rust_type: Vec<String>,
     rust_name: Vec<String>,
 ) -> Result<Vec<SingleRequestData>, ErrorBinding> {
@@ -48,11 +45,9 @@ pub fn changes_from_patch(
         let vectorized = FileExtractor::string_to_vector(&file);
         for obj in each.range {
             let item = &vectorized[obj.start - 1..obj.end];
-            let _catch: Vec<String> =
-                FileExtractor::push_to_vector(item, "#[derive(Debug)]".to_string(), true)?;
             //Calling at index 0 because parsed_file consists of a single object
             //Does a recursive check, whether the item is still a valid Rust code
-            let parsed_file = &RustItemParser::parse_all_rust_items(&item.join("\n"))?[0];
+            let parsed_file = &RustItemParser::rust_item_parser(&item.join("\n"))?;
             let obj_type_to_compare = &parsed_file.object_type().context(CouldNotGetLineSnafu)?;
             let obj_name_to_compare = &parsed_file.object_name().context(CouldNotGetLineSnafu)?;
             if rust_type
@@ -63,16 +58,13 @@ pub fn changes_from_patch(
                     .any(|obj_name| obj_name_to_compare == obj_name)
             {
                 let as_string = item.join("\n");
-                singlerequestdata.push(SingleRequestData { 
+                singlerequestdata.push(SingleRequestData {
                     function_text: as_string,
-                    context: "".to_string(), 
+                    context: "".to_string(),
                     comment: "".to_string(),
-                    filepath: format!("{:?}", each.filename)
-
+                    filepath: format!("{:?}", each.filename),
                 });
-
             }
-        
         }
     }
     Ok(singlerequestdata)
@@ -85,9 +77,9 @@ and an according path each those ranges that has to be iterated only once
 pub fn get_patch_data(
     path_to_patch: PathBuf,
     relative_path: PathBuf,
-) -> Result<Vec<Export>, ErrorBinding> {
+) -> Result<Vec<ChangeFromPatch>, ErrorBinding> {
     let export = patch_export_change(path_to_patch, relative_path)?;
-    let mut export_difference: Vec<Export> = Vec::new();
+    let mut export_difference: Vec<ChangeFromPatch> = Vec::new();
     let mut vector_of_changed: Vec<Range<usize>> = Vec::new();
     for difference in export {
         let parsed = RustItemParser::parse_rust_file(&difference.filename)?;
@@ -98,7 +90,7 @@ pub fn get_patch_data(
                 vector_of_changed.push(range);
             }
         }
-        export_difference.push(Export {
+        export_difference.push(ChangeFromPatch {
             range: vector_of_changed.to_owned(),
             filename: difference.filename.to_owned(),
         });
