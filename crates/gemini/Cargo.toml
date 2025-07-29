@@ -11,3 +11,4 @@ snafu = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 ai_interactions = { path = "../ai_interactions" }
+tokio = { workspace = true }

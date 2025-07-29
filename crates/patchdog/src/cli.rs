@@ -1,14 +1,17 @@
 use clap::ArgGroup;
-use rust_parsing::error::ErrorBinding;
+use rust_parsing::error::{ErrorBinding, InvalidIoOperationsSnafu};
+use rust_parsing::file_parsing::{FileExtractor, Files};
+use rust_parsing::ErrorHandling;
+use snafu::ResultExt;
 //Unlike Path, PathBuf size is known at compile time and doesn't require lifetime specifier
 use crate::binding::{changes_from_patch, patch_data_argument};
 use ai_interactions::parse_json::make_export;
 #[allow(unused)]
 use clap::{Arg, ArgAction, Command, Parser};
-use gemini::gemini::{GoogleGemini, json_to};
-use serde_json::json;
-use std::fs;
+use gemini::gemini::{GoogleGemini, PreparingRequests, SingleRequestData};
+use std::fs::{self, File};
 use std::path::{Path, PathBuf};
+use std::io::{BufWriter, Write};
 const EMPTY_VALUE: &str = " ";
 const _PATH_BASE: &str = "/home/yurii-sama/patchdog/tests/data.rs";
 #[derive(Parser, Debug)]
@@ -45,32 +48,39 @@ pub async fn cli_patch_to_agent() -> Result<(), ErrorBinding> {
     println!("type: {:?}", commands.type_rust);
     let request = changes_from_patch(patch.clone(), commands.type_rust, commands.name_rust)?;
     let mut new_buffer = GoogleGemini::new();
-    let batch = new_buffer.prepare_batches(request);
-    let prepared = GoogleGemini::assess_batch_readiness(batch).await?;
-    
-
-    //Attempt to form JSON from functions
-    //let mut functions: Vec<FnDataEntry> = Vec::new();
-    //let mut fn_body: Vec<String> = Vec::new();
-    /*
-    for each in &new_buffer.preparing_requests.data {
-        let foo = &each.function_text;
-        let information = FnDataEntry {
-        generic_information: RustItemParser::rust_item_parser(&foo).unwrap(),
-        fn_top_block: RustItemParser::rust_function_parser(&foo).unwrap(),
-        comment: String::new(),
-        };
-        fn_body.push(foo.to_string());
-        functions.push(information);
-    }
-
-    println!("{:#?}", functions[0]);
-    let file: FileFn = FileFn { filename: "placeholder".to_string(), types: functions };
-    let json = json!(file);
-
-    */
-
+    let batch = new_buffer.prepare_batches(request.clone())?;
+    let prepared = GoogleGemini::assess_batch_readiness(batch.clone()).await?; 
+    let response = GoogleGemini::send_batches(&prepared).await?;
+    //Attempt to fix broken gemini output
+    let fixed = hotfix(response, request)?;
+    //Repackaging corrected input. Currently still thinking how to push it to LLM.
+    let repack = new_buffer.prepare_batches(fixed.clone())?;
+    println!("for LLM: {:#?}", batch);
+    println!("repackaged: {:#?}", repack);
+    println!("partial return:\n{:#?}", fixed);
     Ok(())
+}
+
+pub fn call_json_to_rust(output: Vec<String>) -> Result<PreparingRequests, ErrorHandling> {
+    let mut new= vec![];
+    let mut clone_out = output.clone();
+    for _ in 0..clone_out.len() {
+        clone_out.pop();
+        let mut clone_clone = clone_out.clone();
+        //Fixing broken delimiters in returned JSON here
+        clone_clone.push("}]}".to_string());
+        let _ = match serde_json::from_str::<PreparingRequests>(&clone_clone.join("\n")) {
+            Ok(res) =>  {
+                new.push(res);
+                continue;
+            },
+            Err(_) => {
+                continue;
+            }
+        };
+    }
+    Ok(new.first().unwrap().clone())
+
 }
 
 fn find_rust_files(dir: &Path, rust_files: &mut Vec<PathBuf>) {
@@ -86,4 +96,36 @@ fn find_rust_files(dir: &Path, rust_files: &mut Vec<PathBuf>) {
             }
         }
     }
+}
+
+fn hotfix(response: Vec<String>, request: Vec<SingleRequestData>)-> Result<Vec<SingleRequestData>, ErrorHandling> {
+    let mut partial_return = vec![];
+    //Attempt to fix broken gemini output
+    for each in response {
+        let as_vec = FileExtractor::string_to_vector(&each);
+        //Removing the lines, containing ```json``` backticks
+        let remove_first_last_line = as_vec[1..as_vec.len().saturating_sub(1)].to_vec();
+        let a = call_json_to_rust(remove_first_last_line)?;
+        for each in a.data {
+            partial_return.push(each);
+        }
+    }   
+
+    let correct = request[partial_return.len() - 1..request.len() - 1].to_vec();
+    Ok(correct)
+}
+
+pub fn write_to_file(response: Vec<SingleRequestData>) -> Result<(), ErrorHandling>{
+    let mut clone_response = response.clone();
+    clone_response.sort_by(|a, b |b.line_range.start.cmp(&a.line_range.start));
+    //Typical representation of file as stream of lines
+    for each in response {
+        let file = File::open(&each.filepath)
+            .context(InvalidIoOperationsSnafu)?;
+        let mut writer = BufWriter::new(file);
+        let mut as_vec = FileExtractor::string_to_vector(&each.filepath);
+        as_vec.insert(each.line_range.start, each.comment);
+    
+    }
+    Ok(())
 }

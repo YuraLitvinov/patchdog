@@ -26,3 +26,13 @@ gemini = { path = "crates/gemini" }
 chatgpt = { path = "crates/chatgpt" }
 snafu = "0.8.6"
 clap = { version = "4.5.41", features = ["derive", "cargo"] }
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "warn", priority = 1 }
+as_conversions = "warn"
+nursery = { level = "warn", priority = 1 }
+unwrap_used = "deny"
+expect_used = "deny"
+print_stdout = "deny"
+similar_names = { level = "allow", priority = 2 }

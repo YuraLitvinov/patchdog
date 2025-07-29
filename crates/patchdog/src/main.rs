@@ -9,6 +9,5 @@ pub mod tests;
 //Accepts relative path from inside folder
 async fn main() -> Result<(), ErrorBinding> {
     cli_patch_to_agent().await?;
-
     Ok(())
 }

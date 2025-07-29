@@ -1,6 +1,5 @@
 mod tests {
     use crate::binding::get_patch_data;
-    use ai_interactions::parse_json::FnDataEntry;
     use rust_parsing::ErrorHandling;
     use rust_parsing::error::{ErrorBinding, InvalidIoOperationsSnafu};
     use rust_parsing::file_parsing::{FileExtractor, Files};
@@ -205,14 +204,5 @@ mod tests {
         assert_eq!(assessed[0], expected);
         */
         Ok(())
-    }
-    #[test]
-    fn test_form_json() {
-        let file = fs::read_to_string(PATH_BASE).unwrap();
-        let _function = FnDataEntry {
-            generic_information: RustItemParser::rust_item_parser(&file).unwrap(),
-            fn_top_block: RustItemParser::rust_function_parser(&file).unwrap(),
-            comment: String::new(),
-        };
     }
 }

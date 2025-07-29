@@ -8,6 +8,8 @@ pub fn public_function() {}
 fn function_with_return() -> i32 {
     0
 }
+fn required_function() {
+}
 
 // Function with parameters
 fn function_with_params(a: i32, b: &str) {}

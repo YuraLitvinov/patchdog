@@ -8,9 +8,10 @@ use rust_parsing::error::{ErrorBinding, InvalidIoOperationsSnafu, InvalidReadFil
 use rust_parsing::file_parsing::{FileExtractor, Files};
 use rust_parsing::rust_parser::{RustItemParser, RustParser};
 use snafu::{OptionExt, ResultExt};
-use std::fs;
-use std::ops::Range;
-use std::path::{Path, PathBuf};
+use std::{
+    fs, env, ops::Range, 
+    path::{Path, PathBuf}
+};
 
 pub struct FullDiffInfo {
     pub name: String,
@@ -23,12 +24,12 @@ pub struct Difference {
 }
 
 pub fn patch_data_argument(path_to_patch: PathBuf) -> Result<Vec<ChangeFromPatch>, ErrorBinding> {
-    /*
+    
     let path = env::current_dir().context(InvalidReadFileOperationSnafu {
         file_path: &path_to_patch,
     })?;
-    */
-    let path = Path::new("/home/yurii-sama/embucket").to_path_buf();
+    
+    //let path = Path::new("/home/yurii-sama/embucket").to_path_buf();
     let patch = get_patch_data(path.join(path_to_patch), path)?;
     Ok(patch)
 }
@@ -63,6 +64,7 @@ pub fn changes_from_patch(
                     context: "".to_string(),
                     comment: "".to_string(),
                     filepath: format!("{:?}", each.filename),
+                    line_range: obj,
                 });
             }
         }

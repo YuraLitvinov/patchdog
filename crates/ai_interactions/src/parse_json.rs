@@ -1,11 +1,6 @@
-use rust_parsing::error::{CouldNotGetLineSnafu, ErrorBinding, InvalidIoOperationsSnafu};
+use rust_parsing::error::{CouldNotGetLineSnafu, ErrorBinding, InvalidIoOperationsSnafu, ErrorHandling};
 use rust_parsing::file_parsing::{FileExtractor, Files};
-use rust_parsing::rust_parser::FunctionSignature;
 use rust_parsing::rust_parser::{RustItemParser, RustParser};
-use rust_parsing::{ErrorHandling, ObjectRange};
-use serde::de::Deserializer;
-use serde::ser::Serializer;
-use serde::{Deserialize, Serialize};
 use snafu::{OptionExt, ResultExt};
 use std::ops::Range;
 use std::path::PathBuf;
@@ -15,112 +10,9 @@ pub struct ChangeFromPatch {
     pub filename: PathBuf,
     pub range: Vec<Range<usize>>,
 }
-#[derive(Debug, Serialize, Deserialize)]
-pub struct FileFn {
-    pub filename: String,
-    pub types: Vec<FnDataEntry>,
-}
-#[derive(Debug, Serialize, Deserialize)]
-pub struct File {
-    pub filename: String,
-    pub types: Types,
-}
-//Each of the Types share same information for simplicity
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Entry {
-    pub name: String,
-    pub comment: String,
-}
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct FnDataEntry {
-    //Contains: line range, name, type
-    pub generic_information: ObjectRange,
-    //Contains: input type, return type
-    pub fn_top_block: FunctionSignature,
-    //Comment to be filled in by the LLM
-    pub comment: String,
-}
 
-#[derive(Debug)]
-pub struct Types {
-    pub fn_: Vec<FnDataEntry>,
-    pub impl_: Vec<Entry>,
-    pub const_: Vec<Entry>,
-    pub struct_: Vec<Entry>,
-    pub enum_: Vec<Entry>,
-    pub trait_: Vec<Entry>,
-    pub type_: Vec<Entry>,
-}
-
-// Each entry has name and comment fields
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Root {
-    pub files: Vec<File>,
-}
-
-// To handle Rust keywords as field names, use serde renaming:
-
-impl<'de> Deserialize<'de> for Types {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        #[derive(Deserialize)]
-        struct TypesHelper {
-            #[serde(rename = "fn")]
-            fn_: Vec<FnDataEntry>,
-            #[serde(rename = "impl")]
-            impl_: Vec<Entry>,
-            #[serde(rename = "const")]
-            const_: Vec<Entry>,
-            #[serde(rename = "struct")]
-            struct_: Vec<Entry>,
-            #[serde(rename = "enum")]
-            enum_: Vec<Entry>,
-            #[serde(rename = "trait")]
-            trait_: Vec<Entry>,
-            #[serde(rename = "type")]
-            type_: Vec<Entry>,
-        }
-
-        let helper = TypesHelper::deserialize(deserializer)?;
-        Ok(Types {
-            fn_: helper.fn_,
-            impl_: helper.impl_,
-            const_: helper.const_,
-            struct_: helper.struct_,
-            enum_: helper.enum_,
-            trait_: helper.trait_,
-            type_: helper.type_,
-        })
-    }
-}
-
-impl Serialize for Types {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        use serde::ser::SerializeStruct;
-        let mut state = serializer.serialize_struct("Types", 7)?;
-        state.serialize_field("fn", &self.fn_)?;
-        state.serialize_field("impl", &self.impl_)?;
-        state.serialize_field("const", &self.const_)?;
-        state.serialize_field("struct", &self.struct_)?;
-        state.serialize_field("enum", &self.enum_)?;
-        state.serialize_field("trait", &self.trait_)?;
-        state.serialize_field("type", &self.type_)?;
-        state.end()
-    }
-}
-
-pub fn call_agent(err: String) {
-    println!("called call_agent with outcome\n{err}");
-}
-
-//Makes an export structure from files
-//It takes list of files and processes them into objects that could be worked with
+//Makes an export structure from patch
+//It takes list of files and processes them into objects containing git changes that could be worked with
 pub fn make_export(filenames: &Vec<PathBuf>) -> Result<Vec<ChangeFromPatch>, ErrorHandling> {
     let mut output_vec: Vec<ChangeFromPatch> = Vec::new();
     let mut vector_of_changed: Vec<Range<usize>> = Vec::new();
@@ -181,8 +73,7 @@ pub fn justify_presence(
                     .any(|obj_name| obj_name_to_compare == obj_name)
             {
                 vecbool.push(true) //present
-            } else {
-            }
+            } 
         }
     }
     Ok(vecbool)

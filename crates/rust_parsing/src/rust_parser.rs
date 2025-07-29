@@ -221,8 +221,7 @@ pub fn comment_lexer(source_vector: &str) -> Result<Vec<ObjectRange>, ErrorHandl
             .any(|name| matches!(name, Name::TypeName(s) if s == target_type_name))
     }) {
         excess_index_pos = pos;
-    } else {
-    }
+    } 
     if let Some(pos) = comment_vector.iter().position(|obj| {
         obj.names
             .iter()
@@ -236,8 +235,8 @@ pub fn comment_lexer(source_vector: &str) -> Result<Vec<ObjectRange>, ErrorHandl
             .line_ranges
             .push(LineRange::End(*borrow));
         comment_vector.remove(excess_index_pos);
-    } else {
-    }
+    } 
+
     Ok(comment_vector)
 }
 
@@ -275,11 +274,11 @@ fn function_parse(items: &[Item]) -> Result<FunctionSignature, ErrorHandling> {
                 return Ok(func);
             }
             Err(ErrorHandling::CouldNotGetObject {
-                err_kind: format!("{:?} Name: {}", output, f.sig.ident.to_string()),
+                err_kind: format!("{:?} Name: {}", output, f.sig.ident),
             })
         }
     } else {
-        println!("{:#?}", items);
+        println!("{items:#?}");
         Err(ErrorHandling::NotFunction)
     }
 }
