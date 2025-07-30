@@ -1,0 +1,645 @@
+{
+  "remaining_capacity": 30466,
+  "data": [
+    {
+      "function_text": "pub fn return_prompt() -> &'static str {\n    \"The provided data in function text is valid Rust code. Instruction: Locate each function in the structure, if context is present, use it at your disposal, elsewise proceed as is, generate /// comment for it and fill in the comment block. Return same structure with filled in comment block for each function. Dismiss.\"\n}",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/ai_interactions/src/lib.rs\"",
+      "line_range": {
+        "start": 3,
+        "end": 5
+      }
+    },
+    {
+      "function_text": "pub fn make_export(filenames: &Vec<PathBuf>) -> Result<Vec<ChangeFromPatch>, ErrorHandling> {\n    let mut output_vec: Vec<ChangeFromPatch> = Vec::new();\n    let mut vector_of_changed: Vec<Range<usize>> = Vec::new();\n    for filename in filenames {\n        let path = env::current_dir()\n            .context(InvalidIoOperationsSnafu)?\n            .join(filename);\n\n        let parsed_file = RustItemParser::parse_rust_file(&path);\n        match parsed_file {\n            Ok(value) => {\n                for each_object in value {\n                    let range = each_object.line_start().context(CouldNotGetLineSnafu)?\n                        ..each_object.line_end().context(CouldNotGetLineSnafu)?;\n                    vector_of_changed.push(range);\n                }\n                output_vec.push({\n                    ChangeFromPatch {\n                        filename: path,\n                        range: vector_of_changed.to_owned(),\n                    }\n                });\n                vector_of_changed.clear();\n            }\n            Err(e) => {\n                println!(\"WARNING!\\nSKIPPING {e:?} PLEASE REFER TO ERROR LOG\");\n                continue;\n            }\n        }\n    }\n    Ok(output_vec)\n}",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/ai_interactions/src/parse_json.rs\"",
+      "line_range": {
+        "start": 16,
+        "end": 47
+      }
+    },
+    {
+      "function_text": "pub fn justify_presence(\n    exported_from_file: Vec<ChangeFromPatch>,\n    rust_type: Vec<String>,\n    rust_name: Vec<String>,\n) -> Result<Vec<bool>, ErrorBinding> {\n    let mut vecbool: Vec<bool> = Vec::new();\n    for each_item in exported_from_file {\n        let file = fs::read_to_string(&each_item.filename).context(InvalidIoOperationsSnafu)?;\n        let vectorized = FileExtractor::string_to_vector(&file);\n        for object in each_item.range {\n            //object.start - 1 is a relatively safe operation, as line number never starts with 0\n            let item = &vectorized[object.start - 1..object.end];\n            let _catch: Vec<String> =\n                FileExtractor::push_to_vector(item, \"#[derive(Debug)]\".to_string(), true)?;\n            //Calling at index 0 because parsed_file consists of a single object\n            //Does a recursive check, whether the item is still a valid Rust code\n            let parsed_file = &RustItemParser::parse_all_rust_items(&item.join(\"\\n\"))?[0];\n            let obj_type_to_compare = &parsed_file.object_type().context(CouldNotGetLineSnafu)?;\n            let obj_name_to_compare = &parsed_file.object_name().context(CouldNotGetLineSnafu)?;\n            if rust_type\n                .iter()\n                .any(|obj_type| obj_type_to_compare == obj_type)\n                && rust_name\n                    .iter()\n                    .any(|obj_name| obj_name_to_compare == obj_name)\n            {\n                vecbool.push(true) //present\n            } \n        }\n    }\n    Ok(vecbool)\n}",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/ai_interactions/src/parse_json.rs\"",
+      "line_range": {
+        "start": 49,
+        "end": 80
+      }
+    },
+    {
+      "function_text": "    pub fn size(&self) -> usize {\n        (self.context.len() + self.function_text.len() + self.filepath.len()) / 3 //One token is approx. 3 symbols\n    }",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/gemini/src/gemini.rs\"",
+      "line_range": {
+        "start": 25,
+        "end": 27
+      }
+    },
+    {
+      "function_text": "    pub fn new() -> PreparingRequests {\n        PreparingRequests {\n            remaining_capacity: TOKENS_PER_REQUEST - return_prompt().len(),\n            data: vec![],\n        }\n    }",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/gemini/src/gemini.rs\"",
+      "line_range": {
+        "start": 36,
+        "end": 41
+      }
+    },
+    {
+      "function_text": "    pub fn function_add(&mut self, request_data: SingleRequestData) -> bool {\n        let size = request_data.size();\n        if size <= self.remaining_capacity {\n            self.remaining_capacity -= size;\n            self.data.push(request_data);\n            true\n        } else {\n            false\n        }\n    }",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/gemini/src/gemini.rs\"",
+      "line_range": {
+        "start": 42,
+        "end": 51
+      }
+    },
+    {
+      "function_text": "    fn default() -> Self {\n        Self::new()\n    }",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/gemini/src/gemini.rs\"",
+      "line_range": {
+        "start": 55,
+        "end": 57
+      }
+    },
+    {
+      "function_text": "    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {\n        writeln!(f, \"{self:#?}\")\n    }",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/gemini/src/gemini.rs\"",
+      "line_range": {
+        "start": 61,
+        "end": 63
+      }
+    },
+    {
+      "function_text": "    fn default() -> Self {\n        Self::new()\n    }",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/gemini/src/gemini.rs\"",
+      "line_range": {
+        "start": 77,
+        "end": 79
+      }
+    },
+    {
+      "function_text": "pub fn json_to<T: DeserializeOwned>(val: serde_json::Value) -> T {\n    serde_json::from_value(val).unwrap()\n}",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/gemini/src/gemini.rs\"",
+      "line_range": {
+        "start": 81,
+        "end": 83
+      }
+    },
+    {
+      "function_text": "    pub fn new() -> GoogleGemini {\n        GoogleGemini {\n            preparing_requests: PreparingRequests {\n                remaining_capacity: TOKENS_PER_MIN / REQUESTS_PER_MIN,\n                data: vec![],\n            },\n        }\n    }",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/gemini/src/gemini.rs\"",
+      "line_range": {
+        "start": 91,
+        "end": 98
+      }
+    },
+    {
+      "function_text": "    pub async fn send_batches(request: &Vec<WaitForTimeout>) -> Result<Vec<String>, ErrorHandling> {\n        let mut response = vec![];\n        let one_minute = time::Duration::from_secs(61);\n        for single_request in request {\n            for each in &single_request.prepared_requests {\n                let as_json = serde_json::to_string_pretty(each).context(SerdeSnafu)?;\n                match GoogleGemini::req_res(&as_json, return_prompt()).await {\n                    //Handling exclusive case, where one of the requests may fail\n                    Ok(r) => {\n                        response.push(r);\n                    },\n                    Err(e) => {\n                        //error marker\n                        println!(\"Skipping at {e:#?}\\nBut why?\");\n                        return Err(e); \n                    }\n                }\n            }\n            if request.len() > 1 {\n                tokio::time::sleep(one_minute).await;\n            }\n        }\n        println!(\"{}\", \"exited send_batches\");\n        Ok(response)\n    }",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/gemini/src/gemini.rs\"",
+      "line_range": {
+        "start": 99,
+        "end": 123
+      }
+    },
+    {
+      "function_text": "    pub async fn assess_batch_readiness(\n        batch: Vec<PreparingRequests>,\n    ) -> Result<Vec<WaitForTimeout>, ErrorBinding> {\n        //Architecture: batch[BIG_NUMBER..len()-1]\n        //Next: batch[0..4]\n        let mut await_response: Vec<WaitForTimeout> = vec![];\n        if batch.len() > REQUESTS_PER_MIN {\n            let mut size: usize = batch.len();\n            for _ in 1..=batch.len().div_ceil(REQUESTS_PER_MIN) {\n                let mut new_batch: Vec<PreparingRequests> = Vec::new();\n                //Response where quantity of batches exceed allow per min request count\n                //Check for last items in batch\n                if size < REQUESTS_PER_MIN {\n                    new_batch.extend_from_slice(&batch[0..size]);\n                    await_response.push(WaitForTimeout {\n                        prepared_requests: new_batch,\n                    });\n                    continue;\n                } else {\n                    new_batch.extend_from_slice(\n                        &batch[size.saturating_sub(REQUESTS_PER_MIN)..size],\n                    );\n                    size -= REQUESTS_PER_MIN;\n                    await_response.push(WaitForTimeout {\n                        prepared_requests: new_batch,\n                    });\n                }\n            }\n        } else {\n            //Return as normal\n            await_response.push(WaitForTimeout {\n                prepared_requests: batch,\n            });\n        }\n        Ok(await_response)\n    }",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/gemini/src/gemini.rs\"",
+      "line_range": {
+        "start": 125,
+        "end": 160
+      }
+    },
+    {
+      "function_text": "    pub async fn req_res(file_content: &str, arguments: &str) -> Result<String, ErrorHandling> {\n        //let api_key = std::env::var(\"API_KEY_GEMINI\").context(StdVarSnafu)?;\n        let client = Gemini::new(\"AIzaSyCqlP-v467ts_yN8POCh1ojijXjd0uRwqc\");\n        //let args = std::env::var(\"INPUT_FOR_MODEL\")?;\n        let res = client\n            .generate_content()\n            .with_system_prompt(arguments)\n            .with_user_message(file_content)\n            .execute()\n            .await\n            .context(GeminiRustSnafu)?;\n        Ok(res.text())\n    }",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/gemini/src/gemini.rs\"",
+      "line_range": {
+        "start": 162,
+        "end": 174
+      }
+    },
+    {
+      "function_text": "    pub fn prepare_batches(\n        &mut self,\n        request: Vec<SingleRequestData>,\n    ) -> Result<Vec<PreparingRequests>, ErrorHandling> {\n        let mut batches: Vec<PreparingRequests> = Vec::new();\n        let mut preparing_requests = PreparingRequests::new();\n        for data in request {\n            if !preparing_requests.function_add(data.to_owned()) {\n                //Preserving overflow of preparing request to next iter\n                if !preparing_requests.data.is_empty() {\n                    batches.push(preparing_requests);\n                }\n                //Reinitializing preparing_requests to free the buffer\n                preparing_requests = PreparingRequests::new();\n\n                // Attempt to push\n                if !preparing_requests.function_add(data) {\n                    // Here should be handled the case, where single object exceeds token limit\n                    //Which is likely would not be possible\n                }\n            }\n        }\n\n        // Last unempty request\n        if !preparing_requests.data.is_empty() {\n            batches.push(preparing_requests);\n        }\n        Ok(batches)\n    }",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/gemini/src/gemini.rs\"",
+      "line_range": {
+        "start": 178,
+        "end": 206
+      }
+    },
+    {
+      "function_text": "    pub fn filename(&self) -> String {\n        self.filename.to_owned()\n    }",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/git_parsing/src/patch_parse.rs\"",
+      "line_range": {
+        "start": 33,
+        "end": 35
+      }
+    },
+    {
+      "function_text": "    pub fn get_line(&self) -> usize {\n        self.line\n    }",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/git_parsing/src/patch_parse.rs\"",
+      "line_range": {
+        "start": 36,
+        "end": 38
+      }
+    },
+    {
+      "function_text": "pub fn match_patch_with_parse(\n    relative_path: &Path,\n    patch_src: &[u8],\n) -> Result<Vec<Change>, Git2ErrorHandling> {\n    let mut changes: Vec<Change> = Vec::new();\n    let list_of_unique_files = read_non_repeting_functions(patch_src, relative_path)?;\n    let diff = Diff::from_buffer(patch_src).context(Git2Snafu)?;\n    let changed = get_filenames(&diff)?;\n    let mut hunks = git_get_hunks(diff, changed)?;\n    hunks.sort_by_key(|a| a.filename());\n    for each_unique in list_of_unique_files.iter() {\n        let mut count = 0;\n        for each in &hunks {\n            let full_path = relative_path.join(each.filename());\n            if full_path == Path::new(&each_unique) {\n                count += 1;\n                changes.push(Change {\n                    quantity: count,\n                    change_at_hunk: each.to_owned(),\n                });\n            }\n        }\n    }\n    println!(\"Quantity of hunks: {}\", hunks.len());\n    println!(\"Quantity of changes: {}\", changes.len());\n    Ok(changes)\n}",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/git_parsing/src/patch_parse.rs\"",
+      "line_range": {
+        "start": 47,
+        "end": 73
+      }
+    },
+    {
+      "function_text": "pub fn get_easy_hunk(patch_src: &[u8], at_file_path: &str) -> Result<Vec<Hunk>, Git2ErrorHandling> {\n    let mut vec_of_hunks: Vec<Hunk> = Vec::new();\n    let diff = Diff::from_buffer(patch_src).context(Git2Snafu)?;\n    let filenames = get_filenames(&diff)?;\n    let hunks = git_get_hunks(diff, filenames)?;\n    vec_of_hunks.sort_by_key(|hunk| hunk.filename.to_owned());\n\n    for hunk in hunks {\n        if hunk.filename() == at_file_path {\n            vec_of_hunks.push(hunk);\n        }\n    }\n    Ok(vec_of_hunks)\n}",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/git_parsing/src/patch_parse.rs\"",
+      "line_range": {
+        "start": 75,
+        "end": 88
+      }
+    },
+    {
+      "function_text": "fn get_filenames(diff: &Diff<'static>) -> Result<Vec<String>, Git2ErrorHandling> {\n    let mut vector_of_filenames: Vec<String> = Vec::new();\n    for delta in diff.deltas() {\n        let new_path = delta\n            .new_file()\n            .path()\n            .map(|p| p.display().to_string())\n            .unwrap_or_default();\n        vector_of_filenames.push(new_path);\n    }\n    Ok(vector_of_filenames)\n}",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/git_parsing/src/patch_parse.rs\"",
+      "line_range": {
+        "start": 90,
+        "end": 101
+      }
+    },
+    {
+      "function_text": "fn git_get_hunks(\n    diff: Diff<'static>,\n    vector_of_filenames: Vec<String>,\n) -> Result<Vec<Hunk>, Git2ErrorHandling> {\n    let mut hunk_tuple: Vec<Hunk> = Vec::new();\n    //i returns tuple\n    for i in diff.deltas().enumerate() {\n        let patch = Patch::from_diff(&diff, i.0).context(Git2Snafu)?;\n        let patch_ref = patch.as_ref().context(PatchExportSnafu)?;\n        for hunk_idx in 0..patch_ref.num_hunks() {\n            let (_hunk, _) = patch_ref.hunk(hunk_idx).context(Git2Snafu)?;\n            for line_idx in 0..patch_ref.num_lines_in_hunk(hunk_idx).context(Git2Snafu)? {\n                let line = patch_ref\n                    .line_in_hunk(hunk_idx, line_idx)\n                    .context(Git2Snafu)?;\n                let line_processed: usize = line.new_lineno().unwrap_or(0) as usize;\n                let change = match line.origin() {\n                    '+' => HunkChange::Add,\n                    ' ' => HunkChange::Modify,\n                    _ => continue,\n                };\n                hunk_tuple.push(Hunk {\n                    change,\n                    line: line_processed,\n                    filename: vector_of_filenames[i.0].to_owned(),\n                });\n            }\n        }\n    }\n    Ok(hunk_tuple)\n}",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/git_parsing/src/patch_parse.rs\"",
+      "line_range": {
+        "start": 102,
+        "end": 132
+      }
+    },
+    {
+      "function_text": "fn read_non_repeting_functions(\n    patch_src: &[u8],\n    relative_path: &Path,\n) -> Result<Vec<PathBuf>, Git2ErrorHandling> {\n    let mut vec_of_files: Vec<PathBuf> = Vec::new();\n    let diff = Diff::from_buffer(patch_src).context(Git2Snafu)?;\n    let filenames = get_filenames(&diff)?;\n    let hunks = git_get_hunks(diff, filenames)?;\n    let mut seen = HashSet::new();\n    let unique_files = hunks\n        .into_iter()\n        .filter(|hunk| seen.insert(hunk.filename.to_owned()));\n    for list_of_unique_files in unique_files {\n        let new_filename = list_of_unique_files.filename();\n        let file_extension = Path::new(&new_filename).extension().and_then(OsStr::to_str);\n        if let Some(\"rs\") = file_extension {\n            let path = relative_path.join(new_filename);\n            vec_of_files.push(path);\n        }\n    }\n    Ok(vec_of_files)\n}",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/git_parsing/src/patch_parse.rs\"",
+      "line_range": {
+        "start": 133,
+        "end": 154
+      }
+    },
+    {
+      "function_text": "pub fn patch_data_argument(path_to_patch: PathBuf) -> Result<Vec<ChangeFromPatch>, ErrorBinding> {\n    \n    let path = env::current_dir().context(InvalidReadFileOperationSnafu {\n        file_path: &path_to_patch,\n    })?;\n    \n    //let path = Path::new(\"/home/yurii-sama/embucket\").to_path_buf();\n    let patch = get_patch_data(path.join(path_to_patch), path)?;\n    Ok(patch)\n}",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/patchdog/src/binding.rs\"",
+      "line_range": {
+        "start": 26,
+        "end": 35
+      }
+    },
+    {
+      "function_text": "pub fn changes_from_patch(\n    exported_from_file: Vec<ChangeFromPatch>,\n    rust_type: Vec<String>,\n    rust_name: Vec<String>,\n) -> Result<Vec<SingleRequestData>, ErrorBinding> {\n    let mut singlerequestdata: Vec<SingleRequestData> = Vec::new();\n    for each in exported_from_file {\n        println!(\"{:?}\", &each.filename);\n        let file = fs::read_to_string(&each.filename).context(InvalidIoOperationsSnafu)?;\n        let vectorized = FileExtractor::string_to_vector(&file);\n        for obj in each.range {\n            let item = &vectorized[obj.start - 1..obj.end];\n            //Calling at index 0 because parsed_file consists of a single object\n            //Does a recursive check, whether the item is still a valid Rust code\n            let parsed_file = &RustItemParser::rust_item_parser(&item.join(\"\\n\"))?;\n            let obj_type_to_compare = &parsed_file.object_type().context(CouldNotGetLineSnafu)?;\n            let obj_name_to_compare = &parsed_file.object_name().context(CouldNotGetLineSnafu)?;\n            if rust_type\n                .iter()\n                .any(|obj_type| obj_type_to_compare == obj_type)\n                || rust_name\n                    .iter()\n                    .any(|obj_name| obj_name_to_compare == obj_name)\n            {\n                let as_string = item.join(\"\\n\");\n                singlerequestdata.push(SingleRequestData {\n                    function_text: as_string,\n                    context: \"\".to_string(),\n                    comment: \"\".to_string(),\n                    filepath: format!(\"{:?}\", each.filename),\n                    line_range: obj,\n                });\n            }\n        }\n    }\n    Ok(singlerequestdata)\n}",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/patchdog/src/binding.rs\"",
+      "line_range": {
+        "start": 37,
+        "end": 73
+      }
+    },
+    {
+      "function_text": "pub fn get_patch_data(\n    path_to_patch: PathBuf,\n    relative_path: PathBuf,\n) -> Result<Vec<ChangeFromPatch>, ErrorBinding> {\n    let export = patch_export_change(path_to_patch, relative_path)?;\n    let mut export_difference: Vec<ChangeFromPatch> = Vec::new();\n    let mut vector_of_changed: Vec<Range<usize>> = Vec::new();\n    for difference in export {\n        let parsed = RustItemParser::parse_rust_file(&difference.filename)?;\n        for each_parsed in &parsed {\n            let range = each_parsed.line_start().context(CouldNotGetLineSnafu)?\n                ..each_parsed.line_end().context(CouldNotGetLineSnafu)?;\n            if difference.line.iter().any(|line| range.contains(line)) {\n                vector_of_changed.push(range);\n            }\n        }\n        export_difference.push(ChangeFromPatch {\n            range: vector_of_changed.to_owned(),\n            filename: difference.filename.to_owned(),\n        });\n        vector_of_changed.clear();\n    }\n    Ok(export_difference)\n}",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/patchdog/src/binding.rs\"",
+      "line_range": {
+        "start": 79,
+        "end": 102
+      }
+    },
+    {
+      "function_text": "fn store_objects(\n    relative_path: &Path,\n    patch_src: &[u8],\n) -> Result<Vec<FullDiffInfo>, ErrorBinding> {\n    let mut vec_of_surplus: Vec<FullDiffInfo> = Vec::new();\n    let matched = match_patch_with_parse(relative_path, patch_src)?;\n    for change_line in &matched {\n        if change_line.quantity == 1 {\n            let list_of_unique_files =\n                get_easy_hunk(patch_src, &change_line.change_at_hunk.filename())?;\n            let path = relative_path.join(change_line.change_at_hunk.filename());\n            let file = fs::read_to_string(&path)\n                .context(InvalidReadFileOperationSnafu { file_path: &path })?;\n            let parsed = RustItemParser::parse_all_rust_items(&file)?;\n            vec_of_surplus.push(FullDiffInfo {\n                name: change_line.change_at_hunk.filename(),\n                object_range: parsed,\n                hunk: list_of_unique_files,\n            });\n        }\n    }\n\n    Ok(vec_of_surplus)\n}",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/patchdog/src/binding.rs\"",
+      "line_range": {
+        "start": 104,
+        "end": 127
+      }
+    },
+    {
+      "function_text": "fn patch_export_change(\n    path_to_patch: PathBuf,\n    relative_path: PathBuf,\n) -> Result<Vec<Difference>, ErrorBinding> {\n    let mut change_in_line: Vec<usize> = Vec::new();\n    let mut line_and_file: Vec<Difference> = Vec::new();\n    let patch_text = fs::read(&path_to_patch).context(InvalidReadFileOperationSnafu {\n        file_path: path_to_patch,\n    })?;\n    let each_diff = store_objects(&relative_path, &patch_text)?;\n    for diff_hunk in &each_diff {\n        let path_to_file = relative_path.to_owned().join(&diff_hunk.name);\n        let file = fs::read_to_string(&path_to_file).context(InvalidIoOperationsSnafu)?;\n        let parsed = RustItemParser::parse_all_rust_items(&file)?;\n        let path = path_to_file;\n\n        for each in &diff_hunk.hunk {\n            let parsed_in_diff = &parsed;\n            if FileExtractor::check_for_valid_object(parsed_in_diff, each.get_line())? {\n                continue;\n            }\n            change_in_line.push(each.get_line());\n        }\n        line_and_file.push(Difference {\n            filename: path,\n            line: change_in_line.to_owned(),\n        });\n        change_in_line.clear();\n    }\n    Ok(line_and_file)\n}",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/patchdog/src/binding.rs\"",
+      "line_range": {
+        "start": 128,
+        "end": 158
+      }
+    },
+    {
+      "function_text": "pub async fn cli_search_mode() -> Result<(), ErrorBinding> {\n    let mut rust_files: Vec<PathBuf> = Vec::new();\n    let commands = Mode::parse();\n    find_rust_files(&commands.dir_path, &mut rust_files);\n    let file_export = make_export(&rust_files)?;\n    changes_from_patch(file_export, commands.type_rust, commands.name_rust)?;\n    println!(\"rust files len {}\", &rust_files.len());\n    Ok(())\n}",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/patchdog/src/cli.rs\"",
+      "line_range": {
+        "start": 34,
+        "end": 42
+      }
+    },
+    {
+      "function_text": "pub async fn cli_patch_to_agent() -> Result<(), ErrorBinding> {\n    let commands = Mode::parse();\n    let patch = patch_data_argument(commands.file_patch)?;\n    println!(\"type: {:?}\", commands.type_rust);\n    let request = changes_from_patch(patch.clone(), commands.type_rust, commands.name_rust)?;\n    let mut new_buffer = GoogleGemini::new();\n    let batch = new_buffer.prepare_batches(request.clone())?;\n    let prepared = GoogleGemini::assess_batch_readiness(batch.clone()).await?; \n    for each in batch {\n        let a = serde_json::to_string_pretty(&each).context(SerdeSnafu)?;\n        println!(\"{}\", a);\n    }\n    /* \n    let response = GoogleGemini::send_batches(&prepared).await?;\n    //Attempt to fix broken gemini output\n    let fixed = hotfix(response, request)?;\n    //Repackaging corrected input. Currently still thinking how to push it to LLM.\n    let repack = new_buffer.prepare_batches(fixed.clone())?;\n    println!(\"for LLM: {:#?}\", batch);\n    println!(\"repackaged: {:#?}\", repack);\n    println!(\"partial return:\\n{:#?}\", fixed);\n    */\n    Ok(())\n}",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/patchdog/src/cli.rs\"",
+      "line_range": {
+        "start": 44,
+        "end": 67
+      }
+    },
+    {
+      "function_text": "pub fn call_json_to_rust(output: Vec<String>) -> Result<PreparingRequests, ErrorHandling> {\n    let mut new= vec![];\n    let mut clone_out = output.clone();\n    for _ in 0..clone_out.len() {\n        clone_out.pop();\n        let mut clone_clone = clone_out.clone();\n        //Fixing broken delimiters in returned JSON here\n        clone_clone.push(\"}]}\".to_string());\n        let _ = match serde_json::from_str::<PreparingRequests>(&clone_clone.join(\"\\n\")) {\n            Ok(res) =>  {\n                new.push(res);\n                continue;\n            },\n            Err(_) => {\n                continue;\n            }\n        };\n    }\n    Ok(new.first().unwrap().clone())\n\n}",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/patchdog/src/cli.rs\"",
+      "line_range": {
+        "start": 69,
+        "end": 89
+      }
+    },
+    {
+      "function_text": "#[tokio::main]\n//Accepts relative path from inside folder\nasync fn main() -> Result<(), ErrorBinding> {\n    cli_patch_to_agent().await?;\n    Ok(())\n}",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/patchdog/src/main.rs\"",
+      "line_range": {
+        "start": 8,
+        "end": 13
+      }
+    },
+    {
+      "function_text": "    #[test]\n    fn test_file_to_vector() {\n        //file_to_vectors splits a file into a string of vectors line by line\n        let path = Path::new(PATH_BASE);\n        let source = fs::read_to_string(&path)\n            .context(InvalidIoOperationsSnafu)\n            .expect(\"File read failed\");\n        let vectored_file = FileExtractor::string_to_vector(&source);\n        let line_eight_from_vector = &vectored_file[7]; //Count in vec! starts from 0 \n        assert_eq!(COMPARE_LINES, line_eight_from_vector.to_owned() + \"\\n\"); //This test has passed\n    }",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/patchdog/src/tests.rs\"",
+      "line_range": {
+        "start": 15,
+        "end": 25
+      }
+    },
+    {
+      "function_text": "    #[test]\n    fn test_parse() {\n        let source = fs::read_to_string(PATH_BASE)\n            .context(InvalidIoOperationsSnafu)\n            .expect(\"File read failed\");\n        let parsed = RustItemParser::parse_all_rust_items(&source).expect(\"Parsing failed\");\n        for object in parsed {\n            let obj_type = object\n                .object_type()\n                .expect(\"Unwrapping ObjectRange to type failed\");\n            if obj_type == \"impl\".to_string() {\n                println!(\"{:?}\", object);\n            }\n        }\n\n        assert_eq!(true, true);\n    }",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/patchdog/src/tests.rs\"",
+      "line_range": {
+        "start": 26,
+        "end": 42
+      }
+    },
+    {
+      "function_text": "    #[test]\n    fn find_all_fn() {\n        let source = fs::read_to_string(PATH_BASE)\n            .context(InvalidIoOperationsSnafu)\n            .expect(\"Failed to read file\");\n        let parsed = RustItemParser::parse_all_rust_items(&source).expect(\"Failed to parse\");\n        for object in parsed {\n            let obj_type = object\n                .object_type()\n                .expect(\"Unwrapping ObjectRange to type failed\");\n            if obj_type == \"fn\".to_string() {\n                println!(\"{:?}\", object);\n            }\n        }\n    }",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/patchdog/src/tests.rs\"",
+      "line_range": {
+        "start": 43,
+        "end": 57
+      }
+    },
+    {
+      "function_text": "    #[test]\n    fn test_find_module_files() {\n        let expected_behavior: &str = \"../../tests/test_lib.rs\\n../../tests/data.rs\";\n        let path = Path::new(\"../../tests/lib.rs\");\n        let source = fs::read_to_string(&path)\n            .context(InvalidIoOperationsSnafu)\n            .expect(\"Failed to read file\");\n        let parsed = RustItemParser::parse_all_rust_items(&source).expect(\"Failed to parse\");\n        let mut obj_vector: Vec<String> = Vec::new();\n        for object in parsed {\n            let obj_type = object\n                .object_type()\n                .expect(\"Unwrapping ObjectRange to type failed\");\n            let obj_name = object\n                .object_name()\n                .expect(\"Unwrapping ObjectRange to name failed\");\n            if obj_type == \"mod\".to_string() {\n                let module_location =\n                    RustItemParser::find_module_file(path.to_path_buf(), obj_name.to_owned())\n                        .expect(\"Couldn't find mod file\");\n                obj_vector.push(module_location.unwrap().to_string_lossy().to_string());\n            }\n        }\n\n        assert_eq!(expected_behavior, obj_vector.join(\"\\n\"));\n    }",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/patchdog/src/tests.rs\"",
+      "line_range": {
+        "start": 58,
+        "end": 83
+      }
+    },
+    {
+      "function_text": "    #[test]\n    fn test_read_argument() {\n        let mut path = env::current_dir().expect(\"couldn't get path\");\n        path.pop();\n        path.pop();\n        let _path_to_patch = path.join(\"patch.patch\");\n        /*\n        assert_eq!(\n            path_to_patch,\n            Path::new(\"/home/runner/work/patchdog/patchdog/patch.patch\")\n        );\n        */\n        assert_eq!(true, true);\n    }",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/patchdog/src/tests.rs\"",
+      "line_range": {
+        "start": 85,
+        "end": 98
+      }
+    },
+    {
+      "function_text": "    #[test]\n    fn test_read_patch() {\n        let mut path = env::current_dir()\n            .context(InvalidIoOperationsSnafu)\n            .expect(\"couldn't get current dir\");\n        path.pop();\n        path.pop();\n        let output = Command::new(\"git\")\n            .args([\"format-patch\", \"--stdout\", \"-1\", \"HEAD\"])\n            .output()\n            .expect(\"failed to execute process\");\n\n        let mut patch_file = NamedTempFile::new()\n            .context(InvalidIoOperationsSnafu)\n            .expect(\"couldn't make temp file\");\n        patch_file\n            .write_all(&output.stdout)\n            .expect(\"couldn't write output to tempfile\");\n        println!(\"{:?}\", patch_file.path());\n        let patch =\n            get_patch_data(patch_file.path().to_path_buf(), path).expect(\"couldn't get patch\");\n        for each in patch {\n            println!(\"{:?}\", each);\n        }\n        assert_eq!(true, true);\n    }",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/patchdog/src/tests.rs\"",
+      "line_range": {
+        "start": 100,
+        "end": 125
+      }
+    },
+    {
+      "function_text": "    #[test]\n    fn test_write() -> Result<(), ErrorHandling> {\n        let file = fs::read_to_string(\"/home/yurii-sama/patchdog/crates/patchdog/src/cli.rs\")\n            .expect(\"err\");\n        let stringvec = FileExtractor::string_to_vector(&file);\n        //write_to_vecstring should replace line 21\n        FileExtractor::write_to_vecstring(\n            Path::new(\"src/cli.rs\"),\n            stringvec,\n            20,\n            \"//TEST TEST TEST\n        //TEST\n        //TEST\n        //TEST\"\n                .to_string(),\n        )?;\n        //assert_eq!(true,true);\n        Ok(())\n    }",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/patchdog/src/tests.rs\"",
+      "line_range": {
+        "start": 126,
+        "end": 144
+      }
+    },
+    {
+      "function_text": "    #[test]\n    fn test_cover_empty_object() {\n        /*\n        let mut name: Vec<Name> = Vec::new();\n        let mut ranges: Vec<LineRange> = Vec::new();\n        let mut _objectrange: Vec<ObjectRange> = Vec::new();\n        */\n    }",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/patchdog/src/tests.rs\"",
+      "line_range": {
+        "start": 146,
+        "end": 153
+      }
+    },
+    {
+      "function_text": "    #[test]\n    fn find_comments() {\n        //block is of 94 symbols length\n        let file = fs::read_to_string(\"../../crates/patchdog/src/binding.rs\").expect(\"err on 159\");\n        let parsed = RustItemParser::parse_all_rust_items(&file).expect(\"err\");\n        for each in parsed {\n            println!(\"{:?}\", each);\n        }\n        assert_eq!(true, false);\n    }",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/patchdog/src/tests.rs\"",
+      "line_range": {
+        "start": 155,
+        "end": 164
+      }
+    },
+    {
+      "function_text": "    #[test]\n    fn test_agent_out() -> Result<(), ErrorBinding> {\n        /*\n        1. We need to assess whether the JSON given by the AI Agent is valid first-hand. If it's not, then we recursively call\n        function to run again and again until there is a proper response.\n        serde_json(json) is_err(): retry\n        2. Filename is_err(): retry\n        3. search function is.err(): retry\n        //call_agent - using it as mock for calling AI Agent again\n\n        let assessed = assess_correct_output(JSON.to_string())?;\n        let expected = Assess {\n            filename: \"/home/yurii-sama/patchdog/crates/gemini/src/lib.rs\".to_string(),\n            names: vec![\"req_res\".to_string()],\n        };\n        assert_eq!(assessed[0], expected);\n        */\n        Ok(())\n    }",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/patchdog/src/tests.rs\"",
+      "line_range": {
+        "start": 189,
+        "end": 207
+      }
+    },
+    {
+      "function_text": "    fn from(git: Git2ErrorHandling) -> Self {\n        ErrorBinding::GitParsing(git)\n    }",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/rust_parsing/src/error.rs\"",
+      "line_range": {
+        "start": 67,
+        "end": 69
+      }
+    },
+    {
+      "function_text": "    fn from(rust: ErrorHandling) -> Self {\n        ErrorBinding::RustParsing(rust)\n    }",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/rust_parsing/src/error.rs\"",
+      "line_range": {
+        "start": 73,
+        "end": 75
+      }
+    },
+    {
+      "function_text": "    fn write_to_vecstring(\n        path: &Path,\n        mut source: Vec<String>,\n        line_index: usize,\n        changed_element: String,\n    ) -> Result<(), ErrorHandling> {\n        source.insert(line_index, changed_element);\n        let mut file = File::create(path).context(InvalidIoOperationsSnafu)?;\n        for each in &source {\n            writeln!(file, \"{each}\").context(InvalidIoOperationsSnafu)?;\n        }\n        Ok(())\n    }",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/rust_parsing/src/file_parsing.rs\"",
+      "line_range": {
+        "start": 42,
+        "end": 54
+      }
+    },
+    {
+      "function_text": "    fn push_to_vector(\n        str_source: &[String],\n        push: String,\n        push_where: bool,\n    ) -> Result<Vec<String>, ErrorHandling> {\n        let mut source_clone = str_source.to_owned(); //We do this, so the str_source stays immutable\n        let whitespace = &source_clone\n            .first()\n            .ok_or(ErrorHandling::LineOutOfBounds { line_number: 0 })?\n            .chars()\n            .take_while(|w| w.is_whitespace())\n            .collect::<String>();\n        //whitespace variable preserves formatting, push is the value that has to be inserted\n        let push_preserving = whitespace.to_owned() + &push;\n        if push_where {\n            source_clone.insert(0_usize, push_preserving);\n        } else {\n            source_clone.insert(source_clone.len(), push_preserving);\n        }\n        Ok(source_clone)\n    }",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/rust_parsing/src/file_parsing.rs\"",
+      "line_range": {
+        "start": 57,
+        "end": 77
+      }
+    },
+    {
+      "function_text": "    fn check_for_valid_object(\n        parsed: &[ObjectRange],\n        line_number: usize,\n    ) -> Result<bool, ErrorHandling> {\n        for each in parsed {\n            if each.line_start().context(CouldNotGetLineSnafu)? <= line_number\n                && line_number <= each.line_end().context(CouldNotGetLineSnafu)?\n            {\n                return Ok(false);\n            }\n        }\n        Ok(true)\n    }",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/rust_parsing/src/file_parsing.rs\"",
+      "line_range": {
+        "start": 79,
+        "end": 91
+      }
+    },
+    {
+      "function_text": "    fn string_to_vector(str_source: &str) -> Vec<String> {\n        str_source.lines().map(|line| line.to_string()).collect()\n    }",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/rust_parsing/src/file_parsing.rs\"",
+      "line_range": {
+        "start": 94,
+        "end": 96
+      }
+    },
+    {
+      "function_text": "    fn export_object(\n        line_number: usize,\n        visited: &[ObjectRange],\n        src: &[String],\n    ) -> Result<String, ErrorHandling> {\n        for item in visited {\n            let found = seeker(line_number, item, src);\n            if found.is_err() {\n                continue;\n            }\n            return found;\n        }\n        Err(ErrorHandling::ExportObjectFailed {\n            line_number,\n            src: format!(\"{visited:?}\"),\n        })\n    }",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/rust_parsing/src/file_parsing.rs\"",
+      "line_range": {
+        "start": 100,
+        "end": 116
+      }
+    },
+    {
+      "function_text": "    fn export_object_preserving_comments(\n        src: Vec<String>,\n        from_line: usize,\n        parsed: Vec<ObjectRange>,\n    ) -> Result<String, ErrorHandling> {\n        let mut new_previous: Vec<usize> = Vec::new();\n        new_previous.push(1);\n        let mut i = 0;\n        for each in parsed {\n            let found = seeker_for_comments(\n                from_line,\n                new_previous[i],\n                each.line_end().context(CouldNotGetLineSnafu)?,\n                &src,\n            );\n            if found.is_err() {\n                i += 1;\n                let previous_end_line = each.line_end().context(CouldNotGetLineSnafu)? + 1;\n                new_previous.push(previous_end_line);\n                continue;\n            }\n            let extracted = extract_by_line(\n                &src,\n                &new_previous[i],\n                &each.line_end().context(CouldNotGetLineSnafu)?,\n            );\n            return Ok(extracted);\n        }\n        Err(ErrorHandling::LineOutOfBounds { line_number: 0 })\n    }",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/rust_parsing/src/file_parsing.rs\"",
+      "line_range": {
+        "start": 118,
+        "end": 147
+      }
+    },
+    {
+      "function_text": "fn seeker(line_number: usize, item: &ObjectRange, src: &[String]) -> Result<String, ErrorHandling> {\n    let line_start = item.line_start().context(CouldNotGetLineSnafu)?;\n    let line_end = item.line_end().context(CouldNotGetLineSnafu)?;\n    ensure!(\n        line_start <= line_number && line_end >= line_number,\n        SeekerFailedSnafu { line_number }\n    );\n    Ok(extract_by_line(src, &line_start, &line_end))\n}",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/rust_parsing/src/file_parsing.rs\"",
+      "line_range": {
+        "start": 152,
+        "end": 160
+      }
+    },
+    {
+      "function_text": "fn seeker_for_comments(\n    line_number: usize,\n    line_start: usize,\n    line_end: usize,\n    src: &[String],\n) -> Result<String, ErrorHandling> {\n    ensure!(\n        line_start <= line_number && line_end >= line_number,\n        LineOutOfBoundsSnafu { line_number }\n    );\n    Ok(extract_by_line(src, &line_start, &line_end))\n}",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/rust_parsing/src/file_parsing.rs\"",
+      "line_range": {
+        "start": 162,
+        "end": 173
+      }
+    },
+    {
+      "function_text": "fn extract_by_line(from: &[String], line_start: &usize, line_end: &usize) -> String {\n    let line_start = line_start - 1;\n    from[line_start..*line_end].join(\"\\n\")\n}",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/rust_parsing/src/file_parsing.rs\"",
+      "line_range": {
+        "start": 175,
+        "end": 178
+      }
+    },
+    {
+      "function_text": "    fn parse_rust_file(src: &Path) -> Result<Vec<ObjectRange>, ErrorHandling> {\n        let file = fs::read_to_string(src).context(InvalidIoOperationsSnafu)?;\n        let ast: File = parse_str(&file).context(InvalidItemParsingSnafu { str_source: src })?;\n        visit_items(&ast.items)\n    }",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/rust_parsing/src/rust_parser.rs\"",
+      "line_range": {
+        "start": 56,
+        "end": 60
+      }
+    },
+    {
+      "function_text": "    fn parse_all_rust_items(src: &str) -> Result<Vec<ObjectRange>, ErrorHandling> {\n        let src_format_error = format!(\"{:#?}\", &src);\n        let ast: File = parse_str(src).context(InvalidItemParsingSnafu {\n            str_source: src_format_error,\n        })?;\n        let mut comments = comment_lexer(src)?;\n        let mut visited = visit_items(&ast.items)?;\n        visited.append(&mut comments);\n        visited.sort_by_key(|line_obj| {\n            line_obj\n                .line_ranges\n                .iter()\n                .filter_map(|linerange| {\n                    if let LineRange::Start(n) = linerange {\n                        Some(*n)\n                    } else {\n                        None\n                    }\n                })\n                .min()\n                .unwrap_or(usize::MAX)\n        });\n\n        Ok(visited)\n    }",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/rust_parsing/src/rust_parser.rs\"",
+      "line_range": {
+        "start": 62,
+        "end": 86
+      }
+    },
+    {
+      "function_text": "    fn rust_function_parser(src: &str) -> Result<FunctionSignature, ErrorHandling> {\n        let ast: File = parse_str(src).context(InvalidItemParsingSnafu {\n            str_source: &src.to_string(),\n        })?;\n        function_parse(&ast.items)\n    }",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/rust_parsing/src/rust_parser.rs\"",
+      "line_range": {
+        "start": 88,
+        "end": 93
+      }
+    },
+    {
+      "function_text": "    fn rust_item_parser(src: &str) -> Result<ObjectRange, ErrorHandling> {\n        let src_format_error = format!(\"{:#?}\", &src);\n        let ast: File = parse_str(src).context(InvalidItemParsingSnafu {\n            str_source: src_format_error,\n        })?;\n        let binding: Vec<ObjectRange> = visit_items(&ast.items)?;\n        let visited: &ObjectRange = binding\n            .first()\n            .ok_or(ErrorHandling::LineOutOfBounds { line_number: 0 })?;\n        Ok(ObjectRange {\n            line_ranges: vec![\n                LineRange::Start(visited.line_start().unwrap()),\n                LineRange::End(visited.line_end().unwrap()),\n            ],\n            names: vec![\n                Name::TypeName(visited.object_type().unwrap()),\n                Name::Name(visited.object_name().unwrap()),\n            ],\n        })\n    }",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/rust_parsing/src/rust_parser.rs\"",
+      "line_range": {
+        "start": 95,
+        "end": 114
+      }
+    },
+    {
+      "function_text": "    fn rust_ast(src: &str) -> Result<File, ErrorHandling> {\n        let ast: File = parse_str(src).context(InvalidItemParsingSnafu {\n            str_source: &src.to_string(),\n        })?;\n        Ok(ast)\n    }",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/rust_parsing/src/rust_parser.rs\"",
+      "line_range": {
+        "start": 116,
+        "end": 121
+      }
+    },
+    {
+      "function_text": "    fn find_module_file(\n        base_path: PathBuf,\n        mod_name: String,\n    ) -> Result<Option<PathBuf>, ErrorHandling> {\n        let mut path = base_path;\n        path.pop();\n        let paths = [path.join(format!(\"{mod_name}.rs\"))];\n        for path in paths {\n            if path.exists() {\n                return Ok(Some(path));\n            }\n        }\n        Ok(None)\n    }",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/rust_parsing/src/rust_parser.rs\"",
+      "line_range": {
+        "start": 123,
+        "end": 136
+      }
+    },
+    {
+      "function_text": "pub fn comment_lexer(source_vector: &str) -> Result<Vec<ObjectRange>, ErrorHandling> {\n    let vectorized = FileExtractor::string_to_vector(source_vector);\n    let mut comment_vector: Vec<ObjectRange> = Vec::new();\n    let mut line_number = 0;\n    for source in vectorized {\n        line_number += 1;\n        let tokenized = tokenize(&source);\n        for each in tokenized {\n            match each.kind {\n                //Terminated indicates whether block comment ends in the same line it was initialized\n                TokenKind::BlockComment { terminated } => {\n                    if terminated {\n                        comment_vector.push(ObjectRange {\n                            line_ranges: vec![\n                                LineRange::Start(line_number),\n                                LineRange::End(line_number),\n                            ],\n                            names: vec![\n                                Name::TypeName(\"CommentBlockSingeLine\".to_string()),\n                                Name::Name(\"Comment\".to_string()),\n                            ],\n                        });\n                    } else {\n                        comment_vector.push(ObjectRange {\n                            line_ranges: vec![LineRange::Start(line_number), LineRange::End(0)],\n                            names: vec![\n                                Name::TypeName(\"CommentBlockMultiLine\".to_string()),\n                                Name::Name(\"Comment\".to_string()),\n                            ],\n                        });\n                    };\n                }\n                TokenKind::Slash => {\n                    comment_vector.push(ObjectRange {\n                        line_ranges: vec![\n                            LineRange::Start(line_number),\n                            LineRange::End(line_number),\n                        ],\n                        names: vec![\n                            Name::TypeName(\"CommentBlockMultiLineEnd\".to_string()),\n                            Name::Name(\"Refers to index - 1 (CommentBlockMultiLine)\".to_string()),\n                        ],\n                    });\n                }\n                TokenKind::LineComment => {\n                    comment_vector.push(ObjectRange {\n                        line_ranges: vec![\n                            LineRange::Start(line_number),\n                            LineRange::End(line_number),\n                        ],\n                        names: vec![\n                            Name::TypeName(\"LineComment\".to_string()),\n                            Name::Name(\"Comment\".to_string()),\n                        ],\n                    });\n                }\n\n                TokenKind::Lifetime {\n                    starts_with_number: _,\n                } => {\n                    comment_vector.push(ObjectRange {\n                        line_ranges: vec![\n                            LineRange::Start(line_number),\n                            LineRange::End(line_number),\n                        ],\n                        names: vec![\n                            Name::TypeName(\"LifetimeIndicator\".to_string()),\n                            Name::Name(\"Comment\".to_string()),\n                        ],\n                    });\n                }\n\n                _ => {}\n            }\n        }\n    }\n    let target_type_name = \"CommentBlockMultiLineEnd\";\n    let target_type_name2 = \"CommentBlockMultiLine\";\n    let mut excess_index_pos = 0;\n    if let Some(pos) = comment_vector.iter().position(|obj| {\n        obj.names\n            .iter()\n            .any(|name| matches!(name, Name::TypeName(s) if s == target_type_name))\n    }) {\n        excess_index_pos = pos;\n    } \n    if let Some(pos) = comment_vector.iter().position(|obj| {\n        obj.names\n            .iter()\n            .any(|name| matches!(name, Name::TypeName(s) if s == target_type_name2))\n    }) {\n        comment_vector[pos]\n            .line_ranges\n            .retain(|r| !matches!(r, LineRange::End(0)));\n        let borrow = &comment_vector[excess_index_pos].line_end().expect(\"err\");\n        comment_vector[pos]\n            .line_ranges\n            .push(LineRange::End(*borrow));\n        comment_vector.remove(excess_index_pos);\n    } \n\n    Ok(comment_vector)\n}",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/rust_parsing/src/rust_parser.rs\"",
+      "line_range": {
+        "start": 139,
+        "end": 241
+      }
+    },
+    {
+      "function_text": "fn function_parse(items: &[Item]) -> Result<FunctionSignature, ErrorHandling> {\n    let mut vec_token_inputs: Vec<TokenStream> = Vec::new();\n    let default_return = FnOutputToken {\n        kind: \"Default\".to_string(),\n        output_type: \"()\".to_string(),\n        error_type: Some(\"None\".to_string()),\n    };\n    if let Item::Fn(f) = &items[0] {\n        let input_tokens = f.sig.inputs.iter();\n        for each in input_tokens {\n            match each {\n                FnArg::Receiver(_) => {}\n                FnArg::Typed(pat_type) => {\n                    let input_tokens = pat_type.to_token_stream();\n                    vec_token_inputs.push(input_tokens);\n                }\n            }\n        }\n        let output = &f.sig.output;\n        if let ReturnType::Type(_, boxed_ty) = &output {\n            let func = FunctionSignature {\n                fn_input: fn_input(vec_token_inputs)?,\n                fn_out: analyze_return_type(boxed_ty)?,\n            };\n            Ok(func)\n        } else {\n            if let ReturnType::Default = &output {\n                let func = FunctionSignature {\n                    fn_input: fn_input(vec_token_inputs)?,\n                    fn_out: default_return,\n                };\n                return Ok(func);\n            }\n            Err(ErrorHandling::CouldNotGetObject {\n                err_kind: format!(\"{:?} Name: {}\", output, f.sig.ident),\n            })\n        }\n    } else {\n        println!(\"{items:#?}\");\n        Err(ErrorHandling::NotFunction)\n    }\n}",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/rust_parsing/src/rust_parser.rs\"",
+      "line_range": {
+        "start": 243,
+        "end": 284
+      }
+    },
+    {
+      "function_text": "fn fn_input(input_vector_stream: Vec<TokenStream>) -> Result<Vec<FnInputToken>, ErrorHandling> {\n    let mut input_tokens: Vec<FnInputToken> = Vec::new();\n    for input in input_vector_stream {\n        let tokens: Vec<TokenTree> = input.into_iter().collect();\n        for (i, token) in tokens.iter().enumerate() {\n            if let TokenTree::Punct(punct) = token {\n                if punct.as_char() == ':' && punct.spacing() != Spacing::Joint {\n                    let before = tokens.get(i.wrapping_sub(1));\n                    let after_tokens: Vec<TokenTree> = tokens.iter().skip(i + 1).cloned().collect();\n                    let after_stream: TokenStream = after_tokens.into_iter().collect();\n                    if let Some(before_token) = before {\n                        let rm_space_from_before = remove_whitespace(before_token.to_string());\n                        let rm_space_from_after = remove_whitespace(after_stream.to_string());\n                        input_tokens.push({\n                            FnInputToken {\n                                input_name: rm_space_from_before?,\n                                input_type: rm_space_from_after?,\n                            }\n                        });\n                    }\n                }\n            }\n        }\n    }\n    Ok(input_tokens)\n}",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/rust_parsing/src/rust_parser.rs\"",
+      "line_range": {
+        "start": 286,
+        "end": 311
+      }
+    },
+    {
+      "function_text": "pub fn remove_whitespace(s: String) -> Result<String, ErrorHandling> {\n    Ok(s.chars().filter(|c| !c.is_whitespace()).collect())\n}",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/rust_parsing/src/rust_parser.rs\"",
+      "line_range": {
+        "start": 313,
+        "end": 315
+      }
+    },
+    {
+      "function_text": "fn analyze_return_type(ty: &Type) -> Result<FnOutputToken, ErrorHandling> {\n    let mut kind = \"Other\".to_string();\n    let mut output_type = ty.to_token_stream().to_string();\n    let mut error_type = None;\n    if let Type::Path(TypePath { path, .. }) = ty {\n        if let Some(segment) = path.segments.last() {\n            let ident_str = segment.ident.to_string();\n            match ident_str.as_str() {\n                \"Result\" => {\n                    kind = \"Result\".to_string();\n\n                    if let PathArguments::AngleBracketed(AngleBracketedGenericArguments {\n                        args,\n                        ..\n                    }) = &segment.arguments\n                    {\n                        let mut args = args.iter();\n                        if let Some(ok_ty) = args.next() {\n                            output_type = remove_whitespace(ok_ty.to_token_stream().to_string())?;\n                        }\n                        if let Some(err_ty) = args.next() {\n                            error_type = Some(err_ty.to_token_stream().to_string());\n                        }\n                    }\n                }\n                \"Option\" => {\n                    kind = \"Option\".to_string();\n\n                    if let PathArguments::AngleBracketed(AngleBracketedGenericArguments {\n                        args,\n                        ..\n                    }) = &segment.arguments\n                    {\n                        if let Some(inner_ty) = args.first() {\n                            output_type =\n                                remove_whitespace(inner_ty.to_token_stream().to_string())?;\n                        }\n                    }\n                }\n                _ => {\n                    kind = \"Other\".to_string();\n                    output_type = ty.to_token_stream().to_string();\n                }\n            }\n        }\n    }\n    Ok(FnOutputToken {\n        kind,\n        output_type,\n        error_type,\n    })\n}",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/rust_parsing/src/rust_parser.rs\"",
+      "line_range": {
+        "start": 316,
+        "end": 367
+      }
+    },
+    {
+      "function_text": "fn visit_items(items: &[Item]) -> Result<Vec<ObjectRange>, ErrorHandling> {\n    let mut object_line: Vec<ObjectRange> = Vec::new();\n\n    for item in items {\n        match item {\n            Item::Struct(s) => {\n                object_line.push(ObjectRange {\n                    line_ranges: vec![\n                        LineRange::Start(s.span().start().line),\n                        LineRange::End(s.span().end().line),\n                    ],\n                    names: vec![\n                        Name::TypeName(\"struct\".to_string()),\n                        Name::Name(s.ident.to_string()),\n                    ],\n                });\n            }\n            Item::Enum(e) => {\n                object_line.push(ObjectRange {\n                    line_ranges: vec![\n                        LineRange::Start(e.span().start().line),\n                        LineRange::End(e.span().end().line),\n                    ],\n                    names: vec![\n                        Name::TypeName(\"enum\".to_string()),\n                        Name::Name(e.ident.to_string()),\n                    ],\n                });\n            }\n            Item::Fn(f) => {\n                object_line.push(ObjectRange {\n                    line_ranges: vec![\n                        LineRange::Start(f.span().start().line),\n                        LineRange::End(f.span().end().line),\n                    ],\n                    names: vec![\n                        Name::TypeName(\"fn\".to_string()),\n                        Name::Name(f.sig.ident.to_string()),\n                    ],\n                });\n            }\n            Item::Mod(m) => match &m.content {\n                Some((_, items)) => {\n                    object_line.push(ObjectRange {\n                        line_ranges: vec![\n                            LineRange::Start(m.span().start().line),\n                            LineRange::End(m.span().end().line),\n                        ],\n                        names: vec![\n                            Name::TypeName(\"mod\".to_string()),\n                            Name::Name(m.ident.to_string()),\n                        ],\n                    });\n                    object_line.extend(visit_items(items)?);\n                }\n                None => {\n                    object_line.push(ObjectRange {\n                        line_ranges: vec![\n                            LineRange::Start(m.span().start().line),\n                            LineRange::End(m.span().end().line),\n                        ],\n                        names: vec![\n                            Name::TypeName(\"mod\".to_string()),\n                            Name::Name(m.ident.to_string()),\n                        ],\n                    });\n                }\n            },\n            Item::Use(u) => {\n                if let syn::UseTree::Path(path) = u.tree.to_owned() {\n                    object_line.push(ObjectRange {\n                        line_ranges: vec![\n                            LineRange::Start(path.span().start().line),\n                            LineRange::End(path.span().end().line),\n                        ],\n                        names: vec![\n                            Name::TypeName(\"use\".to_string()),\n                            Name::Name(path.ident.to_string()),\n                        ],\n                    });\n                }\n            }\n            Item::Impl(i) => {\n                let trait_name = match &i.trait_ {\n                    Some((_, path, _)) => path\n                        .segments\n                        .last()\n                        .expect(\"failed to get impl name\")\n                        .ident\n                        .to_string(),\n                    None => \"matches struct\".to_string(),\n                };\n                object_line.push(ObjectRange {\n                    line_ranges: vec![\n                        LineRange::Start(i.span().start().line),\n                        LineRange::End(i.span().end().line),\n                    ],\n                    names: vec![Name::TypeName(\"impl\".to_string()), Name::Name(trait_name)],\n                });\n                for each_block in &i.items {\n                    match each_block {\n                        ImplItem::Fn(f) => {\n                            object_line.push(ObjectRange {\n                                line_ranges: vec![\n                                    LineRange::Start(f.span().start().line),\n                                    LineRange::End(f.span().end().line),\n                                ],\n                                names: vec![\n                                    Name::TypeName(\"fn\".to_string()),\n                                    Name::Name(f.sig.ident.to_string()),\n                                ],\n                            });\n                        }\n                        ImplItem::Const(c) => {\n                            object_line.push(ObjectRange {\n                                line_ranges: vec![\n                                    LineRange::Start(c.span().start().line),\n                                    LineRange::End(c.span().end().line),\n                                ],\n                                names: vec![\n                                    Name::TypeName(\"const\".to_string()),\n                                    Name::Name(c.ident.to_string()),\n                                ],\n                            });\n                        }\n                        ImplItem::Type(t) => {\n                            object_line.push(ObjectRange {\n                                line_ranges: vec![\n                                    LineRange::Start(t.span().start().line),\n                                    LineRange::End(t.span().end().line),\n                                ],\n                                names: vec![\n                                    Name::TypeName(\"type\".to_string()),\n                                    Name::Name(t.ident.to_string()),\n                                ],\n                            });\n                        }\n                        ImplItem::Macro(m) => {\n                            object_line.push(ObjectRange {\n                                line_ranges: vec![\n                                    LineRange::Start(m.span().start().line),\n                                    LineRange::End(m.span().end().line),\n                                ],\n                                names: vec![\n                                    Name::TypeName(\"macro\".to_string()),\n                                    Name::Name(format!(\"{:?}\", m.mac.path)),\n                                ],\n                            });\n                        }\n                        ImplItem::Verbatim(v) => {\n                            object_line.push(ObjectRange {\n                                line_ranges: vec![\n                                    LineRange::Start(v.span().start().line),\n                                    LineRange::End(v.span().end().line),\n                                ],\n                                names: vec![\n                                    Name::TypeName(\"verbatim\".to_string()),\n                                    Name::Name(v.to_string()),\n                                ],\n                            });\n                        }\n                        _ => println!(\"Other impl object\"),\n                    }\n                }\n            }\n            Item::Trait(t) => {\n                object_line.push(ObjectRange {\n                    line_ranges: vec![\n                        LineRange::Start(t.span().start().line),\n                        LineRange::End(t.span().end().line),\n                    ],\n                    names: vec![\n                        Name::TypeName(\"trait\".to_string()),\n                        Name::Name(t.ident.to_string()),\n                    ],\n                });\n            }\n            Item::Type(t) => {\n                object_line.push(ObjectRange {\n                    line_ranges: vec![\n                        LineRange::Start(t.span().start().line),\n                        LineRange::End(t.span().end().line),\n                    ],\n                    names: vec![\n                        Name::TypeName(\"type\".to_string()),\n                        Name::Name(t.ident.to_string()),\n                    ],\n                });\n            }\n            Item::Union(u) => {\n                object_line.push(ObjectRange {\n                    line_ranges: vec![\n                        LineRange::Start(u.span().start().line),\n                        LineRange::End(u.span().end().line),\n                    ],\n                    names: vec![\n                        Name::TypeName(\"union\".to_string()),\n                        Name::Name(u.ident.to_string()),\n                    ],\n                });\n            }\n            Item::Const(c) => {\n                object_line.push(ObjectRange {\n                    line_ranges: vec![\n                        LineRange::Start(c.span().start().line),\n                        LineRange::End(c.span().end().line),\n                    ],\n                    names: vec![\n                        Name::TypeName(\"const\".to_string()),\n                        Name::Name(c.ident.to_string()),\n                    ],\n                });\n            }\n            Item::Macro(m) => {\n                object_line.push(ObjectRange {\n                    line_ranges: vec![\n                        LineRange::Start(m.span().start().line),\n                        LineRange::End(m.span().end().line),\n                    ],\n                    names: vec![\n                        Name::TypeName(\"macro\".to_string()),\n                        Name::Name(format!(\"{:?}\", m.mac.path)),\n                    ],\n                });\n            }\n            Item::ExternCrate(c) => {\n                object_line.push(ObjectRange {\n                    line_ranges: vec![\n                        LineRange::Start(c.span().start().line),\n                        LineRange::End(c.span().end().line),\n                    ],\n                    names: vec![\n                        Name::TypeName(\"extern crate\".to_string()),\n                        Name::Name(c.ident.to_string()),\n                    ],\n                });\n            }\n            Item::Static(s) => {\n                object_line.push(ObjectRange {\n                    line_ranges: vec![\n                        LineRange::Start(s.span().start().line),\n                        LineRange::End(s.span().end().line),\n                    ],\n                    names: vec![\n                        Name::TypeName(\"static\".to_string()),\n                        Name::Name(s.ident.to_string()),\n                    ],\n                });\n            }\n            _ => println!(\"Other item\"),\n        }\n    }\n\n    Ok(object_line)\n}",
+      "context": "",
+      "comment": "",
+      "filepath": "\"/home/yurii-sama/patchdog/crates/rust_parsing/src/rust_parser.rs\"",
+      "line_range": {
+        "start": 369,
+        "end": 623
+      }
+    }
+  ]
+}

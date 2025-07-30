@@ -1,0 +1,93 @@
+{
+    "remaining_capacity": 30466,
+    "data": [
+        {
+            "function_text": "    pub fn new() -> PreparingRequests {\n        PreparingRequests {\n            remaining_capacity: TOKENS_PER_REQUEST - return_prompt().len(),\n            data: vec![],\n        }\n    }",
+            "context": "",
+            "comment": "",
+            "filepath": "\"/home/yurii-sama/patchdog/crates/gemini/src/gemini.rs\"",
+            "line_range": {
+            "start": 36,
+            "end": 41
+            }
+        },
+        {
+            "function_text": "    pub fn function_add(&mut self, request_data: SingleRequestData) -> bool {\n        let size = request_data.size();\n        if size <= self.remaining_capacity {\n            self.remaining_capacity -= size;\n            self.data.push(request_data);\n            true\n        } else {\n            false\n        }\n    }",
+            "context": "",
+            "comment": "",
+            "filepath": "\"/home/yurii-sama/patchdog/crates/gemini/src/gemini.rs\"",
+            "line_range": {
+            "start": 42,
+            "end": 51
+            }
+        },
+        {
+            "function_text": "    fn default() -> Self {\n        Self::new()\n    }",
+            "context": "",
+            "comment": "",
+            "filepath": "\"/home/yurii-sama/patchdog/crates/gemini/src/gemini.rs\"",
+            "line_range": {
+            "start": 55,
+            "end": 57
+            }
+        },
+        {
+            "function_text": "    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {\n        writeln!(f, \"{self:#?}\")\n    }",
+            "context": "",
+            "comment": "",
+            "filepath": "\"/home/yurii-sama/patchdog/crates/gemini/src/gemini.rs\"",
+            "line_range": {
+            "start": 61,
+            "end": 63
+            }
+        },
+        {
+            "function_text": "    fn default() -> Self {\n        Self::new()\n    }",
+            "context": "",
+            "comment": "",
+            "filepath": "\"/home/yurii-sama/patchdog/crates/gemini/src/gemini.rs\"",
+            "line_range": {
+            "start": 77,
+            "end": 79
+            }
+        },
+        {
+            "function_text": "pub fn json_to<T: DeserializeOwned>(val: serde_json::Value) -> T {\n    serde_json::from_value(val).unwrap()\n}",
+            "context": "",
+            "comment": "",
+            "filepath": "\"/home/yurii-sama/patchdog/crates/gemini/src/gemini.rs\"",
+            "line_range": {
+            "start": 81,
+            "end": 83
+            }
+        },
+        {
+            "function_text": "    pub fn new() -> GoogleGemini {\n        GoogleGemini {\n            preparing_requests: PreparingRequests {\n                remaining_capacity: TOKENS_PER_MIN / REQUESTS_PER_MIN,\n                data: vec![],\n            },\n        }\n    }",
+            "context": "",
+            "comment": "",
+            "filepath": "\"/home/yurii-sama/patchdog/crates/gemini/src/gemini.rs\"",
+            "line_range": {
+            "start": 91,
+            "end": 98
+            }
+        },
+        {
+            "function_text": "    pub async fn send_batches(request: &Vec<WaitForTimeout>) -> Result<Vec<String>, ErrorHandling> {\n        let mut response = vec![];\n        let one_minute = time::Duration::from_secs(61);\n        for single_request in request {\n            for each in &single_request.prepared_requests {\n                let as_json = serde_json::to_string_pretty(each).context(SerdeSnafu)?;\n                match GoogleGemini::req_res(&as_json, return_prompt()).await {\n                    //Handling exclusive case, where one of the requests may fail\n                    Ok(r) => {\n                        response.push(r);\n                    },\n                    Err(e) => {\n                        //error marker\n                        println!(\"Skipping at {e:#?}\\nBut why?\");\n                        return Err(e); \n                    }\n                }\n            }\n            if request.len() > 1 {\n                tokio::time::sleep(one_minute).await;\n            }\n        }\n        println!(\"{}\", \"exited send_batches\");\n        Ok(response)\n    }",
+            "context": "",
+            "comment": "",
+            "filepath": "\"/home/yurii-sama/patchdog/crates/gemini/src/gemini.rs\"",
+            "line_range": {
+            "start": 99,
+            "end": 123
+            }
+        },
+        {
+            "function_text": "    pub async fn assess_batch_readiness(\n        batch: Vec<PreparingRequests>,\n    ) -> Result<Vec<WaitForTimeout>, ErrorBinding> {\n        //Architecture: batch[BIG_NUMBER..len()-1]\n        //Next: batch[0..4]\n        let mut await_response: Vec<WaitForTimeout> = vec![];\n        if batch.len() > REQUESTS_PER_MIN {\n            let mut size: usize = batch.len();\n            for _ in 1..=batch.len().div_ceil(REQUESTS_PER_MIN) {\n                let mut new_batch: Vec<PreparingRequests> = Vec::new();\n                //Response where quantity of batches exceed allow per min request count\n                //Check for last items in batch\n                if size < REQUESTS_PER_MIN {\n                    new_batch.extend_from_slice(&batch[0..size]);\n                    await_response.push(WaitForTimeout {\n                        prepared_requests: new_batch,\n                    });\n                    continue;\n                } else {\n                    new_batch.extend_from_slice(\n                        &batch[size.saturating_sub(REQUESTS_PER_MIN)..size],\n                    );\n                    size -= REQUESTS_PER_MIN;\n                    await_response.push(WaitForTimeout {\n                        prepared_requests: new_batch,\n                    });\n                }\n            }\n        } else {\n            //Return as normal\n            await_response.push(WaitForTimeout {\n                prepared_requests: batch,\n            });\n        }\n        Ok(await_response)\n    }",
+            "context": "",
+            "comment": "",
+            "filepath": "\"/home/yurii-sama/patchdog/crates/gemini/src/gemini.rs\"",
+            "line_range": {
+            "start": 125,
+            "end": 160
+            }
+        }]}

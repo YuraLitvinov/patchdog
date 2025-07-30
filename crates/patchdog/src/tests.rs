@@ -1,7 +1,9 @@
 mod tests {
     use crate::binding::get_patch_data;
+    use crate::cli::{call_json_to_rust, hotfix};
+    use gemini::gemini::PreparingRequests;
     use rust_parsing::ErrorHandling;
-    use rust_parsing::error::{ErrorBinding, InvalidIoOperationsSnafu};
+    use rust_parsing::error::{ErrorBinding, InvalidIoOperationsSnafu, SerdeSnafu};
     use rust_parsing::file_parsing::{FileExtractor, Files};
     use rust_parsing::rust_parser::{RustItemParser, RustParser};
     use snafu::ResultExt;
@@ -203,6 +205,61 @@ mod tests {
         };
         assert_eq!(assessed[0], expected);
         */
+        Ok(())
+    }
+
+    #[test]
+    fn test_hotfix () -> Result<(), ErrorBinding> {
+        //Trying here to see whether hotfix and call_json_to_rust work as intended.
+        //Importing tests/preparingrequests.json, containing PreparingRequests and SingleRequestData
+        //Here, I am trying to use HashMap for searching elements in response
+        /*
+        let mut res = vec![];
+        let response: String = fs::read_to_string(Path::new("../../tests/response.json"))
+            .context(InvalidIoOperationsSnafu)?;
+        let as_vec = FileExtractor::string_to_vector(&response);
+        let as_req = call_json_to_rust(as_vec)?.data;
+        res.push(response);
+        let request_json = fs::read_to_string(Path::new("../../tests/request.json"))
+            .context(InvalidIoOperationsSnafu)?;
+        let request = serde_json::from_str::<PreparingRequests>(&request_json)
+            .context(SerdeSnafu)?.data;
+        //Hotfix has to return missing elements in single response, that are present in request
+        let mut map_request  = HashMap::new();
+        request.clone().into_iter().for_each(|each| {
+            map_request.insert((each.clone().filepath, each.clone().line_range), each.clone());
+        });
+        let mut map_response = HashMap::new();
+        as_req.clone().into_iter().for_each(|each| {
+            map_response.insert((each.clone().filepath, each.clone().line_range), each.clone());
+        });
+        //println!("{:#?}", map);
+        let mut hotfixed = vec![];
+        //hotfixed = hotfix(res.clone(), request.clone())?;
+        //Comparing remaining elements vs all elements and real response
+        println!("res len: {}", as_req.len());
+        println!("request len: {}", request.len());
+        //Key here represents filepath and lineranges of an object, i.e. function
+        for (key, _) in &map_request {
+            if !map_response.contains_key(&key) {
+                hotfixed.push(map_request.get(&key).unwrap().clone());
+            }
+        }
+        println!("hotfixed len: {}", hotfixed.len());
+        println!("{:#?}", hotfixed);
+        */
+        
+        let response: String = fs::read_to_string(Path::new("../../tests/response.json"))
+            .context(InvalidIoOperationsSnafu)?;
+        let as_vec = FileExtractor::string_to_vector(&response);
+        let as_req = call_json_to_rust(as_vec)?.data;
+        let request_json = fs::read_to_string(Path::new("../../tests/request.json"))
+            .context(InvalidIoOperationsSnafu)?;
+        let request = serde_json::from_str::<PreparingRequests>(&request_json)
+            .context(SerdeSnafu)?.data;
+        let hotfixed = hotfix(response, request.clone())?;
+        assert_eq!(hotfixed.len(), request.len() - as_req.len());
+        //assert_eq!(true, false);
         Ok(())
     }
 }
