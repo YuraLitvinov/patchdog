@@ -15,23 +15,32 @@ use syn::{AngleBracketedGenericArguments, PathArguments, Type, TypePath};
 use syn::{File, ReturnType};
 use syn::{FnArg, parse_str};
 use syn::{ImplItem, Item};
-
+/*
+1. Парсер патчей
+2. Раст парсер
+3. Предподготовка запросов к ЛЛМ
+    1. Хеширование запросов
+    2. Сериализация запросов
+4. Обработка ответа
+    1. Сопоставление данных полученных и переданных
+5. Запись ответа
+*/
 #[allow(dead_code)]
-#[derive(Debug, Clone, serde::Deserialize, Serialize)]
+#[derive(Debug, Clone, serde::Deserialize, Serialize, PartialEq)]
 pub struct FunctionSignature {
     fn_input: Vec<FnInputToken>,
     fn_out: FnOutputToken,
 }
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
-#[derive(serde::Deserialize, Serialize)]
+#[derive(serde::Deserialize, Serialize, PartialEq)]
 struct FnInputToken {
     input_name: String,
     input_type: String,
 }
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
-#[derive(serde::Deserialize, Serialize)]
+#[derive(serde::Deserialize, Serialize, PartialEq)]
 struct FnOutputToken {
     kind: String,
     output_type: String,

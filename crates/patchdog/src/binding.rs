@@ -1,6 +1,6 @@
 use crate::binding::rust_parsing::error::CouldNotGetLineSnafu;
 use ai_interactions::parse_json::ChangeFromPatch;
-use gemini::gemini::SingleRequestData;
+use gemini::gemini::{ContextData, SingleFunctionData};
 use git_parsing::{Hunk, get_easy_hunk, match_patch_with_parse};
 use rust_parsing;
 use rust_parsing::ObjectRange;
@@ -23,23 +23,12 @@ pub struct Difference {
     pub line: Vec<usize>,
 }
 
-pub fn patch_data_argument(path_to_patch: PathBuf) -> Result<Vec<ChangeFromPatch>, ErrorBinding> {
-    
-    let path = env::current_dir().context(InvalidReadFileOperationSnafu {
-        file_path: &path_to_patch,
-    })?;
-    
-    //let path = Path::new("/home/yurii-sama/embucket").to_path_buf();
-    let patch = get_patch_data(path.join(path_to_patch), path)?;
-    Ok(patch)
-}
-
 pub fn changes_from_patch(
     exported_from_file: Vec<ChangeFromPatch>,
     rust_type: Vec<String>,
     rust_name: Vec<String>,
-) -> Result<Vec<SingleRequestData>, ErrorBinding> {
-    let mut singlerequestdata: Vec<SingleRequestData> = Vec::new();
+) -> Result<Vec<SingleFunctionData>, ErrorBinding> {
+    let mut singlerequestdata: Vec<SingleFunctionData> = Vec::new();
     for each in exported_from_file {
         println!("{:?}", &each.filename);
         let file = fs::read_to_string(&each.filename).context(InvalidIoOperationsSnafu)?;
@@ -59,18 +48,37 @@ pub fn changes_from_patch(
                     .any(|obj_name| obj_name_to_compare == obj_name)
             {
                 let as_string = item.join("\n");
-                singlerequestdata.push(SingleRequestData {
+            
+                singlerequestdata.push(SingleFunctionData {
                     function_text: as_string,
-                    context: "".to_string(),
-                    comment: "".to_string(),
-                    filepath: format!("{:?}", each.filename),
-                    line_range: obj,
+                    fn_name: parsed_file
+                        .object_name()
+                        .context(CouldNotGetLineSnafu)?,
+                    context: ContextData {
+                        class_name: "".to_string(),
+                        filepath: format!("{:?}", each.filename),
+                        external_dependecies: vec![],
+                        old_comment: vec!["".to_string()],
+                        line_range: obj,
+                    }
                 });
             }
         }
     }
     Ok(singlerequestdata)
 }
+
+pub fn patch_data_argument(path_to_patch: PathBuf) -> Result<Vec<ChangeFromPatch>, ErrorBinding> {
+    
+    let path = env::current_dir().context(InvalidReadFileOperationSnafu {
+        file_path: &path_to_patch,
+    })?;
+    
+    //let path = Path::new("/home/yurii-sama/embucket").to_path_buf();
+    let patch = get_patch_data(path.join(path_to_patch), path)?;
+    Ok(patch)
+}
+
 /*
 Pushes information from a patch into vector that contains lines
 at where there are unique changed objects reprensented with range<usize>

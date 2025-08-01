@@ -8,6 +8,7 @@ pub mod tests;
 #[tokio::main]
 //Accepts relative path from inside folder
 async fn main() -> Result<(), ErrorBinding> {
+    dotenv::dotenv().ok();
     cli_patch_to_agent().await?;
     Ok(())
 }

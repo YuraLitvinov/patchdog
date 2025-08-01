@@ -5,6 +5,7 @@ use snafu::{OptionExt, ResultExt};
 use std::ops::Range;
 use std::path::PathBuf;
 use std::{env, fs};
+
 #[derive(Debug, Clone)]
 pub struct ChangeFromPatch {
     pub filename: PathBuf,
@@ -78,3 +79,4 @@ pub fn justify_presence(
     }
     Ok(vecbool)
 }
+

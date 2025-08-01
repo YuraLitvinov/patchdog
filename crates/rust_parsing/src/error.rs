@@ -55,6 +55,9 @@ pub enum ErrorHandling {
     SerdeError {
         source: serde_json::error::Error,
     },
+    UuidError {
+        source: uuid::Error,
+    }
 }
 
 #[derive(Debug)]

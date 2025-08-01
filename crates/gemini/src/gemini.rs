@@ -1,35 +1,117 @@
 use ai_interactions::return_prompt;
 use async_trait::async_trait;
 use gemini_rust::Gemini;
+use regex::Regex;
 use rust_parsing::error::{ErrorBinding, SerdeSnafu};
-use rust_parsing::{ErrorHandling, error::GeminiRustSnafu};
+use rust_parsing::{ErrorHandling, error::GeminiRustSnafu, error::StdVarSnafu};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use snafu::ResultExt;
 use std::ops::Range;
-use std::{fmt::Display, time};
+use std::fs;
+use std::path::Path;
+use std::collections::HashMap;
+use rust_parsing::file_parsing::REGEX;
+use std::{fmt::Display, time, env::var};
 //Theoretical maximum is 250_000, but is highly flawed in a way, that Gemini can 'tear' the response. 
 //This behavior is explained in call_json_to_rust error case
 //Similar issue on https://github.com/googleapis/python-genai/issues/922
 const TOKENS_PER_MIN: usize = 250_000;
 pub const REQUESTS_PER_MIN: usize = 5;
 const TOKENS_PER_REQUEST: usize = TOKENS_PER_MIN / REQUESTS_PER_MIN;
+/*
+
+[
+    {
+        "id": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
+        "fn-name": "main",
+        "comment": "bla-bla",
+    },
+    {
+        "id": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
+        "fn-name": "new",
+        "comment": "bla-bla",
+    }
+]
+
+*/
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
-pub struct SingleRequestData {
+pub struct SingleFunctionData {
+    pub fn_name: String,
     pub function_text: String,
-    pub context: String,
-    pub comment: String,
+    #[serde(skip_serializing)]
+    pub context: ContextData,
+}
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
+pub struct ContextData {
+    pub class_name: String,
     pub filepath: String,
+    pub external_dependecies: Vec<String>,
+    pub old_comment: Vec<String>,
     pub line_range: Range<usize>,
 }
-impl SingleRequestData {
+impl ContextData {
     pub fn size(&self) -> usize {
-        (self.context.len() + self.function_text.len() + self.filepath.len()) / 3 //One token is approx. 3 symbols
+        let mut size_ext = 0;
+        for each in &self.external_dependecies {
+            size_ext += each.len();
+        }
+        for each in &self.old_comment {
+            size_ext += each.len();
+        }
+        self.class_name.len() + 
+        self.filepath.len() + 
+        size_ext + 
+        self.line_range.len()
     }
 }
+
+impl SingleFunctionData {
+    pub fn size(&self) -> usize {
+        ( self.fn_name.len() + self.context.size() + self.function_text.len()) / 3 //One token is approx. 3 symbols
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+pub struct MappedRequest {
+    pub remaining_capacity: usize,
+    pub data: HashMap<String, SingleFunctionData>,
+}
+
+impl MappedRequest {
+    pub fn new() -> MappedRequest {
+        MappedRequest {
+            remaining_capacity: TOKENS_PER_REQUEST,
+            data: HashMap::new(),
+        }
+    }
+    pub fn function_add(&mut self, request_data: SingleFunctionData) -> bool {
+        let size = request_data.size();
+        if size <= self.remaining_capacity {
+            self.data.insert(uuid::Uuid::new_v4().to_string(), request_data);
+            self.remaining_capacity -= size;
+            true
+        } else {
+            false
+        }
+    }
+}
+
+impl Default for MappedRequest {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+    
+impl Display for MappedRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "{self:#?}")
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 pub struct PreparingRequests {
     pub remaining_capacity: usize,
-    pub data: Vec<SingleRequestData>,
+    pub data: Vec<SingleFunctionData>,
 }
 
 impl PreparingRequests {
@@ -39,7 +121,7 @@ impl PreparingRequests {
             data: vec![],
         }
     }
-    pub fn function_add(&mut self, request_data: SingleRequestData) -> bool {
+    pub fn function_add(&mut self, request_data: SingleFunctionData) -> bool {
         let size = request_data.size();
         if size <= self.remaining_capacity {
             self.remaining_capacity -= size;
@@ -82,10 +164,12 @@ pub fn json_to<T: DeserializeOwned>(val: serde_json::Value) -> T {
     serde_json::from_value(val).unwrap()
 }
 
+
 #[allow(dead_code)]
 pub struct WaitForTimeout {
-    pub prepared_requests: Vec<PreparingRequests>,
+    pub prepared_requests: Vec<MappedRequest>,
 }
+
 #[allow(async_fn_in_trait)]
 impl GoogleGemini {
     pub fn new() -> GoogleGemini {
@@ -101,7 +185,8 @@ impl GoogleGemini {
         let one_minute = time::Duration::from_secs(61);
         for single_request in request {
             for each in &single_request.prepared_requests {
-                let as_json = serde_json::to_string_pretty(each).context(SerdeSnafu)?;
+                let fmt = format!("{:#?}", each.data);
+                let as_json = serde_json::to_string_pretty(&fmt).context(SerdeSnafu)?;
                 match GoogleGemini::req_res(&as_json, return_prompt()).await {
                     //Handling exclusive case, where one of the requests may fail
                     Ok(r) => {
@@ -123,7 +208,7 @@ impl GoogleGemini {
     }
 
     pub async fn assess_batch_readiness(
-        batch: Vec<PreparingRequests>,
+        batch: Vec<MappedRequest>,
     ) -> Result<Vec<WaitForTimeout>, ErrorBinding> {
         //Architecture: batch[BIG_NUMBER..len()-1]
         //Next: batch[0..4]
@@ -131,7 +216,7 @@ impl GoogleGemini {
         if batch.len() > REQUESTS_PER_MIN {
             let mut size: usize = batch.len();
             for _ in 1..=batch.len().div_ceil(REQUESTS_PER_MIN) {
-                let mut new_batch: Vec<PreparingRequests> = Vec::new();
+                let mut new_batch: Vec<MappedRequest> = Vec::new();
                 //Response where quantity of batches exceed allow per min request count
                 //Check for last items in batch
                 if size < REQUESTS_PER_MIN {
@@ -160,29 +245,31 @@ impl GoogleGemini {
     }
 
     pub async fn req_res(file_content: &str, arguments: &str) -> Result<String, ErrorHandling> {
-        //let api_key = std::env::var("API_KEY_GEMINI").context(StdVarSnafu)?;
-        let client = Gemini::new("AIzaSyCqlP-v467ts_yN8POCh1ojijXjd0uRwqc");
-        //let args = std::env::var("INPUT_FOR_MODEL")?;
-        let res = client
+        dotenv::from_path(".env").ok();
+        println!("{}", var("API_KEY_GEMINI"));
+        let client = Gemini::with_model(
+            var("API_KEY_GEMINI").context(StdVarSnafu)?, 
+            var("GEMINI_MODEL").context(StdVarSnafu)?,
+        )
             .generate_content()
             .with_system_prompt(arguments)
             .with_user_message(file_content)
             .execute()
             .await
             .context(GeminiRustSnafu)?;
-        Ok(res.text())
+        Ok(client.text())
     }
 
     // The idea as I see it is: we provide AI Agent with filled out JSON where all the function names are already mapped and
     // the only goal there is to actually to turn in the JSON and receive it back with written in comments
     pub fn prepare_batches(
         &mut self,
-        request: Vec<SingleRequestData>,
+        request: Vec<SingleFunctionData>,
     ) -> Result<Vec<PreparingRequests>, ErrorHandling> {
         let mut batches: Vec<PreparingRequests> = Vec::new();
         let mut preparing_requests = PreparingRequests::new();
         for data in request {
-            if !preparing_requests.function_add(data.to_owned()) {
+            if !preparing_requests.function_add(data.clone()) {
                 //Preserving overflow of preparing request to next iter
                 if !preparing_requests.data.is_empty() {
                     batches.push(preparing_requests);
@@ -204,4 +291,74 @@ impl GoogleGemini {
         }
         Ok(batches)
     }
+    
+    pub fn prepare_map(
+        &mut self,
+        request: Vec<SingleFunctionData>,
+    ) -> Result<Vec<MappedRequest>, ErrorHandling> {
+        let mut batches: Vec<MappedRequest> = Vec::new();
+        let mut mapped_requests = MappedRequest::new();
+        for data in request {
+            if !mapped_requests.function_add(data.clone()) {
+                //Preserving overflow of preparing request to next iter
+                if !mapped_requests.data.is_empty() {
+                    batches.push(mapped_requests);
+                }
+                //Reinitializing preparing_requests to free the buffer
+                mapped_requests = MappedRequest::new();
+
+                // Attempt to push
+                if !mapped_requests.function_add(data) {
+                    // Here should be handled the case, where single object exceeds token limit
+                    //Which is likely would not be possible
+                }
+            }
+        }
+        // Last unempty request
+        if !mapped_requests.data.is_empty() {
+            batches.push(mapped_requests);
+        }
+        Ok(batches)
+    }
 }
+
+//Hotfix returns missing elements of request that were dropped in the response by the LLM
+pub fn hotfix(response: String, request: Vec<SingleFunctionData>)-> Result<Vec<SingleFunctionData>, ErrorHandling> {
+    let mut hotfixed = vec![];
+    let as_req: Vec<SingleFunctionData> = collect_response(&response)?;
+    let mut map_request  = HashMap::new();
+    request.clone().into_iter().for_each(|each| {
+        map_request.insert((each.context.filepath.clone(), each.context.line_range.clone()), each);
+    });
+    let mut map_response = HashMap::new();
+    as_req.clone().into_iter().for_each(|each| {
+        map_response.insert((each.context.filepath.clone(), each.context.line_range.clone()), each);
+    });
+    //Key here represents filepath and lineranges of an object, i.e. function
+    for (key, data) in map_request {
+        if !map_response.contains_key(&key) {
+            hotfixed.push(data);
+        }
+    }
+    Ok(hotfixed)
+}
+
+//Accepts JSON as Vec<String> and attempts to parse it into PreparingRequests
+pub fn collect_response(output: &str) -> Result<Vec<SingleFunctionData>, ErrorHandling> {
+    let re = Regex::new(REGEX).unwrap();        
+    let mut assess_size = vec![];
+    for cap in re.captures_iter(&output) {
+        let a = cap
+            .get(0)
+            .unwrap()
+            .as_str();
+        let to_struct = serde_json::from_str::<SingleFunctionData>(a)
+            .context(SerdeSnafu)?;
+        assess_size.push(to_struct);
+    }
+    Ok(assess_size)
+
+
+}
+
+

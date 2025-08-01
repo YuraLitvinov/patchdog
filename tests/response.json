@@ -1,7 +1,7 @@
 {
     "remaining_capacity": 30466,
     "data": [
-        {
+        { 
             "function_text": "    pub fn new() -> PreparingRequests {\n        PreparingRequests {\n            remaining_capacity: TOKENS_PER_REQUEST - return_prompt().len(),\n            data: vec![],\n        }\n    }",
             "context": "",
             "comment": "",

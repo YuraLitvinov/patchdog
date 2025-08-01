@@ -1,10 +1,8 @@
 mod tests {
-    use crate::binding::get_patch_data;
-    use crate::cli::{call_json_to_rust, hotfix};
-    use gemini::gemini::PreparingRequests;
+    use gemini::gemini::{collect_response, hotfix, PreparingRequests, SingleFunctionData};
     use rust_parsing::ErrorHandling;
     use rust_parsing::error::{ErrorBinding, InvalidIoOperationsSnafu, SerdeSnafu};
-    use rust_parsing::file_parsing::{FileExtractor, Files};
+    use rust_parsing::file_parsing::{FileExtractor, Files, REGEX};
     use rust_parsing::rust_parser::{RustItemParser, RustParser};
     use snafu::ResultExt;
     use std::env;
@@ -12,6 +10,9 @@ mod tests {
     use std::process::Command;
     use std::{fs, path::Path};
     use tempfile::NamedTempFile;
+    use regex::Regex;
+
+    use crate::binding;
     const PATH_BASE: &str = "../../tests/data.rs";
     const COMPARE_LINES: &str = "fn function_with_return() -> i32 {\n";
     #[test]
@@ -119,11 +120,10 @@ mod tests {
             .expect("couldn't write output to tempfile");
         println!("{:?}", patch_file.path());
         let patch =
-            get_patch_data(patch_file.path().to_path_buf(), path).expect("couldn't get patch");
+            binding::get_patch_data(patch_file.path().to_path_buf(), path).expect("couldn't get patch");
         for each in patch {
             println!("{:?}", each);
         }
-        assert_eq!(true, true);
     }
     #[test]
     fn test_write() -> Result<(), ErrorHandling> {
@@ -210,56 +210,41 @@ mod tests {
 
     #[test]
     fn test_hotfix () -> Result<(), ErrorBinding> {
-        //Trying here to see whether hotfix and call_json_to_rust work as intended.
+        //Trying here to see whether hotfix and collect_response work as intended.
         //Importing tests/preparingrequests.json, containing PreparingRequests and SingleRequestData
         //Here, I am trying to use HashMap for searching elements in response
-        /*
-        let mut res = vec![];
+
         let response: String = fs::read_to_string(Path::new("../../tests/response.json"))
             .context(InvalidIoOperationsSnafu)?;
-        let as_vec = FileExtractor::string_to_vector(&response);
-        let as_req = call_json_to_rust(as_vec)?.data;
-        res.push(response);
+        let as_req = collect_response(&response)?;
         let request_json = fs::read_to_string(Path::new("../../tests/request.json"))
             .context(InvalidIoOperationsSnafu)?;
         let request = serde_json::from_str::<PreparingRequests>(&request_json)
             .context(SerdeSnafu)?.data;
-        //Hotfix has to return missing elements in single response, that are present in request
-        let mut map_request  = HashMap::new();
-        request.clone().into_iter().for_each(|each| {
-            map_request.insert((each.clone().filepath, each.clone().line_range), each.clone());
-        });
-        let mut map_response = HashMap::new();
-        as_req.clone().into_iter().for_each(|each| {
-            map_response.insert((each.clone().filepath, each.clone().line_range), each.clone());
-        });
-        //println!("{:#?}", map);
-        let mut hotfixed = vec![];
-        //hotfixed = hotfix(res.clone(), request.clone())?;
-        //Comparing remaining elements vs all elements and real response
-        println!("res len: {}", as_req.len());
-        println!("request len: {}", request.len());
-        //Key here represents filepath and lineranges of an object, i.e. function
-        for (key, _) in &map_request {
-            if !map_response.contains_key(&key) {
-                hotfixed.push(map_request.get(&key).unwrap().clone());
-            }
-        }
-        println!("hotfixed len: {}", hotfixed.len());
-        println!("{:#?}", hotfixed);
-        */
-        
-        let response: String = fs::read_to_string(Path::new("../../tests/response.json"))
-            .context(InvalidIoOperationsSnafu)?;
-        let as_vec = FileExtractor::string_to_vector(&response);
-        let as_req = call_json_to_rust(as_vec)?.data;
-        let request_json = fs::read_to_string(Path::new("../../tests/request.json"))
-            .context(InvalidIoOperationsSnafu)?;
-        let request = serde_json::from_str::<PreparingRequests>(&request_json)
-            .context(SerdeSnafu)?.data;
+
         let hotfixed = hotfix(response, request.clone())?;
         assert_eq!(hotfixed.len(), request.len() - as_req.len());
-        //assert_eq!(true, false);
         Ok(())
+    }
+    #[test]
+    fn test_regex() {
+        let re = Regex::new(REGEX).unwrap();        
+        let test = fs::read_to_string(Path::new("../../tests/request.json")).unwrap();
+        let mut i = 0;
+        let mut assess_size = vec![];
+        for cap in re.captures_iter(&test) {
+            i += 1;
+            let a = cap
+                .get(0)
+                .unwrap()
+                .as_str();
+            let to_struct = serde_json::from_str::<SingleFunctionData>(a).unwrap();
+            println!("{:#?}", to_struct);
+            assess_size.push(to_struct);
+        
+        }
+        println!("{}", assess_size.len());
+        assert_eq!(i, assess_size.len());
+        assert_eq!(true,false);
     }
 }

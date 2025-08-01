@@ -5,6 +5,17 @@ use crate::error::{
 use crate::object_range::ObjectRange;
 use snafu::{OptionExt, ResultExt, ensure};
 use std::{fs::File, io::Write, path::Path};
+pub const REGEX: &str = r#"(?x)                      
+        \{\s*
+            "function_text"\s*:\s*"(?:[^"\\]|\\.)*"\s*,\s*
+            "context"\s*:\s*"(?:[^"\\]|\\.)*"\s*,\s*
+            "comment"\s*:\s*"(?:[^"\\]|\\.)*"\s*,\s*
+            "filepath"\s*:\s*"(?:[^"\\]|\\.)*"\s*,\s*
+            "line_range"\s*:\s*\{\s*
+                "start"\s*:\s*[0-9]+\s*,\s*   
+                "end"\s*:\s*[0-9]+\s*        
+            \}\s*
+        \}"#;
 pub struct FileExtractor;
 pub trait Files {
     fn check_for_valid_object(
