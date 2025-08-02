@@ -177,10 +177,6 @@ let mut matched = vec![];
                     if let Some(found) = set.iter().find(|item| item.0 == each.0) {
                         matched.push(Form { is_full: true, data: each.1.clone(), new_comment: found.1.to_string() });
                     }
-                    else {
-                        println!("Found error134: {:#?}", each);
-                        matched.push(Form { is_full: false, data: each.1.clone(), new_comment: "".to_string() });
-                    }
                 }
         }
         }
