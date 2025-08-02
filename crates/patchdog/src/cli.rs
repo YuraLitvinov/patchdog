@@ -89,7 +89,7 @@ async fn call(
     request: Vec<SingleFunctionData>,
 ) -> Result<Vec<Form>, ErrorBinding> {
     let mut responses_collected = Vec::new();
-    let mut collect_error = vec![];
+    //let mut collect_error = vec![];
     let mut new_buffer = GoogleGemini::new();
     let batch = new_buffer.prepare_map(request)?;
     let prepared = GoogleGemini::assess_batch_readiness(batch)?;
@@ -100,16 +100,18 @@ async fn call(
             if matched.is_full {
                 responses_collected.push(Form{is_full: matched.is_full, data: matched.data, new_comment: matched.new_comment});
             } else {
-                collect_error.push(matched.data);
+                //collect_error.push(matched.data);
                 println!("Found error");
             }
         }
     }
+    /*
     if !collect_error.is_empty() {
         println!("Found error");
         let collect_error = Box::pin(call(collect_error)).await?;
         responses_collected.extend(collect_error);
     }
+    */
     Ok(responses_collected)
 }
 /// Matches a response string with prepared requests and returns a vector of `Form` structs.
