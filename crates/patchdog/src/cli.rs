@@ -160,10 +160,9 @@ fn write_to_file(response: Vec<(SingleFunctionData, String)>) -> Result<(), Erro
     });
     //Typical representation of file as vector of lines
     for each in response {
-        let path = PathBuf::from(each.0.context.filepath);
+        let path = each.0.context.filepath;
         let file =
             fs::read_to_string(&path).context(InvalidIoOperationsSnafu)?;
-        println!("{}", file);
         let as_vec = FileExtractor::string_to_vector(&file);
         FileExtractor::write_to_vecstring(
             path,
