@@ -17,7 +17,9 @@ jobs:
         fetch-depth: 1
     - name: checking out branch
       run: git checkout HEAD
+    - name: move into directory
+      run: cd /home/runner/work/patchdog/patchdog
     - name: make patch
-      run: git diff HEAD^ HEAD > patch.patch
+      run: git diff HEAD~1 HEAD > patch.patch
     - name: run patchdog
       run: cargo run -- --file-patch patch.patch
