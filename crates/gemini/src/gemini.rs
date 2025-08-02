@@ -31,21 +31,21 @@ const TOKENS_PER_REQUEST: usize = TOKENS_PER_MIN / REQUESTS_PER_MIN;
 ]
 
 */
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Response {
     pub uuid: String,
     pub fn_name: String,
     pub new_comment: String,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 pub struct SingleFunctionData {
     pub fn_name: String,
     pub function_text: String,
     #[serde(skip_serializing)]
     pub context: ContextData,
 }
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 pub struct ContextData {
     pub class_name: String,
     pub filepath: PathBuf,
@@ -72,7 +72,7 @@ impl SingleFunctionData {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Eq)]
 pub struct MappedRequest {
     pub remaining_capacity: usize,
     pub data: HashMap<String, SingleFunctionData>,
@@ -110,7 +110,7 @@ impl Display for MappedRequest {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 pub struct PreparingRequests {
     pub remaining_capacity: usize,
     pub data: Vec<SingleFunctionData>,
@@ -167,10 +167,11 @@ pub fn json_to<T: DeserializeOwned>(val: serde_json::Value) -> T {
 }
 
 #[allow(dead_code)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 pub struct WaitForTimeout {
     pub prepared_requests: Vec<MappedRequest>,
 }
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 pub struct Request {
     uuid: String,
     data: SingleFunctionData,
