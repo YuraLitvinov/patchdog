@@ -44,6 +44,16 @@ pub struct Change {
     pub change_at_hunk: Hunk,
 }
 
+/// Matches a patch file with parsed Rust items and generates a vector of `Change` structs.
+///
+/// # Arguments
+///
+/// * `relative_path`: The relative path to the file.
+/// * `patch_src`: A slice of bytes representing the patch source.
+///
+/// # Returns
+///
+/// A `Result` containing a vector of `Change` structs, or a `Git2ErrorHandling` if any error occurred.
 pub fn match_patch_with_parse(
     relative_path: &Path,
     patch_src: &[u8],
@@ -99,6 +109,16 @@ fn get_filenames(diff: &Diff<'static>) -> Result<Vec<String>, Git2ErrorHandling>
     }
     Ok(vector_of_filenames)
 }
+/// Extracts hunks from a Git diff, associating them with filenames and line changes.
+///
+/// # Arguments
+///
+/// * `diff`: A Git diff object.
+/// * `vector_of_filenames`: A vector of filenames.
+///
+/// # Returns
+///
+/// A `Result` containing a vector of `Hunk` structs, or a `Git2ErrorHandling` if any error occurred.
 fn git_get_hunks(
     diff: Diff<'static>,
     vector_of_filenames: Vec<String>,
@@ -117,7 +137,6 @@ fn git_get_hunks(
                 let line_processed: usize = line.new_lineno().unwrap_or(0) as usize;
                 let change = match line.origin() {
                     '+' => HunkChange::Add,
-                    '-' => HunkChange::Remove,
                     ' ' => HunkChange::Modify,
                     _ => continue,
                 };

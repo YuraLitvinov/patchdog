@@ -4,7 +4,17 @@ use crate::error::{
 };
 use crate::object_range::ObjectRange;
 use snafu::{OptionExt, ResultExt, ensure};
-use std::{fs::File, io::Write, path::Path};
+use std::{fs::File, io::Write, path::PathBuf};
+//Advanced matching. This inefficient method is chosen due to error: look-around, including look-ahead and look-behind, is not supported
+/*
+pub const REGEX: &str = r#"\{\s*("uuid"\s*:\s*"[^"]*"\s*,\s*"fn_name"\s*:\s*"[^"]*"\s*,\s*"new_comment"\s*:\s*"[^"]*"
+|\s*"uuid"\s*:\s*"[^"]*"\s*,\s*"new_comment"\s*:\s*"[^"]*"\s*,\s*"fn_name"\s*:\s*"[^"]*"
+|\s*"fn_name"\s*:\s*"[^"]*"\s*,\s*"uuid"\s*:\s*"[^"]*"\s*,\s*"new_comment"\s*:\s*"[^"]*"
+|\s*"fn_name"\s*:\s*"[^"]*"\s*,\s*"new_comment"\s*:\s*"[^"]*"\s*,\s*"uuid"\s*:\s*"[^"]*"
+|\s*"new_comment"\s*:\s*"[^"]*"\s*,\s*"uuid"\s*:\s*"[^"]*"\s*,\s*"fn_name"\s*:\s*"[^"]*"
+|\s*"new_comment"\s*:\s*"[^"]*"\s*,\s*"fn_name"\s*:\s*"[^"]*"\s*,\s*"uuid"\s*:\s*"[^"]*")\s*\}"#;
+*/
+pub const REGEX: &str = r#"\{\s*"uuid"\s*:\s*"[^"]*"\s*,\s*"fn_name"\s*:\s*"[^"]*"\s*,\s*"new_comment"\s*:\s*"[^"]*"\s*\}"#;
 pub struct FileExtractor;
 pub trait Files {
     fn check_for_valid_object(
@@ -31,7 +41,7 @@ pub trait Files {
     ) -> Result<Vec<String>, ErrorHandling>;
     //Representing file as a vector of lines is generally the most effective practise
     fn write_to_vecstring(
-        path: &Path,
+        path: PathBuf,
         source: Vec<String>,
         line_index: usize,
         changed_element: String,
@@ -39,13 +49,25 @@ pub trait Files {
 }
 
 impl Files for FileExtractor {
+/// Writes a vector of strings to a file, inserting a changed element at a specific line index.
+///
+/// # Arguments
+///
+/// * `path`: The path to the file to write to.
+/// * `source`: The vector of strings to write.
+/// * `line_index`: The index at which to insert the changed element.
+/// * `changed_element`: The changed element to insert.
+///
+/// # Returns
+///
+/// A `Result` indicating whether the operation was successful, or an `ErrorHandling` if any error occurred.
     fn write_to_vecstring(
-        path: &Path,
+        path: PathBuf,
         mut source: Vec<String>,
         line_index: usize,
         changed_element: String,
     ) -> Result<(), ErrorHandling> {
-        source.insert(line_index, changed_element);
+        source.insert(line_index.saturating_sub(1), changed_element);
         let mut file = File::create(path).context(InvalidIoOperationsSnafu)?;
         for each in &source {
             writeln!(file, "{each}").context(InvalidIoOperationsSnafu)?;
@@ -54,6 +76,17 @@ impl Files for FileExtractor {
     }
 
     //Assuming str_source can be of different size at runtime, there is sense to only include pushing at begin, represented by true and end, represented by false
+/// Pushes a string to a vector of strings, preserving whitespace.
+///
+/// # Arguments
+///
+/// * `str_source`: The vector of strings to push to.
+/// * `push`: The string to push.
+/// * `push_where`: Whether to push to the beginning or end.
+///
+/// # Returns
+///
+/// A `Result` containing the updated vector of strings, or an `ErrorHandling` if any error occurred.
     fn push_to_vector(
         str_source: &[String],
         push: String,
@@ -97,6 +130,17 @@ impl Files for FileExtractor {
 
     //Main entry for seeker and extract_by_line, roams through Vec<ObjectRange> seeking for the object that fits
     //the requested line number. If it finds no match, then LineOutOfBounds error is thrown
+/// Exports an object from a given source code based on line number.
+///
+/// # Arguments
+///
+/// * `line_number`: The line number of the object to export.
+/// * `visited`: A slice of `ObjectRange` structs representing the parsed items.
+/// * `src`: A slice of strings representing the source code lines.
+///
+/// # Returns
+///
+/// A `Result` containing the exported object as a string, or an `ErrorHandling` if the object was not found.
     fn export_object(
         line_number: usize,
         visited: &[ObjectRange],

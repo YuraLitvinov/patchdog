@@ -1,0 +1,294 @@
+```json
+[
+  {
+    "uuid": "b29d2189-3e89-4b5f-9d74-5e2b4bed2e20",
+    "fn_name": "test_cover_empty_object",
+    "new_comment": "/// \n/// # Description\n/// \n/// This test function checks the behaviour of empty objects.\n/// \n/// # Parameters\n/// \n/// *None*\n/// \n/// # Return value\n/// \n/// *None*"
+  },
+  {
+    "uuid": "c34dd93f-6d36-4b5e-94fb-e1b7dfc15451",
+    "fn_name": "default",
+    "new_comment": "/// Creates a new instance of `Self`.\n///\n/// # Return value\n/// `Self`"
+  },
+  {
+    "uuid": "2ff01a0d-4f82-44dd-b208-fe5a94b0ceac",
+    "fn_name": "size",
+    "new_comment": "/// Calculates the size of the `ContextData` struct.\n///\n/// # Parameters\n///\n/// `&self`: A reference to the `ContextData` instance.\n///\n/// # Return value\n/// `usize`: The calculated size."
+  },
+  {
+    "uuid": "97de1656-8927-4542-ae62-6e853ce64e77",
+    "fn_name": "new",
+    "new_comment": "/// Creates a new `MappedRequest` instance.\n///\n/// # Return value\n/// `MappedRequest`"
+  },
+  {
+    "uuid": "ca986d3d-b322-4a4c-9836-a01900f0bfa2",
+    "fn_name": "fmt",
+    "new_comment": "/// Formats the value using the given formatter.\n///\n/// # Parameters\n///\n/// `&self`: A reference to the instance.\n/// `f`: The formatter to use.\n///\n/// # Return value\n/// `std::fmt::Result`"
+  },
+  {
+    "uuid": "37265023-a6d3-48fc-adb8-729f1d93eb94",
+    "fn_name": "test_agent_out",
+    "new_comment": "/// This test function assesses the output of an AI agent.\n/// It checks if the JSON output is valid and retries if necessary.\n///\n/// # Parameters\n///\n/// *None*\n///\n/// # Return value\n///\n/// `Result<(), ErrorBinding>`"
+  },
+  {
+    "uuid": "8f7d58eb-b3f4-496f-8b17-960bddcd0285",
+    "fn_name": "from",
+    "new_comment": "/// Converts a `Git2ErrorHandling` into an `ErrorBinding`.\n///\n/// # Parameters\n///\n/// `git`: The `Git2ErrorHandling` to convert.\n///\n/// # Return value\n/// `Self`"
+  },
+  {
+    "uuid": "0108c143-5c0c-49f1-955f-82f64035b843",
+    "fn_name": "git_get_hunks",
+    "new_comment": "/// Extracts hunks from a git diff.\n///\n/// # Parameters\n///\n/// `diff`: The git diff.\n/// `vector_of_filenames`: A vector of filenames.\n///\n/// # Return value\n/// `Result<Vec<Hunk>, Git2ErrorHandling>`"
+  },
+  {
+    "uuid": "35dd6b5f-4c85-45eb-bfa2-b210b7248fef",
+    "fn_name": "test_find_module_files",
+    "new_comment": "/// Tests the `find_module_files` function.\n///\n/// # Parameters\n///\n/// *None*\n///\n/// # Return value\n///\n/// *None*"
+  },
+  {
+    "uuid": "f760e8aa-c722-40ef-ba3d-6f4da394fcad",
+    "fn_name": "json_to",
+    "new_comment": "/// Converts a `serde_json::Value` to a type `T`.\n///\n/// # Parameters\n///\n/// `val`: The `serde_json::Value` to convert.\n///\n/// # Return value\n/// `T`"
+  },
+  {
+    "uuid": "9b6fedbc-61fb-4c4c-a309-aefcc74669f0",
+    "fn_name": "store_objects",
+    "new_comment": "/// Stores objects from a patch into a vector of `FullDiffInfo`.\n///\n/// # Parameters\n///\n/// `relative_path`: The relative path to the file.\n/// `patch_src`: The patch source code as a byte slice.\n///\n/// # Return value\n/// `Result<Vec<FullDiffInfo>, ErrorBinding>`"
+  },
+  {
+    "uuid": "0f6dc028-2a11-4a4f-897e-c0ff9fe11af3",
+    "fn_name": "find_comments",
+    "new_comment": "/// Finds comments in a Rust file.\n///\n/// # Parameters\n///\n/// *None*\n///\n/// # Return value\n///\n/// *None*"
+  },
+  {
+    "uuid": "d4197b05-2a97-4008-a5a9-70217ee8e29a",
+    "fn_name": "function_parse",
+    "new_comment": "/// Parses a function signature from a list of items.\n///\n/// # Parameters\n///\n/// `items`: A slice of `Item`s.\n///\n/// # Return value\n/// `Result<FunctionSignature, ErrorHandling>`"
+  },
+  {
+    "uuid": "4d6153e1-ffe0-4319-9fa1-0da454c6661f",
+    "fn_name": "cli_patch_to_agent",
+    "new_comment": "/// Sends patch data to the AI agent via CLI.\n///\n/// # Parameters\n///\n/// *None*\n///\n/// # Return value\n/// `Result<(), ErrorBinding>`"
+  },
+  {
+    "uuid": "845d4725-e6f4-4eee-a9df-409556457883",
+    "fn_name": "cli_search_mode",
+    "new_comment": "/// Performs a search operation in CLI mode.\n///\n/// # Parameters\n///\n/// *None*\n///\n/// # Return value\n/// `Result<(), ErrorBinding>`"
+  },
+  {
+    "uuid": "695f66a4-ce55-42b2-a6b4-eacbb4cf3691",
+    "fn_name": "find_rust_files",
+    "new_comment": "/// Recursively finds all Rust files within a given directory.\n///\n/// # Parameters\n///\n/// `dir`: The starting directory.\n/// `rust_files`: A mutable vector to store the found Rust files.\n///\n/// # Return value\n///\n/// *None*"
+  },
+  {
+    "uuid": "d63608e3-6e75-4ddd-a238-1480e1d0e7c9",
+    "fn_name": "export_object",
+    "new_comment": "/// Exports an object from a source code.\n///\n/// # Parameters\n///\n/// `line_number`: The line number of the object.\n/// `visited`: A slice of `ObjectRange`.\n/// `src`: A slice of strings representing the source code.\n///\n/// # Return value\n/// `Result<String, ErrorHandling>`"
+  },
+  {
+    "uuid": "321286e5-fdd1-47c9-b07f-36dc57fc8b28",
+    "fn_name": "test_read_argument",
+    "new_comment": "/// Tests reading command line arguments.\n///\n/// # Parameters\n///\n/// *None*\n///\n/// # Return value\n///\n/// *None*"
+  },
+  {
+    "uuid": "3e49c337-42ed-46c9-9098-2594b93d45fb",
+    "fn_name": "test_regex",
+    "new_comment": "/// Tests a regular expression against a JSON file.\n///\n/// # Parameters\n///\n/// *None*\n///\n/// # Return value\n///\n/// *None*"
+  },
+  {
+    "uuid": "d675b610-851b-47ab-988c-89c8c22e7d7b",
+    "fn_name": "test_write",
+    "new_comment": "/// Tests writing to a file.\n///\n/// # Parameters\n///\n/// *None*\n///\n/// # Return value\n/// `Result<(), ErrorHandling>`"
+  },
+  {
+    "uuid": "e2490723-dc6c-48b2-8ce9-627b1c3cc5b2",
+    "fn_name": "remove_whitespace",
+    "new_comment": "/// Removes whitespace characters from a string.\n///\n/// # Parameters\n///\n/// `s`: The string to remove whitespace from.\n///\n/// # Return value\n/// `Result<String, ErrorHandling>`"
+  },
+  {
+    "uuid": "e9bd2d82-86b6-4915-bb39-1e608c41d78f",
+    "fn_name": "default",
+    "new_comment": "/// Creates a new instance of `Self`.\n///\n/// # Return value\n/// `Self`"
+  },
+  {
+    "uuid": "c020b147-d1cc-4a48-af45-c1fa97ed1fea",
+    "fn_name": "size",
+    "new_comment": "/// Calculates the approximate size of the `SingleFunctionData` struct.\n///\n/// # Parameters\n///\n/// `&self`: A reference to the `SingleFunctionData` instance.\n///\n/// # Return value\n/// `usize`: The approximate size."
+  },
+  {
+    "uuid": "0d8b120a-bf74-4fd3-bce7-84d598aa25a1",
+    "fn_name": "function_add",
+    "new_comment": "/// Adds a `SingleFunctionData` to the internal data structure.\n///\n/// # Parameters\n///\n/// `&mut self`: A mutable reference to the `MappedRequest` instance.\n/// `request_data`: The `SingleFunctionData` to add.\n///\n/// # Return value\n/// `bool`: `true` if successful, `false` otherwise."
+  },
+  {
+    "uuid": "3ff80005-0053-4204-9e8f-1c4ec1fded2a",
+    "fn_name": "push_to_vector",
+    "new_comment": "/// Pushes a string to a vector of strings, preserving whitespace.\n///\n/// # Parameters\n///\n/// `str_source`: The source vector of strings.\n/// `push`: The string to push.\n/// `push_where`: Indicates whether to push at the beginning or end.\n///\n/// # Return value\n/// `Result<Vec<String>, ErrorHandling>`"
+  },
+  {
+    "uuid": "19eaa950-5fcf-4090-9e0c-cca84c008215",
+    "fn_name": "visit_items",
+    "new_comment": "/// Visits items in the AST and extracts object ranges.\n///\n/// # Parameters\n///\n/// `items`: A slice of `Item`s.\n///\n/// # Return value\n/// `Result<Vec<ObjectRange>, ErrorHandling>`"
+  },
+  {
+    "uuid": "05ba8d93-bf34-4435-bbf9-c0068cadc95d",
+    "fn_name": "match_patch_with_parse",
+    "new_comment": "/// Matches a patch with parsed Rust code to identify changes.\n///\n/// # Parameters\n///\n/// `relative_path`: The relative path to the file.\n/// `patch_src`: The patch source code as a byte slice.\n///\n/// # Return value\n/// `Result<Vec<Change>, Git2ErrorHandling>`"
+  },
+  {
+    "uuid": "dd3045d3-854b-4b6b-894a-1a223ca57f22",
+    "fn_name": "comment_lexer",
+    "new_comment": "/// Lexes comments from a source code string.\n///\n/// # Parameters\n///\n/// `source_vector`: The source code string.\n///\n/// # Return value\n/// `Result<Vec<ObjectRange>, ErrorHandling>`"
+  },
+  {
+    "uuid": "2098e2d4-f669-4032-89b3-319c9df610c1",
+    "fn_name": "parse_all_rust_items",
+    "new_comment": "/// Parses all Rust items from a source string.\n///\n/// # Parameters\n///\n/// `src`: The source string.\n///\n/// # Return value\n/// `Result<Vec<ObjectRange>, ErrorHandling>`"
+  },
+  {
+    "uuid": "960d38ed-b53e-452c-979b-b21772555d2a",
+    "fn_name": "function_with_return",
+    "new_comment": "/// A simple function with a return value.\n///\n/// # Parameters\n///\n/// *None*\n///\n/// # Return value\n/// `i32`"
+  },
+  {
+    "uuid": "102654c5-e633-4d86-a6a4-66a205ab74af",
+    "fn_name": "fn_input",
+    "new_comment": "/// Parses function input parameters from a vector of `TokenStream`.\n///\n/// # Parameters\n///\n/// `input_vector_stream`: A vector of `TokenStream` representing function inputs.\n///\n/// # Return value\n/// `Result<Vec<FnInputToken>, ErrorHandling>`"
+  },
+  {
+    "uuid": "b9b2dcc0-0178-4c49-8a5b-205c6b4df62d",
+    "fn_name": "write_to_file",
+    "new_comment": "/// Writes a vector of `SingleFunctionData` to files.\n///\n/// # Parameters\n///\n/// `response`: A vector of `SingleFunctionData`.\n///\n/// # Return value\n/// `Result<(), ErrorHandling>`"
+  },
+  {
+    "uuid": "c018b998-8216-4431-82bf-5d5affa7a4cc",
+    "fn_name": "rust_item_parser",
+    "new_comment": "/// Parses a single Rust item from a source string.\n///\n/// # Parameters\n///\n/// `src`: The source string.\n///\n/// # Return value\n/// `Result<ObjectRange, ErrorHandling>`"
+  },
+  {
+    "uuid": "a362f031-fbea-4dc4-b58f-890259d05c75",
+    "fn_name": "function_add",
+    "new_comment": "/// Adds a `SingleFunctionData` to the internal data structure.\n///\n/// # Parameters\n///\n/// `&mut self`: A mutable reference to the `PreparingRequests` instance.\n/// `request_data`: The `SingleFunctionData` to add.\n///\n/// # Return value\n/// `bool`: `true` if successful, `false` otherwise."
+  },
+  {
+    "uuid": "629b8ce6-2c3c-4385-9093-91ca8bb2ffad",
+    "fn_name": "send_batches",
+    "new_comment": "/// Sends batches of requests to the Google Gemini API.\n///\n/// # Parameters\n///\n/// `request`: A vector of `WaitForTimeout` structs.\n///\n/// # Return value\n/// `Result<Vec<String>, ErrorHandling>`"
+  },
+  {
+    "uuid": "f67e7be4-8b7a-41a8-b120-6f112ef9dbe8",
+    "fn_name": "analyze_return_type",
+    "new_comment": "/// Analyzes the return type of a function and extracts relevant information.\n///\n/// # Parameters\n///\n/// `ty`: A reference to a `Type` struct.\n///\n/// # Return value\n/// `Result<FnOutputToken, ErrorHandling>`"
+  },
+  {
+    "uuid": "244192fd-7f1e-4b1f-9669-0403388ed26b",
+    "fn_name": "test_hotfix",
+    "new_comment": "/// Tests the hotfix function.\n///\n/// # Parameters\n///\n/// *None*\n///\n/// # Return value\n/// `Result<(), ErrorBinding>`"
+  },
+  {
+    "uuid": "14fa09fc-6b6e-4a1d-8288-46031a2af673",
+    "fn_name": "fmt",
+    "new_comment": "/// Formats the value using the given formatter.\n///\n/// # Parameters\n///\n/// `&self`: A reference to the instance.\n/// `f`: The formatter to use.\n///\n/// # Return value\n/// `std::fmt::Result`"
+  },
+  {
+    "uuid": "9266b0dd-1256-4fce-9cf0-8474c6bd4240",
+    "fn_name": "justify_presence",
+    "new_comment": "/// Checks the presence of objects in a file based on type and name.\n///\n/// # Parameters\n///\n/// `exported_from_file`: A vector of `ChangeFromPatch`.\n/// `rust_type`: A vector of strings representing Rust types.\n/// `rust_name`: A vector of strings representing Rust names.\n///\n/// # Return value\n/// `Result<Vec<bool>, ErrorBinding>`"
+  },
+  {
+    "uuid": "c6573451-6e01-4178-8081-bd5db057e70c",
+    "fn_name": "patch_export_change",
+    "new_comment": "/// Exports changes from a patch file.\n///\n/// # Parameters\n///\n/// `path_to_patch`: Path to the patch file.\n/// `relative_path`: Relative path to the source code.\n///\n/// # Return value\n/// `Result<Vec<Difference>, ErrorBinding>`"
+  },
+  {
+    "uuid": "d3e03d65-45d4-40bf-886a-9a2055ffc4e9",
+    "fn_name": "rust_function_parser",
+    "new_comment": "/// Parses a Rust file and extracts function signatures.\n///\n/// # Parameters\n///\n/// `src`: The source code string.\n///\n/// # Return value\n/// `Result<FunctionSignature, ErrorHandling>`"
+  },
+  {
+    "uuid": "caaad35f-de38-4a96-8aa9-3cbe4e771812",
+    "fn_name": "find_module_file",
+    "new_comment": "/// Finds a module file given a base path and module name.\n///\n/// # Parameters\n///\n/// `base_path`: The base path to search from.\n/// `mod_name`: The name of the module file (without the .rs extension).\n///\n/// # Return value\n/// `Result<Option<PathBuf>, ErrorHandling>`"
+  },
+  {
+    "uuid": "49e2ec03-98d9-4948-a720-0a75669220db",
+    "fn_name": "test_read_patch",
+    "new_comment": "/// Tests reading a patch file using git format-patch.\n///\n/// # Parameters\n///\n/// *None*\n///\n/// # Return value\n///\n/// *None*"
+  },
+  {
+    "uuid": "d2a3eb0a-2afe-4cba-ba30-c285fbf56fc5",
+    "fn_name": "parse_rust_file",
+    "new_comment": "/// Parses a Rust file and returns a vector of `ObjectRange`.\n///\n/// # Parameters\n///\n/// `src`: The path to the Rust file.\n///\n/// # Return value\n/// `Result<Vec<ObjectRange>, ErrorHandling>`"
+  },
+  {
+    "uuid": "166e85f2-e90d-4ceb-abd2-5a185e25518c",
+    "fn_name": "required_function",
+    "new_comment": "/// A placeholder function.\n///\n/// # Parameters\n///\n/// *None*\n///\n/// # Return value\n///\n/// *None*"
+  },
+  {
+    "uuid": "a7196277-80bb-487e-97b0-515536c8a7ca",
+    "fn_name": "new",
+    "new_comment": "/// Creates a new `PreparingRequests` instance.\n///\n/// # Return value\n/// `PreparingRequests`"
+  },
+  {
+    "uuid": "c1ce0a19-eed5-486a-9c71-132de669a722",
+    "fn_name": "main",
+    "new_comment": "/// The main function of the application.\n/// Accepts relative path from inside folder\n///\n/// # Parameters\n///\n/// *None*\n///\n/// # Return value\n/// `Result<(), ErrorBinding>`"
+  },
+  {
+    "uuid": "9d9cb3de-120d-4597-9c3e-315a80b476b8",
+    "fn_name": "test_response",
+    "new_comment": "/// Tests parsing a response JSON file.\n///\n/// # Parameters\n///\n/// *None*\n///\n/// # Return value\n/// `Result<(), ErrorHandling>`"
+  },
+  {
+    "uuid": "408c9b61-1483-4c5e-a3e9-7ad5bba7531c",
+    "fn_name": "get_patch_data",
+    "new_comment": "/// Extracts change data from a patch file.\n///\n/// # Parameters\n///\n/// `path_to_patch`: Path to the patch file.\n/// `relative_path`: Relative path to the project.\n///\n/// # Return value\n/// `Result<Vec<ChangeFromPatch>, ErrorBinding>`"
+  },
+  {
+    "uuid": "5ff49dc5-ff04-401d-8cf4-f1c0495923b9",
+    "fn_name": "patch_data_argument",
+    "new_comment": "/// Reads patch data from the given path.\n///\n/// # Parameters\n///\n/// `path_to_patch`: The path to the patch file.\n///\n/// # Return value\n/// `Result<Vec<ChangeFromPatch>, ErrorBinding>`"
+  },
+  {
+    "uuid": "d6d6b345-7e20-4afd-b9d9-ac9fa0fcf3d7",
+    "fn_name": "return_prompt",
+    "new_comment": "/// Returns a static string used as a prompt for the AI agent.\n///\n/// # Parameters\n///\n/// *None*\n///\n/// # Return value\n/// `&'static str`"
+  },
+  {
+    "uuid": "58c55d21-2fd3-43ba-807a-194f90ba383d",
+    "fn_name": "default",
+    "new_comment": "/// Creates a new instance of `Self`.\n///\n/// # Return value\n/// `Self`"
+  },
+  {
+    "uuid": "fa6b6de1-0a77-42df-a84f-96c765194862",
+    "fn_name": "make_export",
+    "new_comment": "/// Creates an export of changes from a set of filenames.\n///\n/// # Parameters\n///\n/// `filenames`: A vector of paths to files.\n///\n/// # Return value\n/// `Result<Vec<ChangeFromPatch>, ErrorHandling>`"
+  },
+  {
+    "uuid": "fa443bb4-42a9-4b63-b35d-e89ef50607e2",
+    "fn_name": "new",
+    "new_comment": "/// Creates a new instance of `GoogleGemini`.\n///\n/// # Return value\n/// `GoogleGemini`"
+  },
+  {
+    "uuid": "e94244bf-85ab-4cc5-ba01-26fb4cf1b25c",
+    "fn_name": "changes_from_patch",
+    "new_comment": "/// Extracts changes from a patch and generates `SingleFunctionData`.\n///\n/// # Parameters\n///\n/// `exported_from_file`: A vector of `ChangeFromPatch`.\n/// `rust_type`: A vector of Rust types to filter by.\n/// `rust_name`: A vector of Rust names to filter by.\n///\n/// # Return value\n/// `Result<Vec<SingleFunctionData>, ErrorBinding>`"
+  },
+  {
+    "uuid": "dcb2aac3-9239-4fe6-b625-ba867e8c5daa",
+    "fn_name": "from",
+    "new_comment": "/// Converts an `ErrorHandling` into an `ErrorBinding`.\n///\n/// # Parameters\n///\n/// `rust`: The `ErrorHandling` to convert.\n///\n/// # Return value\n/// `Self`"
+  },
+  {
+    "uuid": "66497656-6342-4bba-ad95-10e21eb315c5",
+    "fn_name": "rust_ast",
+    "new_comment": "/// Parses a Rust source string into an AST.\n///\n/// # Parameters\n///\n/// `src`: The Rust source code.\n///\n/// # Return value\n/// `Result<File, ErrorHandling>`"
+  },
+  {
+    "uuid": "e7a27642-1532-4b99-93ef-aeae0e73dc5e",
+    "fn_name": "write_to_vecstring",
+    "new_comment": "/// Writes a vector of strings to a file.\n///\n/// # Parameters\n///\n/// `path`: The path to the file.\n/// `source`: The vector of strings to write.\n/// `line_index`: The index to insert the changed element.\n/// `changed_element`: The string to insert.\n///\n/// # Return value\n/// `Result<(), ErrorHandling>`"
+  }
+]
+```

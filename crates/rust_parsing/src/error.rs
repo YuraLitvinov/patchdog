@@ -1,7 +1,8 @@
-use std::path::PathBuf;
-
+use git_parsing::Git2ErrorHandling;
 use snafu::Snafu;
+use std::{env::VarError, path::PathBuf};
 use syn;
+
 #[derive(Debug, Snafu)]
 #[snafu(visibility(pub))]
 pub enum ErrorHandling {
@@ -25,6 +26,12 @@ pub enum ErrorHandling {
     InvalidIoOperations {
         source: std::io::Error,
     },
+    StdVarError {
+        source: VarError,
+    },
+    GeminiRustError {
+        source: gemini_rust::Error,
+    },
     InvalidReadFileOperation {
         source: std::io::Error,
         file_path: PathBuf,
@@ -40,6 +47,51 @@ pub enum ErrorHandling {
         line_number: usize,
         src: String,
     },
-    CouldNotGetName,
+    NotFunction,
     CouldNotGetLine,
+    CouldNotGetObject {
+        err_kind: String,
+    },
+    SerdeError {
+        source: serde_json::error::Error,
+    },
+    UuidError {
+        source: uuid::Error,
+    },
+}
+
+#[derive(Debug)]
+pub enum ErrorBinding {
+    GitParsing(Git2ErrorHandling),
+    RustParsing(ErrorHandling),
+}
+
+impl From<Git2ErrorHandling> for ErrorBinding {
+/// Creates a new `ErrorBinding` from a given `Git2ErrorHandling`.
+///
+/// # Arguments
+///
+/// * `git`: The `Git2ErrorHandling` to convert.
+///
+/// # Returns
+///
+/// A new `ErrorBinding`.
+    fn from(git: Git2ErrorHandling) -> Self {
+        ErrorBinding::GitParsing(git)
+    }
+}
+
+impl From<ErrorHandling> for ErrorBinding {
+/// Creates a new `ErrorBinding` from a given `ErrorHandling`.
+///
+/// # Arguments
+///
+/// * `rust`: The `ErrorHandling` to convert.
+///
+/// # Returns
+///
+/// A new `ErrorBinding`.
+    fn from(rust: ErrorHandling) -> Self {
+        ErrorBinding::RustParsing(rust)
+    }
 }

@@ -7,12 +7,12 @@ members = [
     "crates/chatgpt",
     "crates/rust_parsing",
     "crates/patchdog",
-    "crates/git_parsing"
-, ]
+    "crates/git_parsing",
+    "crates/ai_interactions" 
+]
 
 [workspace.dependencies]
 syn = { version = "2.0.104", features = ["full", "extra-traits"] }
-
 dotenv = "0.15.0"
 env = "1.0.1"
 gemini-rust = "0.4.2"
@@ -26,3 +26,16 @@ gemini = { path = "crates/gemini" }
 chatgpt = { path = "crates/chatgpt" }
 snafu = "0.8.6"
 clap = { version = "4.5.41", features = ["derive", "cargo"] }
+regex = "1.11.1"
+uuid = { version = "1.17.0", features = ["v4"] }
+
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "warn", priority = 1 }
+as_conversions = "warn"
+nursery = { level = "warn", priority = 1 }
+unwrap_used = "deny"
+expect_used = "deny"
+print_stdout = "deny"
+similar_names = { level = "allow", priority = 2 }
