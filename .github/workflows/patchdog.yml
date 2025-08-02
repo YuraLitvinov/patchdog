@@ -15,11 +15,11 @@ jobs:
     - uses: actions/checkout@v4
       with:
         fetch-depth: 1
-    - name: checking out branch
-      run: git checkout HEAD
     - name: move into directory
       run: cd /home/runner/work/patchdog/patchdog
     - name: make patch
       run: git diff HEAD~1 HEAD > patch.patch
+    - name: checking out branch
+      run: git checkout HEAD
     - name: run patchdog
       run: cargo run -- --file-patch patch.patch
