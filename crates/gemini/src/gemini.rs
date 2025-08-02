@@ -355,6 +355,7 @@ impl GoogleGemini {
         dotenv::from_path(".env").unwrap();
         let api_key = var("API_KEY_GEMINI").context(StdVarSnafu)?;
         let model = var("GEMINI_MODEL").context(StdVarSnafu)?;
+        println!("{} {}", &api_key[0..3], model);
         let client = Gemini::with_model(api_key, model)
             .generate_content()
             .with_system_prompt(arguments)
