@@ -16,28 +16,7 @@ use snafu::ResultExt;
     ArgGroup::new("path")
         .args(["file_patch"])
         .required(true)
-)
-//TEST TEST TEST
-        //TEST
-        //TEST
-        //TEST
-//TEST TEST TEST
-        //TEST
-        //TEST
-        //TEST
-//TEST TEST TEST
-        //TEST
-        //TEST
-        //TEST
-//TEST TEST TEST
-        //TEST
-        //TEST
-        //TEST
-//TEST TEST TEST
-        //TEST
-        //TEST
-        //TEST
-)]
+))]
 struct Mode {
     #[arg(long)]
     file_patch: PathBuf,

@@ -128,31 +128,6 @@ mod tests {
             println!("{:?}", each);
         }
     }
-/// Tests writing to a file. This is a test function and should not be relied upon for production use.
-///
-/// # Returns
-///
-/// A `Result` indicating whether the test was successful, or an `ErrorHandling` if any error occurred.
-    #[test]
-    fn test_write() -> Result<(), ErrorHandling> {
-        let file = fs::read_to_string("/home/yurii-sama/patchdog/crates/patchdog/src/cli.rs")
-            .expect("err");
-        let stringvec = FileExtractor::string_to_vector(&file);
-        //write_to_vecstring should replace line 21
-        FileExtractor::write_to_vecstring(
-            "src/cli.rs".into(),
-            stringvec,
-            20,
-            "//TEST TEST TEST
-        //TEST
-        //TEST
-        //TEST"
-                .to_string(),
-        )?;
-        //assert_eq!(true,true);
-        Ok(())
-    }
-
 /// Tests handling of empty objects (This is a test function and should not be relied upon for production use).
 ///
 /// # Returns
