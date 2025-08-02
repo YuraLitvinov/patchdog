@@ -51,9 +51,8 @@ pub async fn cli_patch_to_agent() -> Result<(), ErrorBinding> {
     println!("Request len: {}", &request.len());
     let responses_collected = call(request).await?;
     println!("{:#?}", responses_collected);
-    for each in responses_collected {
-        write_to_file(each.0, each.1)?;
-    }
+    
+    write_to_file(responses_collected)?;
     Ok(())
 }
 
@@ -170,21 +169,27 @@ pub fn fallback_repair(output: Vec<String>) -> Result<Vec<Response>, ErrorHandli
         };
     }
     //Error prevents stack overflow
+    println!("{}", "Prevent stackoverflow");
     Err(ErrorHandling::CouldNotGetLine)
 }
 
-fn write_to_file(response: SingleFunctionData, new_comment: String) -> Result<(), ErrorHandling>{
+fn write_to_file(response: Vec<(SingleFunctionData, String)>) -> Result<(), ErrorHandling>{
+    let mut response = response;
+    response.sort_by(|a, b |
+        b.0.context.line_range.start
+            .cmp(&a.0.context.line_range.start)
+    );
     //Typical representation of file as vector of lines
-    let _file = File::open(&response.context.filepath)
-        .context(InvalidIoOperationsSnafu)?;
-    let mut as_vec = FileExtractor::string_to_vector(&response.context.filepath);
-    as_vec.insert(response.context.line_range.start, new_comment.clone());
+    for each in response {
+        let as_vec = FileExtractor::string_to_vector(&each.0.context.filepath);
+        //as_vec.insert(each.0.context.line_range.start, each.1.clone());
     FileExtractor::write_to_vecstring(
-        Path::new(&response.context.filepath), 
+        Path::new(&each.0.context.filepath), 
         as_vec,
-        response.context.line_range.start, 
-        new_comment
+        each.0.context.line_range.start, 
+        each.1
     )?;
+    }
     Ok(())
 }
 

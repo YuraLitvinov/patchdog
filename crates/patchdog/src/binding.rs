@@ -38,22 +38,20 @@ pub fn changes_from_patch(
             //Calling at index 0 because parsed_file consists of a single object
             //Does a recursive check, whether the item is still a valid Rust code
             let parsed_file = &RustItemParser::rust_item_parser(&item.join("\n"))?;
-            let obj_type_to_compare = &parsed_file.object_type().context(CouldNotGetLineSnafu)?;
-            let obj_name_to_compare = &parsed_file.object_name().context(CouldNotGetLineSnafu)?;
+            let obj_type_to_compare = parsed_file.object_type().unwrap();
+            let obj_name_to_compare = parsed_file.object_name().unwrap();
             if rust_type
                 .iter()
-                .any(|obj_type| obj_type_to_compare == obj_type)
+                .any(|obj_type| &obj_type_to_compare == obj_type)
                 || rust_name
                     .iter()
-                    .any(|obj_name| obj_name_to_compare == obj_name)
+                    .any(|obj_name| &obj_name_to_compare == obj_name)
             {
                 let as_string = item.join("\n");
             
                 singlerequestdata.push(SingleFunctionData {
                     function_text: as_string,
-                    fn_name: parsed_file
-                        .object_name()
-                        .context(CouldNotGetLineSnafu)?,
+                    fn_name: obj_name_to_compare,
                     context: ContextData {
                         class_name: "".to_string(),
                         filepath: format!("{:?}", each.filename),
