@@ -23,3 +23,7 @@ jobs:
       run: git checkout HEAD
     - name: run patchdog
       run: cargo run -- --file-patch patch.patch
+    - name: create pull request
+      run: gh pr create -B base_branch -H branch_to_merge --title 'Merge PR $(date)' --body 'Created by patchdog!'
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
