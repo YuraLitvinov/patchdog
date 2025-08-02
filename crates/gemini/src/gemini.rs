@@ -7,8 +7,6 @@ use rust_parsing::{ErrorHandling, error::GeminiRustSnafu, error::StdVarSnafu};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use snafu::ResultExt;
 use std::ops::Range;
-use std::fs;
-use std::path::Path;
 use std::collections::HashMap;
 use rust_parsing::file_parsing::REGEX;
 use std::{fmt::Display, time, env::var};
@@ -34,6 +32,13 @@ const TOKENS_PER_REQUEST: usize = TOKENS_PER_MIN / REQUESTS_PER_MIN;
 ]
 
 */
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Response {
+    pub uuid: String,
+    pub fn_name: String,
+    pub new_comment: String,
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 pub struct SingleFunctionData {
     pub fn_name: String,
@@ -169,6 +174,11 @@ pub fn json_to<T: DeserializeOwned>(val: serde_json::Value) -> T {
 pub struct WaitForTimeout {
     pub prepared_requests: Vec<MappedRequest>,
 }
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
+pub struct Request {
+    uuid: String,
+    data: SingleFunctionData
+}
 
 #[allow(async_fn_in_trait)]
 impl GoogleGemini {
@@ -185,8 +195,15 @@ impl GoogleGemini {
         let one_minute = time::Duration::from_secs(61);
         for single_request in request {
             for each in &single_request.prepared_requests {
-                let fmt = format!("{:#?}", each.data);
-                let as_json = serde_json::to_string_pretty(&fmt).context(SerdeSnafu)?;
+                let fmt = &each.data;
+                let mut vec = vec![];
+                for (val, each) in fmt {
+                    vec.push(Request {
+                        uuid: val.clone(),
+                        data: each.clone(),
+                    });
+                }
+                let as_json = serde_json::to_string_pretty(&vec).context(SerdeSnafu)?; 
                 match GoogleGemini::req_res(&as_json, return_prompt()).await {
                     //Handling exclusive case, where one of the requests may fail
                     Ok(r) => {
@@ -194,11 +211,11 @@ impl GoogleGemini {
                     },
                     Err(e) => {
                         //error marker
-                        println!("Skipping at {e:#?}\nBut why?");
                         return Err(e); 
                     }
                 }
             }
+
             if request.len() > 1 {
                 tokio::time::sleep(one_minute).await;
             }
@@ -207,7 +224,7 @@ impl GoogleGemini {
         Ok(response)
     }
 
-    pub async fn assess_batch_readiness(
+    pub fn assess_batch_readiness(
         batch: Vec<MappedRequest>,
     ) -> Result<Vec<WaitForTimeout>, ErrorBinding> {
         //Architecture: batch[BIG_NUMBER..len()-1]
@@ -245,11 +262,12 @@ impl GoogleGemini {
     }
 
     pub async fn req_res(file_content: &str, arguments: &str) -> Result<String, ErrorHandling> {
-        dotenv::from_path(".env").ok();
-        println!("{}", var("API_KEY_GEMINI"));
+        dotenv::from_path(".env").unwrap();
+        let api_key = var("API_KEY_GEMINI").context(StdVarSnafu)?;
+        let model = var("GEMINI_MODEL").context(StdVarSnafu)?;
         let client = Gemini::with_model(
-            var("API_KEY_GEMINI").context(StdVarSnafu)?, 
-            var("GEMINI_MODEL").context(StdVarSnafu)?,
+            api_key, 
+            model,
         )
             .generate_content()
             .with_system_prompt(arguments)
@@ -257,6 +275,7 @@ impl GoogleGemini {
             .execute()
             .await
             .context(GeminiRustSnafu)?;
+
         Ok(client.text())
     }
 
@@ -360,5 +379,3 @@ pub fn collect_response(output: &str) -> Result<Vec<SingleFunctionData>, ErrorHa
 
 
 }
-
-

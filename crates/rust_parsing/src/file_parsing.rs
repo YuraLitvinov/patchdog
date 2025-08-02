@@ -5,17 +5,16 @@ use crate::error::{
 use crate::object_range::ObjectRange;
 use snafu::{OptionExt, ResultExt, ensure};
 use std::{fs::File, io::Write, path::Path};
-pub const REGEX: &str = r#"(?x)                      
-        \{\s*
-            "function_text"\s*:\s*"(?:[^"\\]|\\.)*"\s*,\s*
-            "context"\s*:\s*"(?:[^"\\]|\\.)*"\s*,\s*
-            "comment"\s*:\s*"(?:[^"\\]|\\.)*"\s*,\s*
-            "filepath"\s*:\s*"(?:[^"\\]|\\.)*"\s*,\s*
-            "line_range"\s*:\s*\{\s*
-                "start"\s*:\s*[0-9]+\s*,\s*   
-                "end"\s*:\s*[0-9]+\s*        
-            \}\s*
-        \}"#;
+//Advanced matching. This inefficient method is chosen due to error: look-around, including look-ahead and look-behind, is not supported
+/* 
+pub const REGEX: &str = r#"\{\s*("uuid"\s*:\s*"[^"]*"\s*,\s*"fn_name"\s*:\s*"[^"]*"\s*,\s*"new_comment"\s*:\s*"[^"]*"
+|\s*"uuid"\s*:\s*"[^"]*"\s*,\s*"new_comment"\s*:\s*"[^"]*"\s*,\s*"fn_name"\s*:\s*"[^"]*"
+|\s*"fn_name"\s*:\s*"[^"]*"\s*,\s*"uuid"\s*:\s*"[^"]*"\s*,\s*"new_comment"\s*:\s*"[^"]*"
+|\s*"fn_name"\s*:\s*"[^"]*"\s*,\s*"new_comment"\s*:\s*"[^"]*"\s*,\s*"uuid"\s*:\s*"[^"]*"
+|\s*"new_comment"\s*:\s*"[^"]*"\s*,\s*"uuid"\s*:\s*"[^"]*"\s*,\s*"fn_name"\s*:\s*"[^"]*"
+|\s*"new_comment"\s*:\s*"[^"]*"\s*,\s*"fn_name"\s*:\s*"[^"]*"\s*,\s*"uuid"\s*:\s*"[^"]*")\s*\}"#;
+*/
+pub const REGEX: &str = r#"\{\s*"uuid"\s*:\s*"[^"]*"\s*,\s*"fn_name"\s*:\s*"[^"]*"\s*,\s*"new_comment"\s*:\s*"[^"]*"\s*\}"#;
 pub struct FileExtractor;
 pub trait Files {
     fn check_for_valid_object(

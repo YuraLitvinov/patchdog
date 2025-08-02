@@ -1,5 +1,5 @@
 mod tests {
-    use gemini::gemini::{collect_response, hotfix, PreparingRequests, SingleFunctionData};
+    use gemini::gemini::{collect_response, hotfix, PreparingRequests, SingleFunctionData, Response};
     use rust_parsing::ErrorHandling;
     use rust_parsing::error::{ErrorBinding, InvalidIoOperationsSnafu, SerdeSnafu};
     use rust_parsing::file_parsing::{FileExtractor, Files, REGEX};
@@ -11,7 +11,6 @@ mod tests {
     use std::{fs, path::Path};
     use tempfile::NamedTempFile;
     use regex::Regex;
-
     use crate::binding;
     const PATH_BASE: &str = "../../tests/data.rs";
     const COMPARE_LINES: &str = "fn function_with_return() -> i32 {\n";
@@ -246,5 +245,46 @@ mod tests {
         println!("{}", assess_size.len());
         assert_eq!(i, assess_size.len());
         assert_eq!(true,false);
+    }
+
+    #[test]
+    fn test_response() -> Result<(), ErrorHandling> {
+        let re = Regex::new(REGEX).unwrap();
+        let test = fs::read_to_string(Path::new("../../tests/res.json")).unwrap();
+        let mut assess_size = vec![];
+        for cap in re.captures_iter(&test) {
+            let a = cap
+                .get(0)
+                .unwrap()
+                .as_str();
+            let to_struct = serde_json::from_str::<Response>(a).unwrap();
+            assess_size.push(to_struct);
+        }
+        match serde_json::from_str::<Vec<Response>>(&test) {
+            Ok(ok) => {
+                println!("{} = {}", ok.len(), assess_size.len());
+            },
+            Err(_) => {
+                let as_vec = FileExtractor::string_to_vector(&test);
+                let a = &as_vec[1..as_vec.len()-1].join("\n");
+                let to_struct= serde_json::from_str::<Vec<Response>>(a).unwrap();
+                println!("{:#?}", to_struct);
+                println!("{} = {}", assess_size.len(), to_struct.len());
+                assert_eq!(assess_size.len(), to_struct.len());
+            },
+        }
+        Ok(())
+    }
+
+    #[test] 
+    fn test_compare() -> Result<(), ErrorHandling> {
+        //Attempting to assess and preserve difference between request and response
+        let request = fs::read_to_string(Path::new("../../tests/request.json")).unwrap();
+        let response = fs::read_to_string(Path::new("../../tests/res.json")).unwrap();
+        let request = serde_json::from_str::<PreparingRequests>(&request)
+            .context(SerdeSnafu)?.data;
+        let response = collect_response(&response)?;
+        assert_eq!(request.len(), response.len());
+        Ok(())
     }
 }

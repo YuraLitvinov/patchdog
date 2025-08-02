@@ -1,19 +1,19 @@
 use clap::ArgGroup;
 use rust_parsing::error::ErrorBinding;
-use rust_parsing::rust_parser::{RustItemParser, RustParser};
 //Unlike Path, PathBuf size is known at compile time and doesn't require lifetime specifier
 use crate::binding::{self, changes_from_patch};
 use ai_interactions::parse_json::make_export;
 #[allow(unused)]
 use clap::{Arg, ArgAction, Parser};
-use gemini::gemini::{PreparingRequests, SingleFunctionData, GoogleGemini};
+use gemini::gemini::{GoogleGemini, Response, SingleFunctionData, WaitForTimeout};
 use std::path::{Path, PathBuf};
 use std::fs::{File, self};
 use rust_parsing::error::ErrorHandling;
 use snafu::ResultExt;
 use rust_parsing::error::InvalidIoOperationsSnafu;
 use rust_parsing::file_parsing::{FileExtractor, Files};
-use gemini::gemini::collect_response;
+use rust_parsing::file_parsing::REGEX;
+use regex::Regex;
 const EMPTY_VALUE: &str = " ";
 const _PATH_BASE: &str = "/home/yurii-sama/patchdog/tests/data.rs";
 #[derive(Parser, Debug)]
@@ -44,79 +44,98 @@ pub async fn cli_search_mode() -> Result<(), ErrorBinding> {
     Ok(())
 }
 pub async fn cli_patch_to_agent() -> Result<(), ErrorBinding> {
-    //Error cases handled in this vector
-    //let mut responses_collected = Vec::new();
     let commands = Mode::parse();
     let patch = binding::patch_data_argument(commands.file_patch)?;
     println!("type: {:?}", commands.type_rust);
     let request = changes_from_patch(patch, commands.type_rust, commands.name_rust)?;
-    println!("{}", request.len());     
-    let mut new_buffer = GoogleGemini::new();
-    let batch = new_buffer.prepare_map(request)?;
-    let prepared = GoogleGemini::assess_batch_readiness(batch).await?; 
-    let response = GoogleGemini::send_batches(&prepared).await?;
-    //Attempt to fix broken gemini output
-    for each in response {
-        //Assessing the type of return. Whether the return contains backticks, or is a valid PreparingRequests
-        //Ok root follows the 'happy path' and checks whether the output matches input 
-        //Err variant considers broken JSON structure
-        /* 
-        match serde_json::from_str::<PreparingRequests>(&each) {
-            Ok(ok) => {
-                responses_collected = ok_path(ok, &each)?;
-            },
-            Err(_) => {
-                responses_collected = err_path(&each)?;
-            }
-        }
-        */
-        println!("{}", each);
+    println!("Request len: {}", &request.len());
+    let responses_collected = call(request).await?;
+    println!("{:#?}", responses_collected);
+    for each in responses_collected {
+        write_to_file(each.0, each.1)?;
     }
     Ok(())
 }
 
-fn err_path(source : &str) -> Result<Vec<SingleFunctionData>, ErrorHandling>{
-    let collected = collect_response(source)?;
-    Ok(collected)
-}
-
-fn ok_path (prepared: PreparingRequests, single_response: &str) -> Result<Vec<SingleFunctionData>, ErrorHandling>{ 
+async fn call (request: Vec<SingleFunctionData>) -> Result<Vec<(SingleFunctionData, String)>, ErrorBinding> {
     let mut responses_collected = Vec::new();
-    for data in prepared.data {
-        //Attempt to parse a function - assessing whether it's still valid
-        let parsed_result = RustItemParser::rust_function_parser(&data.function_text);
-        if parsed_result.is_err() {
-            //responses_collected.push(each.function_text);
-            responses_collected = err_path(single_response)?;
-
-        }
-        else {                   
-            //Now, we attempt to locate this function at given path
-            let file = fs::read_to_string(&data.context.filepath)
-                .context(InvalidIoOperationsSnafu)?;
-            //let parsed = RustItemParser::parse_all_rust_items(&file);
-            let file_as_vector = FileExtractor::string_to_vector(&file);
-            let parsed_original = RustItemParser::rust_function_parser(
-                &file_as_vector[data.context.line_range.clone()].join("\n")
-            );
-            if parsed_original.is_err() {
-                //Not good!
-               responses_collected = err_path(&single_response)?;
-
+    let mut collect_error = vec![];
+    let mut new_buffer = GoogleGemini::new();
+    let batch = new_buffer.prepare_map(request)?;
+    let prepared = GoogleGemini::assess_batch_readiness(batch)?; 
+    let response = GoogleGemini::send_batches(&prepared).await?;
+    for each in response {
+        let matches = match_response(&each, &prepared)?;        
+        for matched in matches {
+            if matched.0 {
+                responses_collected.push((matched.1, matched.2));
             }
             else {
-                if parsed_original? == parsed_result? {
-                    //Good! 
-                    continue;  
+                collect_error.push(matched.1);
+            }
+        }
+    }
+    if !collect_error.is_empty() {
+        println!("Found error");
+        let collect_error = Box::pin(call(collect_error)).await?;
+        responses_collected.extend(collect_error);
+    }
+    Ok(responses_collected)
+}
+pub fn match_response(response: &str, prepared: &Vec<WaitForTimeout>) -> Result<Vec<(bool, SingleFunctionData, String)>, ErrorHandling> {
+    let re = Regex::new(REGEX).unwrap();
+    let mut response_from_regex = vec![];
+    for cap in re.captures_iter(&response) {
+        let a = cap
+            .get(0)
+            .unwrap()
+            .as_str();
+        let to_struct = serde_json::from_str::<Response>(a);
+        match to_struct {
+            Ok(ok) => {
+                response_from_regex.push(ok);
+            },
+            Err(e) => {
+                println!("{}", e);
+                continue;
+            }
+        }
+    }
+    match serde_json::from_str::<Vec<Response>>(&response) {
+        Ok(ok) => {
+            if response_from_regex.len() == ok.len() {
+                for each in ok {
+                    let res = match_request_response(prepared, &each)?;
+                    return Ok(res);
                 }
-                else {
-                   responses_collected = err_path(&single_response)?;
-
+            }
+        },
+        Err(_) => {
+            let as_vec = FileExtractor::string_to_vector(&response);
+            let a = &as_vec[1..as_vec.len() - 1];
+            let to_struct = fallback_repair(a.to_vec())?;
+            if response_from_regex.len() == to_struct.len() {
+                for each in &response_from_regex {
+                    let res = match_request_response(prepared, &each)?;
+                    return Ok(res);
                 }
             }
         }
     }
-    Ok(responses_collected)
+    Err(ErrorHandling::CouldNotGetLine)
+}
+//Here we should form a structure, that would consist of request metadata and new comment
+pub fn match_request_response(prepared: &Vec<WaitForTimeout>, uuid: &Response) -> Result<Vec<(bool, SingleFunctionData, String)>, ErrorHandling> {
+    let mut matched: Vec<(bool, SingleFunctionData, String)> = Vec::new();
+    for each in prepared {
+        for request in &each.prepared_requests {
+            let contains = request.data.contains_key(&uuid.uuid);
+            for (_, val) in &request.data {
+                matched.push((contains, val.clone(), uuid.new_comment.clone()));
+            }
+        }
+    }
+    Ok(matched)
 }
 
 fn find_rust_files(dir: &Path, rust_files: &mut Vec<PathBuf>) {
@@ -134,15 +153,38 @@ fn find_rust_files(dir: &Path, rust_files: &mut Vec<PathBuf>) {
     }
 }
 
-pub fn write_to_file(response: Vec<SingleFunctionData>) -> Result<(), ErrorHandling>{
-    let mut response = response;
-    response.sort_by(|a, b |b.context.line_range.start.cmp(&a.context.line_range.start));
-    //Typical representation of file as vector of lines
-    for each in response {
-        let _file = File::open(&each.context.filepath)
-            .context(InvalidIoOperationsSnafu)?;
-        let mut as_vec = FileExtractor::string_to_vector(&each.context.filepath);
-        as_vec.insert(each.context.line_range.start, each.context.old_comment.join("\n"));
+pub fn fallback_repair(output: Vec<String>) -> Result<Vec<Response>, ErrorHandling> {
+    let mut clone_out = output;
+    for _ in 0..clone_out.len() {
+        clone_out.pop();
+        let mut clone_clone = clone_out.clone();
+        //Fixing broken delimiters in returned JSON here
+        clone_clone.push("}]".to_string());
+        let _ = match serde_json::from_str::<Vec<Response>>(&clone_clone.join("\n")) {
+            Ok(res) =>  {
+                return Ok(res);
+            },
+            Err(_) => {
+                continue;
+            }
+        };
     }
+    //Error prevents stack overflow
+    Err(ErrorHandling::CouldNotGetLine)
+}
+
+fn write_to_file(response: SingleFunctionData, new_comment: String) -> Result<(), ErrorHandling>{
+    //Typical representation of file as vector of lines
+    let _file = File::open(&response.context.filepath)
+        .context(InvalidIoOperationsSnafu)?;
+    let mut as_vec = FileExtractor::string_to_vector(&response.context.filepath);
+    as_vec.insert(response.context.line_range.start, new_comment.clone());
+    FileExtractor::write_to_vecstring(
+        Path::new(&response.context.filepath), 
+        as_vec,
+        response.context.line_range.start, 
+        new_comment
+    )?;
     Ok(())
 }
+
