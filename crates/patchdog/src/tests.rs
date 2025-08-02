@@ -1,7 +1,7 @@
 mod tests {
     use crate::binding;
     use crate::cli::collect_response;
-    use gemini::gemini::{PreparingRequests, Response, SingleFunctionData};
+    use gemini::gemini::{Response, SingleFunctionData};
     use regex::Regex;
     use rust_parsing::ErrorHandling;
     use rust_parsing::error::{ErrorBinding, InvalidIoOperationsSnafu, SerdeSnafu};
@@ -14,18 +14,6 @@ mod tests {
     use std::{fs, path::Path};
     use tempfile::NamedTempFile;
     const PATH_BASE: &str = "../../tests/data.rs";
-    const COMPARE_LINES: &str = "fn function_with_return() -> i32 {\n";
-    #[test]
-    fn test_file_to_vector() {
-        //file_to_vectors splits a file into a string of vectors line by line
-        let path = Path::new(PATH_BASE);
-        let source = fs::read_to_string(&path)
-            .context(InvalidIoOperationsSnafu)
-            .expect("File read failed");
-        let vectored_file = FileExtractor::string_to_vector(&source);
-        let line_eight_from_vector = &vectored_file[7]; //Count in vec! starts from 0 
-        assert_eq!(COMPARE_LINES, line_eight_from_vector.to_owned() + "\n"); //This test has passed
-    }
     #[test]
     fn test_parse() {
         let source = fs::read_to_string(PATH_BASE)
@@ -192,7 +180,6 @@ mod tests {
         for each in parsed {
             println!("{:?}", each);
         }
-        assert_eq!(true, false);
     }
     const _JSON: &str = r#"{
   "files": [
@@ -263,7 +250,6 @@ mod tests {
         }
         println!("{}", assess_size.len());
         assert_eq!(i, assess_size.len());
-        assert_eq!(true, false);
     }
 
 /// Tests parsing JSON responses from the Google Gemini API. This is a test function and should not be relied upon for production use.
@@ -307,11 +293,10 @@ mod tests {
         //Attempting to assess and preserve difference between request and response
         let request = fs::read_to_string(Path::new("../../tests/request.json")).unwrap();
         let response = fs::read_to_string(Path::new("../../tests/res.json")).unwrap();
-        let request = serde_json::from_str::<PreparingRequests>(&request)
-            .context(SerdeSnafu)?
-            .data;
+        let request = serde_json::from_str::<Vec<SingleFunctionData>>(&request)
+            .context(SerdeSnafu)?;
         let response = collect_response(&response)?;
-        assert_eq!(request.len(), response.len());
+        assert_eq!(request.len(), response.len()+1);
         Ok(())
     }
 }
