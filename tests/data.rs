@@ -5,9 +5,11 @@ fn regular_function() {}
 pub fn public_function() {}
 
 // Function with return type
+/// A simple function with a return type of i32.  Likely a placeholder.
 fn function_with_return() -> i32 {
     0
 }
+/// An empty function, likely a placeholder or stub.
 fn required_function() {
 }
 

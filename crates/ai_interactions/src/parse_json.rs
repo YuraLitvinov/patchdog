@@ -16,6 +16,15 @@ pub struct ChangeFromPatch {
 
 //Makes an export structure from patch
 //It takes list of files and processes them into objects containing git changes that could be worked with
+/// Processes a list of filenames, parses each Rust file, and generates a vector of `ChangeFromPatch` structs.
+///
+/// # Arguments
+///
+/// * `filenames`: A vector of `PathBuf`s representing the filenames to process.
+///
+/// # Returns
+///
+/// A `Result` containing a vector of `ChangeFromPatch` structs, or an `ErrorHandling` if any error occurred during file parsing or IO operations.
 pub fn make_export(filenames: &Vec<PathBuf>) -> Result<Vec<ChangeFromPatch>, ErrorHandling> {
     let mut output_vec: Vec<ChangeFromPatch> = Vec::new();
     let mut vector_of_changed: Vec<Range<usize>> = Vec::new();
@@ -49,6 +58,17 @@ pub fn make_export(filenames: &Vec<PathBuf>) -> Result<Vec<ChangeFromPatch>, Err
     Ok(output_vec)
 }
 
+/// Checks if code objects of specified types and names are present in a given set of files.
+///
+/// # Arguments
+///
+/// * `exported_from_file`: A vector of `ChangeFromPatch` structs.
+/// * `rust_type`: A vector of strings representing the desired types.
+/// * `rust_name`: A vector of strings representing the desired names.
+///
+/// # Returns
+///
+/// A `Result` containing a vector of booleans indicating presence, or an `ErrorBinding` if any error occurred.
 pub fn justify_presence(
     exported_from_file: Vec<ChangeFromPatch>,
     rust_type: Vec<String>,

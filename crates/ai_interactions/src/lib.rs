@@ -1,5 +1,6 @@
 pub mod parse_json;
 
+/// Returns a static string containing a prompt for the Google Gemini API.
 pub fn return_prompt() -> &'static str {
     r#"response_format = {"type": "json_object"} The provided data is a collection of valid Rust code.
     [

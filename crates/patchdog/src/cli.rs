@@ -33,6 +33,11 @@ struct Form {
     new_comment: String
 }
 
+/// Processes command-line arguments, extracts code changes, sends them to an AI agent, receives the responses, and writes them to a file.
+///
+/// # Returns
+///
+/// A `Result` indicating whether the process was successful, or an `ErrorBinding` if any error occurred.
 pub async fn cli_patch_to_agent() -> Result<(), ErrorBinding> {
     let commands = Mode::parse();
     let patch = binding::patch_data_argument(commands.file_patch)?;
@@ -45,6 +50,15 @@ pub async fn cli_patch_to_agent() -> Result<(), ErrorBinding> {
     Ok(())
 }
 
+/// Collects responses from a string using a regular expression.
+///
+/// # Arguments
+///
+/// * `response`: The response string.
+///
+/// # Returns
+///
+/// A `Result` containing a vector of `Response` structs, or an `ErrorHandling` if any error occurred.
 pub fn collect_response(response: &str) -> Result<Vec<Response>, ErrorHandling> {
     let re = Regex::new(REGEX).unwrap();
     let mut response_from_regex = vec![];
@@ -63,6 +77,15 @@ pub fn collect_response(response: &str) -> Result<Vec<Response>, ErrorHandling> 
     }
     Ok(response_from_regex)
 }
+/// Sends a batch of requests to the Google Gemini API and collects the responses.
+///
+/// # Arguments
+///
+/// * `request`: A vector of `SingleFunctionData` structs representing the requests to send.
+///
+/// # Returns
+///
+/// A `Result` containing a vector of `Form` structs representing the successful responses, or an `ErrorBinding` if any error occurred.
 async fn call(
     request: Vec<SingleFunctionData>,
 ) -> Result<Vec<Form>, ErrorBinding> {
@@ -90,6 +113,16 @@ async fn call(
     }
     Ok(responses_collected)
 }
+/// Matches a response string with prepared requests and returns a vector of `Form` structs.
+///
+/// # Arguments
+///
+/// * `response`: The response string.
+/// * `prepared`: A vector of `WaitForTimeout` structs representing prepared requests.
+///
+/// # Returns
+///
+/// A `Result` containing a vector of `Form` structs, or an `ErrorHandling` if any error occurred.
 fn match_response(
     response: &str,
     prepared: &Vec<WaitForTimeout>,
@@ -118,6 +151,16 @@ fn match_response(
 }
 
 //Here we should form a structure, that would consist of request metadata and new comment
+/// Matches requests and responses based on UUIDs.
+///
+/// # Arguments
+///
+/// * `prepared`: A vector of `WaitForTimeout` structs representing prepared requests.
+/// * `uuid`: A vector of `Response` structs representing responses.
+///
+/// # Returns
+///
+/// A `Result` containing a vector of `Form` structs, or an `ErrorHandling` if any error occurred.
 fn match_request_response(
     prepared: &Vec<WaitForTimeout>,
     uuid: &Vec<Response>,

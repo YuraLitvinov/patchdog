@@ -24,6 +24,17 @@ pub struct Difference {
     pub line: Vec<usize>,
 }
 
+/// Extracts relevant code changes from a list of `ChangeFromPatch` structs, filtering by type and name.
+///
+/// # Arguments
+///
+/// * `exported_from_file`: A vector of `ChangeFromPatch` structs.
+/// * `rust_type`: A vector of strings representing the desired types.
+/// * `rust_name`: A vector of strings representing the desired names.
+///
+/// # Returns
+///
+/// A `Result` containing a vector of `SingleFunctionData` structs, or an `ErrorBinding` if any error occurred.
 pub fn changes_from_patch(
     exported_from_file: Vec<ChangeFromPatch>,
     rust_type: Vec<String>,
@@ -67,6 +78,15 @@ pub fn changes_from_patch(
     Ok(singlerequestdata)
 }
 
+/// Reads patch data from a file and returns a vector of `ChangeFromPatch` structs.
+///
+/// # Arguments
+///
+/// * `path_to_patch`: The path to the patch file.
+///
+/// # Returns
+///
+/// A `Result` containing a vector of `ChangeFromPatch` structs, or an `ErrorBinding` if any error occurred.
 pub fn patch_data_argument(path_to_patch: PathBuf) -> Result<Vec<ChangeFromPatch>, ErrorBinding> {
     let path = env::current_dir().context(InvalidReadFileOperationSnafu {
         file_path: &path_to_patch,
@@ -82,6 +102,16 @@ Pushes information from a patch into vector that contains lines
 at where there are unique changed objects reprensented with range<usize>
 and an according path each those ranges that has to be iterated only once
 */
+/// Extracts data from a patch file, creating a vector of `ChangeFromPatch` structs.
+///
+/// # Arguments
+///
+/// * `path_to_patch`: The path to the patch file.
+/// * `relative_path`: The relative path.
+///
+/// # Returns
+///
+/// A `Result` containing a vector of `ChangeFromPatch` structs, or an `ErrorBinding` if any error occurred.
 pub fn get_patch_data(
     path_to_patch: PathBuf,
     relative_path: PathBuf,
@@ -107,6 +137,16 @@ pub fn get_patch_data(
     Ok(export_difference)
 }
 
+/// Stores objects from a patch file into a vector of `FullDiffInfo` structs.
+///
+/// # Arguments
+///
+/// * `relative_path`: The relative path to the file.
+/// * `patch_src`: A slice of bytes representing the patch source.
+///
+/// # Returns
+///
+/// A `Result` containing a vector of `FullDiffInfo` structs, or an `ErrorBinding` if any error occurred.
 fn store_objects(
     relative_path: &Path,
     patch_src: &[u8],
@@ -131,6 +171,16 @@ fn store_objects(
 
     Ok(vec_of_surplus)
 }
+/// Extracts changes from a patch file and returns a vector of `Difference` structs.
+///
+/// # Arguments
+///
+/// * `path_to_patch`: The path to the patch file.
+/// * `relative_path`: The relative path.
+///
+/// # Returns
+///
+/// A `Result` containing a vector of `Difference` structs, or an `ErrorBinding` if any error occurred.
 fn patch_export_change(
     path_to_patch: PathBuf,
     relative_path: PathBuf,

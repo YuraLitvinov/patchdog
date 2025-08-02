@@ -54,6 +54,11 @@ pub struct ContextData {
     pub line_range: Range<usize>,
 }
 impl ContextData {
+/// Calculates the size of a `ContextData` struct.
+///
+/// # Returns
+///
+/// The size of the struct.
     pub fn size(&self) -> usize {
         let mut size_ext = 0;
         for each in &self.external_dependecies {
@@ -67,6 +72,11 @@ impl ContextData {
 }
 
 impl SingleFunctionData {
+/// Calculates the approximate size of a `SingleFunctionData` struct in tokens.
+///
+/// # Returns
+///
+/// The approximate size in tokens.
     pub fn size(&self) -> usize {
         (self.fn_name.len() + self.context.size() + self.function_text.len()) / 3 //One token is approx. 3 symbols
     }
@@ -79,12 +89,26 @@ pub struct MappedRequest {
 }
 
 impl MappedRequest {
+/// Creates a new `MappedRequest` struct with the remaining capacity set to `TOKENS_PER_REQUEST` and an empty HashMap.
+///
+/// # Returns
+///
+/// A new `MappedRequest` struct.
     pub fn new() -> MappedRequest {
         MappedRequest {
             remaining_capacity: TOKENS_PER_REQUEST,
             data: HashMap::new(),
         }
     }
+/// Adds a `SingleFunctionData` struct to the internal data HashMap, generating a new UUID for each entry.
+///
+/// # Arguments
+///
+/// * `request_data`: The `SingleFunctionData` struct to add.
+///
+/// # Returns
+///
+/// `true` if the data was added successfully, `false` otherwise.
     pub fn function_add(&mut self, request_data: SingleFunctionData) -> bool {
         let size = request_data.size();
         if size <= self.remaining_capacity {
@@ -99,12 +123,26 @@ impl MappedRequest {
 }
 
 impl Default for MappedRequest {
+/// Creates a default instance of the struct.
+///
+/// # Returns
+///
+/// A new instance of the struct.
     fn default() -> Self {
         Self::new()
     }
 }
 
 impl Display for MappedRequest {
+/// Formats the value using the given formatter.
+///
+/// # Arguments
+///
+/// * `f`: The formatter to use.
+///
+/// # Returns
+///
+/// A `Result` indicating whether formatting was successful.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "{self:#?}")
     }
@@ -117,12 +155,26 @@ pub struct PreparingRequests {
 }
 
 impl PreparingRequests {
+/// Creates a new `PreparingRequests` struct with the remaining capacity set to `TOKENS_PER_REQUEST` minus the length of the return prompt and an empty data vector.
+///
+/// # Returns
+///
+/// A new `PreparingRequests` struct.
     pub fn new() -> PreparingRequests {
         PreparingRequests {
             remaining_capacity: TOKENS_PER_REQUEST - return_prompt().len(),
             data: vec![],
         }
     }
+/// Adds a `SingleFunctionData` struct to the internal data vector if there is enough remaining capacity.
+///
+/// # Arguments
+///
+/// * `request_data`: The `SingleFunctionData` struct to add.
+///
+/// # Returns
+///
+/// `true` if the data was added successfully, `false` otherwise.
     pub fn function_add(&mut self, request_data: SingleFunctionData) -> bool {
         let size = request_data.size();
         if size <= self.remaining_capacity {
@@ -136,12 +188,26 @@ impl PreparingRequests {
 }
 
 impl Default for PreparingRequests {
+/// Creates a default instance of the struct.
+///
+/// # Returns
+///
+/// A new instance of the struct.
     fn default() -> Self {
         Self::new()
     }
 }
 
 impl Display for PreparingRequests {
+/// Formats the value using the given formatter.
+///
+/// # Arguments
+///
+/// * `f`: The formatter to use.
+///
+/// # Returns
+///
+/// A `Result` indicating whether formatting was successful.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "{self:#?}")
     }
@@ -158,10 +224,24 @@ pub struct GoogleGemini {
 } //Req Res = Request Response
 
 impl Default for GoogleGemini {
+/// Creates a default instance of the struct.
+///
+/// # Returns
+///
+/// A new instance of the struct.
     fn default() -> Self {
         Self::new()
     }
 }
+/// Converts a `serde_json::Value` to a specified type.
+///
+/// # Arguments
+///
+/// * `val`: The `serde_json::Value` to convert.
+///
+/// # Returns
+///
+/// The converted value.
 pub fn json_to<T: DeserializeOwned>(val: serde_json::Value) -> T {
     serde_json::from_value(val).unwrap()
 }
@@ -179,6 +259,11 @@ pub struct Request {
 
 #[allow(async_fn_in_trait)]
 impl GoogleGemini {
+/// Creates a new `GoogleGemini` struct with the remaining capacity set to `TOKENS_PER_MIN / REQUESTS_PER_MIN` and an empty data vector.
+///
+/// # Returns
+///
+/// A new `GoogleGemini` struct.
     pub fn new() -> GoogleGemini {
         GoogleGemini {
             preparing_requests: PreparingRequests {
@@ -187,6 +272,15 @@ impl GoogleGemini {
             },
         }
     }
+/// Sends batches of requests to the Google Gemini API.
+///
+/// # Arguments
+///
+/// * `request`: A vector of `WaitForTimeout` structs representing the requests to send.
+///
+/// # Returns
+///
+/// A `Result` containing a vector of strings representing the responses, or an `ErrorHandling` if any error occurred.
     pub async fn send_batches(request: &Vec<WaitForTimeout>) -> Result<Vec<String>, ErrorHandling> {
         let mut response = vec![];
         let one_minute = time::Duration::from_secs(61);

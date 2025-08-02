@@ -67,12 +67,30 @@ pub enum ErrorBinding {
 }
 
 impl From<Git2ErrorHandling> for ErrorBinding {
+/// Creates a new `ErrorBinding` from a given `Git2ErrorHandling`.
+///
+/// # Arguments
+///
+/// * `git`: The `Git2ErrorHandling` to convert.
+///
+/// # Returns
+///
+/// A new `ErrorBinding`.
     fn from(git: Git2ErrorHandling) -> Self {
         ErrorBinding::GitParsing(git)
     }
 }
 
 impl From<ErrorHandling> for ErrorBinding {
+/// Creates a new `ErrorBinding` from a given `ErrorHandling`.
+///
+/// # Arguments
+///
+/// * `rust`: The `ErrorHandling` to convert.
+///
+/// # Returns
+///
+/// A new `ErrorBinding`.
     fn from(rust: ErrorHandling) -> Self {
         ErrorBinding::RustParsing(rust)
     }

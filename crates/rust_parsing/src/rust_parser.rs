@@ -62,12 +62,30 @@ pub trait RustParser {
 pub struct RustItemParser;
 
 impl RustParser for RustItemParser {
+/// Parses a Rust file and extracts its items.
+///
+/// # Arguments
+///
+/// * `src`: The path to the Rust file.
+///
+/// # Returns
+///
+/// A `Result` containing a vector of `ObjectRange` structs, or an `ErrorHandling` if any error occurred.
     fn parse_rust_file(src: &Path) -> Result<Vec<ObjectRange>, ErrorHandling> {
         let file = fs::read_to_string(src).context(InvalidIoOperationsSnafu)?;
         let ast: File = parse_str(&file).context(InvalidItemParsingSnafu { str_source: src })?;
         visit_items(&ast.items)
     }
 
+/// Parses all Rust items from a given source string.
+///
+/// # Arguments
+///
+/// * `src`: The source string to parse.
+///
+/// # Returns
+///
+/// A `Result` containing a vector of `ObjectRange` structs, or an `ErrorHandling` if any error occurred.
     fn parse_all_rust_items(src: &str) -> Result<Vec<ObjectRange>, ErrorHandling> {
         let src_format_error = format!("{:#?}", &src);
         let ast: File = parse_str(src).context(InvalidItemParsingSnafu {
@@ -94,6 +112,15 @@ impl RustParser for RustItemParser {
         Ok(visited)
     }
 
+/// Parses a Rust source code string and extracts function signature information.
+///
+/// # Arguments
+///
+/// * `src`: The Rust source code string to parse.
+///
+/// # Returns
+///
+/// A `Result` containing a `FunctionSignature` struct, or an `ErrorHandling` if any error occurred.
     fn rust_function_parser(src: &str) -> Result<FunctionSignature, ErrorHandling> {
         let ast: File = parse_str(src).context(InvalidItemParsingSnafu {
             str_source: &src.to_string(),
@@ -101,6 +128,15 @@ impl RustParser for RustItemParser {
         function_parse(&ast.items)
     }
 
+/// Parses a Rust source code string and extracts the first item's information.
+///
+/// # Arguments
+///
+/// * `src`: The Rust source code string to parse.
+///
+/// # Returns
+///
+/// A `Result` containing an `ObjectRange` struct representing the first item, or an `ErrorHandling` if any error occurred.
     fn rust_item_parser(src: &str) -> Result<ObjectRange, ErrorHandling> {
         let src_format_error = format!("{:#?}", &src);
         let ast: File = parse_str(src).context(InvalidItemParsingSnafu {
@@ -122,6 +158,15 @@ impl RustParser for RustItemParser {
         })
     }
 
+/// Parses a Rust source code string into an abstract syntax tree (AST).
+///
+/// # Arguments
+///
+/// * `src`: The Rust source code string to parse.
+///
+/// # Returns
+///
+/// A `Result` containing the parsed `File` AST, or an `ErrorHandling` if any error occurred.
     fn rust_ast(src: &str) -> Result<File, ErrorHandling> {
         let ast: File = parse_str(src).context(InvalidItemParsingSnafu {
             str_source: &src.to_string(),
@@ -129,6 +174,16 @@ impl RustParser for RustItemParser {
         Ok(ast)
     }
 
+/// Searches for a module file with the given name in the given base path.
+///
+/// # Arguments
+///
+/// * `base_path`: The base path to search in.
+/// * `mod_name`: The name of the module file to search for.
+///
+/// # Returns
+///
+/// A `Result` containing an `Option<PathBuf>` representing the path to the module file if found, or `None` if not found, or an `ErrorHandling` if any error occurred.
     fn find_module_file(
         base_path: PathBuf,
         mod_name: String,
@@ -145,6 +200,15 @@ impl RustParser for RustItemParser {
     }
 }
 
+/// Lexes comments from a Rust source code string.
+///
+/// # Arguments
+///
+/// * `source_vector`: The source code string.
+///
+/// # Returns
+///
+/// A `Result` containing a vector of `ObjectRange` structs representing the comments, or an `ErrorHandling` if any error occurred.
 pub fn comment_lexer(source_vector: &str) -> Result<Vec<ObjectRange>, ErrorHandling> {
     let vectorized = FileExtractor::string_to_vector(source_vector);
     let mut comment_vector: Vec<ObjectRange> = Vec::new();
@@ -249,6 +313,15 @@ pub fn comment_lexer(source_vector: &str) -> Result<Vec<ObjectRange>, ErrorHandl
     Ok(comment_vector)
 }
 
+/// Parses a vector of `Item` structs and extracts function signature information.
+///
+/// # Arguments
+///
+/// * `items`: A slice of `Item` structs.
+///
+/// # Returns
+///
+/// A `Result` containing a `FunctionSignature` struct, or an `ErrorHandling` if any error occurred.
 fn function_parse(items: &[Item]) -> Result<FunctionSignature, ErrorHandling> {
     let mut vec_token_inputs: Vec<TokenStream> = Vec::new();
     let default_return = FnOutputToken {
@@ -292,6 +365,15 @@ fn function_parse(items: &[Item]) -> Result<FunctionSignature, ErrorHandling> {
     }
 }
 
+/// Parses a vector of `TokenStream`s and extracts function input names and types.
+///
+/// # Arguments
+///
+/// * `input_vector_stream`: A vector of `TokenStream`s representing the function inputs.
+///
+/// # Returns
+///
+/// A `Result` containing a vector of `FnInputToken` structs, or an `ErrorHandling` if any error occurred.
 fn fn_input(input_vector_stream: Vec<TokenStream>) -> Result<Vec<FnInputToken>, ErrorHandling> {
     let mut input_tokens: Vec<FnInputToken> = Vec::new();
     for input in input_vector_stream {
@@ -319,9 +401,27 @@ fn fn_input(input_vector_stream: Vec<TokenStream>) -> Result<Vec<FnInputToken>, 
     Ok(input_tokens)
 }
 
+/// Removes whitespace characters from a given string.
+///
+/// # Arguments
+///
+/// * `s`: The string to remove whitespace from.
+///
+/// # Returns
+///
+/// A `Result` containing the string with whitespace removed, or an `ErrorHandling` if any error occurred.
 pub fn remove_whitespace(s: String) -> Result<String, ErrorHandling> {
     Ok(s.chars().filter(|c| !c.is_whitespace()).collect())
 }
+/// Analyzes a type and extracts its kind, output type, and error type.
+///
+/// # Arguments
+///
+/// * `ty`: The type to analyze.
+///
+/// # Returns
+///
+/// A `Result` containing a `FnOutputToken` struct, or an `ErrorHandling` if any error occurred.
 fn analyze_return_type(ty: &Type) -> Result<FnOutputToken, ErrorHandling> {
     let mut kind = "Other".to_string();
     let mut output_type = ty.to_token_stream().to_string();
@@ -375,6 +475,15 @@ fn analyze_return_type(ty: &Type) -> Result<FnOutputToken, ErrorHandling> {
     })
 }
 
+/// Visits items in a Rust syntax tree and extracts their line ranges and names.
+///
+/// # Arguments
+///
+/// * `items`: A slice of `Item` structs.
+///
+/// # Returns
+///
+/// A `Result` containing a vector of `ObjectRange` structs, or an `ErrorHandling` if any error occurred.
 fn visit_items(items: &[Item]) -> Result<Vec<ObjectRange>, ErrorHandling> {
     let mut object_line: Vec<ObjectRange> = Vec::new();
 

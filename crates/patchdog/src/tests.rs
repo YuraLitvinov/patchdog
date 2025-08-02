@@ -58,6 +58,11 @@ mod tests {
             }
         }
     }
+/// Tests finding module files within a project. This is a test function and should not be relied upon for production use.
+///
+/// # Returns
+///
+/// None
     #[test]
     fn test_find_module_files() {
         let expected_behavior: &str = "../../tests/test_lib.rs\n../../tests/data.rs";
@@ -85,6 +90,11 @@ mod tests {
         assert_eq!(expected_behavior, obj_vector.join("\n"));
     }
 
+/// Tests reading command-line arguments (This is a test function and should not be relied upon for production use).
+///
+/// # Returns
+///
+/// None
     #[test]
     fn test_read_argument() {
         let mut path = env::current_dir().expect("couldn't get path");
@@ -100,6 +110,11 @@ mod tests {
         assert_eq!(true, true);
     }
 
+/// Tests reading and processing a Git patch file. This is a test function and should not be relied upon for production use.
+///
+/// # Returns
+///
+/// None
     #[test]
     fn test_read_patch() {
         let mut path = env::current_dir()
@@ -125,6 +140,11 @@ mod tests {
             println!("{:?}", each);
         }
     }
+/// Tests writing to a file. This is a test function and should not be relied upon for production use.
+///
+/// # Returns
+///
+/// A `Result` indicating whether the test was successful, or an `ErrorHandling` if any error occurred.
     #[test]
     fn test_write() -> Result<(), ErrorHandling> {
         let file = fs::read_to_string("/home/yurii-sama/patchdog/crates/patchdog/src/cli.rs")
@@ -145,6 +165,11 @@ mod tests {
         Ok(())
     }
 
+/// Tests handling of empty objects (This is a test function and should not be relied upon for production use).
+///
+/// # Returns
+///
+/// None
     #[test]
     fn test_cover_empty_object() {
         /*
@@ -154,6 +179,11 @@ mod tests {
         */
     }
 
+/// Tests finding comments in a Rust file. This is a test function and should not be relied upon for production use.
+///
+/// # Returns
+///
+/// None
     #[test]
     fn find_comments() {
         //block is of 94 symbols length
@@ -188,6 +218,11 @@ mod tests {
         "type": []
       }
 }]}"#;
+/// Tests the output of the AI agent. This is a test function and should not be relied upon for production use.
+///
+/// # Returns
+///
+/// A `Result` indicating whether the test was successful, or an `ErrorBinding` if any error occurred.
     #[test]
     fn test_agent_out() -> Result<(), ErrorBinding> {
         /*
@@ -208,6 +243,11 @@ mod tests {
         Ok(())
     }
 
+/// Tests the regular expression used for parsing JSON data.  This is a test function and should not be relied upon for production use.
+///
+/// # Returns
+///
+/// None
     #[test]
     fn test_regex() {
         let re = Regex::new(REGEX).unwrap();
@@ -226,6 +266,11 @@ mod tests {
         assert_eq!(true, false);
     }
 
+/// Tests parsing JSON responses from the Google Gemini API. This is a test function and should not be relied upon for production use.
+///
+/// # Returns
+///
+/// A `Result` indicating whether the test was successful, or an `ErrorHandling` if any error occurred.
     #[test]
     fn test_response() -> Result<(), ErrorHandling> {
         let re = Regex::new(REGEX).unwrap();
@@ -252,6 +297,11 @@ mod tests {
         Ok(())
     }
 
+/// Tests comparing request and response data. This is a test function and should not be relied upon for production use.
+///
+/// # Returns
+///
+/// A `Result` indicating whether the test was successful, or an `ErrorHandling` if any error occurred.
     #[test]
     fn test_compare() -> Result<(), ErrorHandling> {
         //Attempting to assess and preserve difference between request and response
