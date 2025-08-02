@@ -10,7 +10,7 @@ use rust_parsing::file_parsing::REGEX;
 use rust_parsing::file_parsing::{FileExtractor, Files};
 use snafu::ResultExt;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None, group(
     ArgGroup::new("path")
@@ -32,8 +32,9 @@ pub async fn cli_patch_to_agent() -> Result<(), ErrorBinding> {
     let patch = binding::patch_data_argument(commands.file_patch)?;
     println!("type: {:?}", commands.type_rust);
     let request = changes_from_patch(patch, commands.type_rust, commands.name_rust)?;
-    println!("Request len: {}", &request.len());
+    println!("Request len: {}", &request.len()); 
     let responses_collected = call(request).await?;
+    println!("{:#?}", &responses_collected);
     write_to_file(responses_collected)?;
     Ok(())
 }
@@ -108,6 +109,7 @@ fn match_response(
             }
         }
     }
+    println!("Failed to match response");
     Err(ErrorHandling::CouldNotGetLine)
 }
 //Here we should form a structure, that would consist of request metadata and new comment
@@ -158,12 +160,13 @@ fn write_to_file(response: Vec<(SingleFunctionData, String)>) -> Result<(), Erro
     });
     //Typical representation of file as vector of lines
     for each in response {
+        let path = PathBuf::from(each.0.context.filepath);
         let file =
-            fs::read_to_string(&each.0.context.filepath).context(InvalidIoOperationsSnafu)?;
+            fs::read_to_string(&path).context(InvalidIoOperationsSnafu)?;
+        println!("{}", file);
         let as_vec = FileExtractor::string_to_vector(&file);
-        //as_vec.insert(each.0.context.line_range.start, each.1.clone());
         FileExtractor::write_to_vecstring(
-            Path::new(&each.0.context.filepath),
+            path,
             as_vec,
             each.0.context.line_range.start,
             each.1,

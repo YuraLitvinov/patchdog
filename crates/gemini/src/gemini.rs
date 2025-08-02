@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use snafu::ResultExt;
 use std::collections::HashMap;
 use std::ops::Range;
+use std::path::PathBuf;
 use std::{env::var, fmt::Display, time};
 //Theoretical maximum is 250_000, but is highly flawed in a way, that Gemini can 'tear' the response.
 //This behavior is explained in call_json_to_rust error case
@@ -47,7 +48,7 @@ pub struct SingleFunctionData {
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 pub struct ContextData {
     pub class_name: String,
-    pub filepath: String,
+    pub filepath: PathBuf,
     pub external_dependecies: Vec<String>,
     pub old_comment: Vec<String>,
     pub line_range: Range<usize>,
@@ -61,7 +62,7 @@ impl ContextData {
         for each in &self.old_comment {
             size_ext += each.len();
         }
-        self.class_name.len() + self.filepath.len() + size_ext + self.line_range.len()
+        self.class_name.len() + self.filepath.to_str().unwrap().len() + size_ext + self.line_range.len()
     }
 }
 

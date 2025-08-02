@@ -4,7 +4,7 @@ use crate::error::{
 };
 use crate::object_range::ObjectRange;
 use snafu::{OptionExt, ResultExt, ensure};
-use std::{fs::File, io::Write, path::Path};
+use std::{fs::File, io::Write, path::PathBuf};
 //Advanced matching. This inefficient method is chosen due to error: look-around, including look-ahead and look-behind, is not supported
 /*
 pub const REGEX: &str = r#"\{\s*("uuid"\s*:\s*"[^"]*"\s*,\s*"fn_name"\s*:\s*"[^"]*"\s*,\s*"new_comment"\s*:\s*"[^"]*"
@@ -41,7 +41,7 @@ pub trait Files {
     ) -> Result<Vec<String>, ErrorHandling>;
     //Representing file as a vector of lines is generally the most effective practise
     fn write_to_vecstring(
-        path: &Path,
+        path: PathBuf,
         source: Vec<String>,
         line_index: usize,
         changed_element: String,
@@ -50,7 +50,7 @@ pub trait Files {
 
 impl Files for FileExtractor {
     fn write_to_vecstring(
-        path: &Path,
+        path: PathBuf,
         mut source: Vec<String>,
         line_index: usize,
         changed_element: String,

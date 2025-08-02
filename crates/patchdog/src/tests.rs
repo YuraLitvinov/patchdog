@@ -132,7 +132,7 @@ mod tests {
         let stringvec = FileExtractor::string_to_vector(&file);
         //write_to_vecstring should replace line 21
         FileExtractor::write_to_vecstring(
-            Path::new("src/cli.rs"),
+            "src/cli.rs".into(),
             stringvec,
             20,
             "//TEST TEST TEST

@@ -55,7 +55,7 @@ pub fn changes_from_patch(
                     fn_name: obj_name_to_compare,
                     context: ContextData {
                         class_name: "".to_string(),
-                        filepath: format!("{:?}", each.filename),
+                        filepath: each.filename.clone(),
                         external_dependecies: vec![],
                         old_comment: vec!["".to_string()],
                         line_range: obj,
