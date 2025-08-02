@@ -1,16 +1,14 @@
 use ai_interactions::return_prompt;
 use async_trait::async_trait;
 use gemini_rust::Gemini;
-use regex::Regex;
 use rust_parsing::error::{ErrorBinding, SerdeSnafu};
 use rust_parsing::{ErrorHandling, error::GeminiRustSnafu, error::StdVarSnafu};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use snafu::ResultExt;
-use std::ops::Range;
 use std::collections::HashMap;
-use rust_parsing::file_parsing::REGEX;
-use std::{fmt::Display, time, env::var};
-//Theoretical maximum is 250_000, but is highly flawed in a way, that Gemini can 'tear' the response. 
+use std::ops::Range;
+use std::{env::var, fmt::Display, time};
+//Theoretical maximum is 250_000, but is highly flawed in a way, that Gemini can 'tear' the response.
 //This behavior is explained in call_json_to_rust error case
 //Similar issue on https://github.com/googleapis/python-genai/issues/922
 const TOKENS_PER_MIN: usize = 250_000;
@@ -63,16 +61,13 @@ impl ContextData {
         for each in &self.old_comment {
             size_ext += each.len();
         }
-        self.class_name.len() + 
-        self.filepath.len() + 
-        size_ext + 
-        self.line_range.len()
+        self.class_name.len() + self.filepath.len() + size_ext + self.line_range.len()
     }
 }
 
 impl SingleFunctionData {
     pub fn size(&self) -> usize {
-        ( self.fn_name.len() + self.context.size() + self.function_text.len()) / 3 //One token is approx. 3 symbols
+        (self.fn_name.len() + self.context.size() + self.function_text.len()) / 3 //One token is approx. 3 symbols
     }
 }
 
@@ -92,7 +87,8 @@ impl MappedRequest {
     pub fn function_add(&mut self, request_data: SingleFunctionData) -> bool {
         let size = request_data.size();
         if size <= self.remaining_capacity {
-            self.data.insert(uuid::Uuid::new_v4().to_string(), request_data);
+            self.data
+                .insert(uuid::Uuid::new_v4().to_string(), request_data);
             self.remaining_capacity -= size;
             true
         } else {
@@ -106,7 +102,7 @@ impl Default for MappedRequest {
         Self::new()
     }
 }
-    
+
 impl Display for MappedRequest {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "{self:#?}")
@@ -143,7 +139,7 @@ impl Default for PreparingRequests {
         Self::new()
     }
 }
-    
+
 impl Display for PreparingRequests {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "{self:#?}")
@@ -169,7 +165,6 @@ pub fn json_to<T: DeserializeOwned>(val: serde_json::Value) -> T {
     serde_json::from_value(val).unwrap()
 }
 
-
 #[allow(dead_code)]
 pub struct WaitForTimeout {
     pub prepared_requests: Vec<MappedRequest>,
@@ -177,7 +172,7 @@ pub struct WaitForTimeout {
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 pub struct Request {
     uuid: String,
-    data: SingleFunctionData
+    data: SingleFunctionData,
 }
 
 #[allow(async_fn_in_trait)]
@@ -203,15 +198,15 @@ impl GoogleGemini {
                         data: each.clone(),
                     });
                 }
-                let as_json = serde_json::to_string_pretty(&vec).context(SerdeSnafu)?; 
+                let as_json = serde_json::to_string_pretty(&vec).context(SerdeSnafu)?;
                 match GoogleGemini::req_res(&as_json, return_prompt()).await {
                     //Handling exclusive case, where one of the requests may fail
                     Ok(r) => {
                         response.push(r);
-                    },
+                    }
                     Err(e) => {
                         //error marker
-                        return Err(e); 
+                        return Err(e);
                     }
                 }
             }
@@ -220,7 +215,7 @@ impl GoogleGemini {
                 tokio::time::sleep(one_minute).await;
             }
         }
-        println!("{}", "exited send_batches");
+        println!("exited send_batches");
         Ok(response)
     }
 
@@ -243,9 +238,8 @@ impl GoogleGemini {
                     });
                     continue;
                 } else {
-                    new_batch.extend_from_slice(
-                        &batch[size.saturating_sub(REQUESTS_PER_MIN)..size],
-                    );
+                    new_batch
+                        .extend_from_slice(&batch[size.saturating_sub(REQUESTS_PER_MIN)..size]);
                     size -= REQUESTS_PER_MIN;
                     await_response.push(WaitForTimeout {
                         prepared_requests: new_batch,
@@ -265,10 +259,7 @@ impl GoogleGemini {
         dotenv::from_path(".env").unwrap();
         let api_key = var("API_KEY_GEMINI").context(StdVarSnafu)?;
         let model = var("GEMINI_MODEL").context(StdVarSnafu)?;
-        let client = Gemini::with_model(
-            api_key, 
-            model,
-        )
+        let client = Gemini::with_model(api_key, model)
             .generate_content()
             .with_system_prompt(arguments)
             .with_user_message(file_content)
@@ -310,7 +301,7 @@ impl GoogleGemini {
         }
         Ok(batches)
     }
-    
+
     pub fn prepare_map(
         &mut self,
         request: Vec<SingleFunctionData>,
@@ -339,43 +330,4 @@ impl GoogleGemini {
         }
         Ok(batches)
     }
-}
-
-//Hotfix returns missing elements of request that were dropped in the response by the LLM
-pub fn hotfix(response: String, request: Vec<SingleFunctionData>)-> Result<Vec<SingleFunctionData>, ErrorHandling> {
-    let mut hotfixed = vec![];
-    let as_req: Vec<SingleFunctionData> = collect_response(&response)?;
-    let mut map_request  = HashMap::new();
-    request.clone().into_iter().for_each(|each| {
-        map_request.insert((each.context.filepath.clone(), each.context.line_range.clone()), each);
-    });
-    let mut map_response = HashMap::new();
-    as_req.clone().into_iter().for_each(|each| {
-        map_response.insert((each.context.filepath.clone(), each.context.line_range.clone()), each);
-    });
-    //Key here represents filepath and lineranges of an object, i.e. function
-    for (key, data) in map_request {
-        if !map_response.contains_key(&key) {
-            hotfixed.push(data);
-        }
-    }
-    Ok(hotfixed)
-}
-
-//Accepts JSON as Vec<String> and attempts to parse it into PreparingRequests
-pub fn collect_response(output: &str) -> Result<Vec<SingleFunctionData>, ErrorHandling> {
-    let re = Regex::new(REGEX).unwrap();        
-    let mut assess_size = vec![];
-    for cap in re.captures_iter(&output) {
-        let a = cap
-            .get(0)
-            .unwrap()
-            .as_str();
-        let to_struct = serde_json::from_str::<SingleFunctionData>(a)
-            .context(SerdeSnafu)?;
-        assess_size.push(to_struct);
-    }
-    Ok(assess_size)
-
-
 }

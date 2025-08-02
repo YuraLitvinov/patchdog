@@ -9,8 +9,9 @@ use rust_parsing::file_parsing::{FileExtractor, Files};
 use rust_parsing::rust_parser::{RustItemParser, RustParser};
 use snafu::{OptionExt, ResultExt};
 use std::{
-    fs, env, ops::Range, 
-    path::{Path, PathBuf}
+    env, fs,
+    ops::Range,
+    path::{Path, PathBuf},
 };
 
 pub struct FullDiffInfo {
@@ -48,7 +49,7 @@ pub fn changes_from_patch(
                     .any(|obj_name| &obj_name_to_compare == obj_name)
             {
                 let as_string = item.join("\n");
-            
+
                 singlerequestdata.push(SingleFunctionData {
                     function_text: as_string,
                     fn_name: obj_name_to_compare,
@@ -58,7 +59,7 @@ pub fn changes_from_patch(
                         external_dependecies: vec![],
                         old_comment: vec!["".to_string()],
                         line_range: obj,
-                    }
+                    },
                 });
             }
         }
@@ -67,11 +68,10 @@ pub fn changes_from_patch(
 }
 
 pub fn patch_data_argument(path_to_patch: PathBuf) -> Result<Vec<ChangeFromPatch>, ErrorBinding> {
-    
     let path = env::current_dir().context(InvalidReadFileOperationSnafu {
         file_path: &path_to_patch,
     })?;
-    
+
     //let path = Path::new("/home/yurii-sama/embucket").to_path_buf();
     let patch = get_patch_data(path.join(path_to_patch), path)?;
     Ok(patch)

@@ -1,4 +1,6 @@
-use rust_parsing::error::{CouldNotGetLineSnafu, ErrorBinding, InvalidIoOperationsSnafu, ErrorHandling};
+use rust_parsing::error::{
+    CouldNotGetLineSnafu, ErrorBinding, ErrorHandling, InvalidIoOperationsSnafu,
+};
 use rust_parsing::file_parsing::{FileExtractor, Files};
 use rust_parsing::rust_parser::{RustItemParser, RustParser};
 use snafu::{OptionExt, ResultExt};
@@ -74,9 +76,8 @@ pub fn justify_presence(
                     .any(|obj_name| obj_name_to_compare == obj_name)
             {
                 vecbool.push(true) //present
-            } 
+            }
         }
     }
     Ok(vecbool)
 }
-

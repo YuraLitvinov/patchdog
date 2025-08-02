@@ -1,5 +1,8 @@
 mod tests {
-    use gemini::gemini::{collect_response, hotfix, PreparingRequests, SingleFunctionData, Response};
+    use crate::binding;
+    use crate::cli::collect_response;
+    use gemini::gemini::{PreparingRequests, Response, SingleFunctionData};
+    use regex::Regex;
     use rust_parsing::ErrorHandling;
     use rust_parsing::error::{ErrorBinding, InvalidIoOperationsSnafu, SerdeSnafu};
     use rust_parsing::file_parsing::{FileExtractor, Files, REGEX};
@@ -10,8 +13,6 @@ mod tests {
     use std::process::Command;
     use std::{fs, path::Path};
     use tempfile::NamedTempFile;
-    use regex::Regex;
-    use crate::binding;
     const PATH_BASE: &str = "../../tests/data.rs";
     const COMPARE_LINES: &str = "fn function_with_return() -> i32 {\n";
     #[test]
@@ -118,8 +119,8 @@ mod tests {
             .write_all(&output.stdout)
             .expect("couldn't write output to tempfile");
         println!("{:?}", patch_file.path());
-        let patch =
-            binding::get_patch_data(patch_file.path().to_path_buf(), path).expect("couldn't get patch");
+        let patch = binding::get_patch_data(patch_file.path().to_path_buf(), path)
+            .expect("couldn't get patch");
         for each in patch {
             println!("{:?}", each);
         }
@@ -208,43 +209,21 @@ mod tests {
     }
 
     #[test]
-    fn test_hotfix () -> Result<(), ErrorBinding> {
-        //Trying here to see whether hotfix and collect_response work as intended.
-        //Importing tests/preparingrequests.json, containing PreparingRequests and SingleRequestData
-        //Here, I am trying to use HashMap for searching elements in response
-
-        let response: String = fs::read_to_string(Path::new("../../tests/response.json"))
-            .context(InvalidIoOperationsSnafu)?;
-        let as_req = collect_response(&response)?;
-        let request_json = fs::read_to_string(Path::new("../../tests/request.json"))
-            .context(InvalidIoOperationsSnafu)?;
-        let request = serde_json::from_str::<PreparingRequests>(&request_json)
-            .context(SerdeSnafu)?.data;
-
-        let hotfixed = hotfix(response, request.clone())?;
-        assert_eq!(hotfixed.len(), request.len() - as_req.len());
-        Ok(())
-    }
-    #[test]
     fn test_regex() {
-        let re = Regex::new(REGEX).unwrap();        
+        let re = Regex::new(REGEX).unwrap();
         let test = fs::read_to_string(Path::new("../../tests/request.json")).unwrap();
         let mut i = 0;
         let mut assess_size = vec![];
         for cap in re.captures_iter(&test) {
             i += 1;
-            let a = cap
-                .get(0)
-                .unwrap()
-                .as_str();
+            let a = cap.get(0).unwrap().as_str();
             let to_struct = serde_json::from_str::<SingleFunctionData>(a).unwrap();
             println!("{:#?}", to_struct);
             assess_size.push(to_struct);
-        
         }
         println!("{}", assess_size.len());
         assert_eq!(i, assess_size.len());
-        assert_eq!(true,false);
+        assert_eq!(true, false);
     }
 
     #[test]
@@ -253,36 +232,34 @@ mod tests {
         let test = fs::read_to_string(Path::new("../../tests/res.json")).unwrap();
         let mut assess_size = vec![];
         for cap in re.captures_iter(&test) {
-            let a = cap
-                .get(0)
-                .unwrap()
-                .as_str();
+            let a = cap.get(0).unwrap().as_str();
             let to_struct = serde_json::from_str::<Response>(a).unwrap();
             assess_size.push(to_struct);
         }
         match serde_json::from_str::<Vec<Response>>(&test) {
             Ok(ok) => {
                 println!("{} = {}", ok.len(), assess_size.len());
-            },
+            }
             Err(_) => {
                 let as_vec = FileExtractor::string_to_vector(&test);
-                let a = &as_vec[1..as_vec.len()-1].join("\n");
-                let to_struct= serde_json::from_str::<Vec<Response>>(a).unwrap();
+                let a = &as_vec[1..as_vec.len() - 1].join("\n");
+                let to_struct = serde_json::from_str::<Vec<Response>>(a).unwrap();
                 println!("{:#?}", to_struct);
                 println!("{} = {}", assess_size.len(), to_struct.len());
                 assert_eq!(assess_size.len(), to_struct.len());
-            },
+            }
         }
         Ok(())
     }
 
-    #[test] 
+    #[test]
     fn test_compare() -> Result<(), ErrorHandling> {
         //Attempting to assess and preserve difference between request and response
         let request = fs::read_to_string(Path::new("../../tests/request.json")).unwrap();
         let response = fs::read_to_string(Path::new("../../tests/res.json")).unwrap();
         let request = serde_json::from_str::<PreparingRequests>(&request)
-            .context(SerdeSnafu)?.data;
+            .context(SerdeSnafu)?
+            .data;
         let response = collect_response(&response)?;
         assert_eq!(request.len(), response.len());
         Ok(())

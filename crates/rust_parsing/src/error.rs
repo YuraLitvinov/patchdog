@@ -57,7 +57,7 @@ pub enum ErrorHandling {
     },
     UuidError {
         source: uuid::Error,
-    }
+    },
 }
 
 #[derive(Debug)]

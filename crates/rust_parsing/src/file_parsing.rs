@@ -6,7 +6,7 @@ use crate::object_range::ObjectRange;
 use snafu::{OptionExt, ResultExt, ensure};
 use std::{fs::File, io::Write, path::Path};
 //Advanced matching. This inefficient method is chosen due to error: look-around, including look-ahead and look-behind, is not supported
-/* 
+/*
 pub const REGEX: &str = r#"\{\s*("uuid"\s*:\s*"[^"]*"\s*,\s*"fn_name"\s*:\s*"[^"]*"\s*,\s*"new_comment"\s*:\s*"[^"]*"
 |\s*"uuid"\s*:\s*"[^"]*"\s*,\s*"new_comment"\s*:\s*"[^"]*"\s*,\s*"fn_name"\s*:\s*"[^"]*"
 |\s*"fn_name"\s*:\s*"[^"]*"\s*,\s*"uuid"\s*:\s*"[^"]*"\s*,\s*"new_comment"\s*:\s*"[^"]*"
@@ -55,7 +55,7 @@ impl Files for FileExtractor {
         line_index: usize,
         changed_element: String,
     ) -> Result<(), ErrorHandling> {
-        source.insert(line_index, changed_element);
+        source.insert(line_index.saturating_sub(1), changed_element);
         let mut file = File::create(path).context(InvalidIoOperationsSnafu)?;
         for each in &source {
             writeln!(file, "{each}").context(InvalidIoOperationsSnafu)?;
