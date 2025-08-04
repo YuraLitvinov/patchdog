@@ -8,3 +8,5 @@ rust_parsing = { path = "../rust_parsing" }
 snafu = { workspace = true }
 serde_json = { workspace = true }
 serde = { workspace = true } 
+yaml-rust2 = { workspace = true }
+tracing = { workspace = true }

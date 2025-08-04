@@ -1,7 +1,7 @@
 use ai_interactions::return_prompt;
 use async_trait::async_trait;
 use gemini_rust::Gemini;
-use rust_parsing::error::{ErrorBinding, SerdeSnafu};
+use rust_parsing::error::{ErrorBinding, ParseErrSnafu, SerdeSnafu};
 use rust_parsing::{ErrorHandling, error::GeminiRustSnafu, error::StdVarSnafu};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use snafu::ResultExt;
@@ -9,12 +9,13 @@ use std::collections::HashMap;
 use std::ops::Range;
 use std::path::PathBuf;
 use std::{env::var, fmt::Display, time};
+use tracing::{event, Level};
 //Theoretical maximum is 250_000, but is highly flawed in a way, that Gemini can 'tear' the response.
 //This behavior is explained in call_json_to_rust error case
 //Similar issue on https://github.com/googleapis/python-genai/issues/922
-const TOKENS_PER_MIN: usize = 250_000;
-pub const REQUESTS_PER_MIN: usize = 5;
-const TOKENS_PER_REQUEST: usize = TOKENS_PER_MIN / REQUESTS_PER_MIN;
+//const TOKENS_PER_MIN: usize = 250_000;
+//pub const REQUESTS_PER_MIN: usize = 5;
+//const TOKENS_PER_REQUEST: usize = TOKENS_PER_MIN / REQUESTS_PER_MIN;
 /*
 
 [
@@ -38,6 +39,11 @@ pub struct Response {
     pub new_comment: String,
 }
 
+/*
+Here skip serializing occurs because LLM doesn't need to know about external context, such as linerange, filepath.
+Although, there is visible clear necessity in including trait information and what are the dependecies which a function would use.
+Currently, inclusion of this information is not in the scope.   
+*/
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 pub struct SingleFunctionData {
     pub fn_name: String,
@@ -96,7 +102,8 @@ impl MappedRequest {
 /// A new `MappedRequest` struct.
     pub fn new() -> MappedRequest {
         MappedRequest {
-            remaining_capacity: TOKENS_PER_REQUEST,
+            remaining_capacity: var("TOKENS_PER_MIN").context(StdVarSnafu).unwrap().parse::<usize>().unwrap() / 
+                var("REQUEST_PER_MIN").context(StdVarSnafu).unwrap().parse::<usize>().unwrap(),
             data: HashMap::new(),
         }
     }
@@ -162,7 +169,8 @@ impl PreparingRequests {
 /// A new `PreparingRequests` struct.
     pub fn new() -> PreparingRequests {
         PreparingRequests {
-            remaining_capacity: TOKENS_PER_REQUEST - return_prompt().len(),
+            remaining_capacity: var("TOKENS_PER_MIN").context(StdVarSnafu).unwrap().parse::<usize>().unwrap() / 
+                var("REQUEST_PER_MIN").context(StdVarSnafu).unwrap().parse::<usize>().unwrap() - return_prompt().unwrap().len(),
             data: vec![],
         }
     }
@@ -267,7 +275,8 @@ impl GoogleGemini {
     pub fn new() -> GoogleGemini {
         GoogleGemini {
             preparing_requests: PreparingRequests {
-                remaining_capacity: TOKENS_PER_MIN / REQUESTS_PER_MIN,
+                remaining_capacity: var("TOKENS_PER_MIN").context(StdVarSnafu).unwrap().parse::<usize>().unwrap() / 
+                var("REQUEST_PER_MIN").context(StdVarSnafu).unwrap().parse::<usize>().unwrap(),
                 data: vec![],
             },
         }
@@ -295,7 +304,7 @@ impl GoogleGemini {
                     });
                 }
                 let as_json = serde_json::to_string_pretty(&vec).context(SerdeSnafu)?;
-                match GoogleGemini::req_res(&as_json, return_prompt()).await {
+                match GoogleGemini::req_res(&as_json, &return_prompt()?).await {
                     //Handling exclusive case, where one of the requests may fail
                     Ok(r) => {
                         response.push(r);
@@ -311,7 +320,7 @@ impl GoogleGemini {
                 tokio::time::sleep(one_minute).await;
             }
         }
-        println!("exited send_batches");
+        event!(Level::INFO, "exited send_batches");
         Ok(response)
     }
 
@@ -321,13 +330,17 @@ impl GoogleGemini {
         //Architecture: batch[BIG_NUMBER..len()-1]
         //Next: batch[0..4]
         let mut await_response: Vec<WaitForTimeout> = vec![];
-        if batch.len() > REQUESTS_PER_MIN {
+        let request_per_min = var("REQUEST_PER_MIN")
+            .context(StdVarSnafu)?
+            .parse::<usize>()
+            .context(ParseErrSnafu)?;
+        if batch.len() > request_per_min {
             let mut size: usize = batch.len();
-            for _ in 1..=batch.len().div_ceil(REQUESTS_PER_MIN) {
+            for _ in 1..=batch.len().div_ceil(request_per_min) {
                 let mut new_batch: Vec<MappedRequest> = Vec::new();
                 //Response where quantity of batches exceed allow per min request count
                 //Check for last items in batch
-                if size < REQUESTS_PER_MIN {
+                if size < request_per_min {
                     new_batch.extend_from_slice(&batch[0..size]);
                     await_response.push(WaitForTimeout {
                         prepared_requests: new_batch,
@@ -335,8 +348,8 @@ impl GoogleGemini {
                     continue;
                 } else {
                     new_batch
-                        .extend_from_slice(&batch[size.saturating_sub(REQUESTS_PER_MIN)..size]);
-                    size -= REQUESTS_PER_MIN;
+                        .extend_from_slice(&batch[size.saturating_sub(request_per_min)..size]);
+                    size -= request_per_min;
                     await_response.push(WaitForTimeout {
                         prepared_requests: new_batch,
                     });
@@ -352,9 +365,8 @@ impl GoogleGemini {
     }
 
     pub async fn req_res(file_content: &str, arguments: &str) -> Result<String, ErrorHandling> {
-        dotenv::from_path(".env").unwrap();
         let api_key = var("API_KEY_GEMINI").context(StdVarSnafu)?;
-        let model = var("GEMINI_MODEL").context(StdVarSnafu)?;
+        let model = var("GEMINI_MODEL").context(StdVarSnafu)?;  
         let client = Gemini::with_model(api_key, model)
             .generate_content()
             .with_system_prompt(arguments)

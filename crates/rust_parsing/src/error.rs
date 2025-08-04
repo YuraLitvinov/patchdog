@@ -1,6 +1,6 @@
 use git_parsing::Git2ErrorHandling;
 use snafu::Snafu;
-use std::{env::VarError, path::PathBuf};
+use std::{env::VarError, num::ParseIntError, path::PathBuf};
 use syn;
 
 #[derive(Debug, Snafu)]
@@ -58,6 +58,12 @@ pub enum ErrorHandling {
     UuidError {
         source: uuid::Error,
     },
+    YamlError {
+        source: yaml_rust2::scanner::ScanError,
+    },
+    ParseErr {
+        source: ParseIntError,
+    }
 }
 
 #[derive(Debug)]

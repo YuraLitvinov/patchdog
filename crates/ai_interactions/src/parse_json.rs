@@ -7,6 +7,7 @@ use snafu::{OptionExt, ResultExt};
 use std::ops::Range;
 use std::path::PathBuf;
 use std::{env, fs};
+use tracing::{event, span, Level};
 
 #[derive(Debug, Clone)]
 pub struct ChangeFromPatch {
@@ -50,7 +51,7 @@ pub fn make_export(filenames: &Vec<PathBuf>) -> Result<Vec<ChangeFromPatch>, Err
                 vector_of_changed.clear();
             }
             Err(e) => {
-                println!("WARNING!\nSKIPPING {e:?} PLEASE REFER TO ERROR LOG");
+                event!(Level::WARN, "{e:#?}");
                 continue;
             }
         }

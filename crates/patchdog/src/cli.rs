@@ -7,6 +7,8 @@ use rust_parsing::error::ErrorBinding;
 use rust_parsing::error::ErrorHandling;
 use rust_parsing::file_parsing::REGEX;
 use rust_parsing::file_parsing::{FileExtractor, Files};
+use syn::token::Le;
+use tracing::{event, Level, span};
 use std::collections::HashMap;
 use std::{path::PathBuf, fs};
 use rust_parsing::error::InvalidIoOperationsSnafu;
@@ -25,10 +27,10 @@ struct Mode {
     #[arg(long, num_args=1..,  requires = "file_patch")]
     name_rust: Vec<String>,
 }
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 struct Form {
     is_full: bool,
-    data: SingleFunctionData, 
+    data: (String, SingleFunctionData), 
     new_comment: String
 }
 
@@ -40,11 +42,11 @@ struct Form {
 pub async fn cli_patch_to_agent() -> Result<(), ErrorBinding> {
     let commands = Mode::parse();
     let patch = binding::patch_data_argument(commands.file_patch)?;
-    println!("type: {:?}", commands.type_rust);
+    event!(Level::INFO, "type: {:#?}", commands.type_rust);
     let request = changes_from_patch(patch, commands.type_rust, commands.name_rust)?;
-    println!("Request len: {}", &request.len()); 
+    event!(Level::INFO, "Request len: {}", &request.len()); 
     let responses_collected = call(request).await?;
-    println!("{}", responses_collected.len());
+    event!(Level::INFO, "{}", responses_collected.len());
     write_to_file(responses_collected)?;
     Ok(())
 }
@@ -69,7 +71,7 @@ pub fn collect_response(response: &str) -> Result<Vec<Response>, ErrorHandling> 
                 response_from_regex.push(ok);
             }
             Err(e) => {
-                println!("{e}");
+                event!(Level::WARN, "{e}");
                 continue;
             }
         }
@@ -89,29 +91,38 @@ async fn call(
     request: Vec<SingleFunctionData>,
 ) -> Result<Vec<Form>, ErrorBinding> {
     let mut responses_collected = Vec::new();
-    //let mut collect_error = vec![];
+    let mut collect_error = HashMap::new();
     let mut new_buffer = GoogleGemini::new();
-    let batch = new_buffer.prepare_map(request)?;
+    let batch = new_buffer.prepare_map(request.clone())?;
     let prepared = GoogleGemini::assess_batch_readiness(batch)?;
     let response = GoogleGemini::send_batches(&prepared).await?;
     for each in response {
+        event!(Level::DEBUG, each);
         let matches = match_response(&each, &prepared)?;
         for matched in matches {
             if matched.is_full {
-                responses_collected.push(Form{is_full: matched.is_full, data: matched.data, new_comment: matched.new_comment});
+                responses_collected.push(
+                    Form {
+                        is_full: matched.is_full,
+                        data: matched.data,
+                        new_comment: matched.new_comment
+                    });
             } else {
-                //collect_error.push(matched.data);
-                println!("Found error");
+                collect_error.insert(matched.data.0, matched.data.1);
+                event!(Level::WARN, "Propagated a response mismatch");
             }
         }
     }
-    /*
-    if !collect_error.is_empty() {
-        println!("Found error");
-        let collect_error = Box::pin(call(collect_error)).await?;
+    
+    if !collect_error.is_empty() && collect_error.len() < request.len() {
+        event!(Level::WARN, "Quantity of bad responses: {}", collect_error.len());
+        let as_vec = collect_error
+            .into_values()
+            .collect();
+        let collect_error = Box::pin(call(as_vec)).await?;
         responses_collected.extend(collect_error);
     }
-    */
+    
     Ok(responses_collected)
 }
 /// Matches a response string with prepared requests and returns a vector of `Form` structs.
@@ -146,9 +157,10 @@ fn match_response(
             }
         }
     }
-    println!("Failed to match response");
-    println!("{}", response);
+
+    event!(Level::ERROR, "Failed to match response");
     Err(ErrorHandling::CouldNotGetLine)
+
 }
 
 //Here we should form a structure, that would consist of request metadata and new comment
@@ -164,18 +176,18 @@ fn match_response(
 /// A `Result` containing a vector of `Form` structs, or an `ErrorHandling` if any error occurred.
 fn match_request_response(
     prepared: &Vec<WaitForTimeout>,
-    uuid: &Vec<Response>,
+    uuid: &[Response],
 ) -> Result<Vec<Form>, ErrorHandling> {
 let mut matched = vec![];
         let mut set = HashMap::new();
-        for each in uuid.clone() {
+        for each in uuid.to_owned() {
             set.insert(each.uuid, each.new_comment);
         }
         for prepare in prepared {
             for req in &prepare.prepared_requests {
                 for each in &req.data {
                     if let Some(found) = set.iter().find(|item| item.0 == each.0) {
-                        matched.push(Form { is_full: true, data: each.1.clone(), new_comment: found.1.to_string() });
+                        matched.push(Form { is_full: true, data: (each.0.to_owned(), each.1.clone()), new_comment: found.1.to_string() });
                     }
                 }
         }
@@ -199,31 +211,32 @@ fn fallback_repair(output: Vec<String>) -> Result<Vec<Response>, ErrorHandling> 
             }
         };
     }
-    println!("Prevent stackoverflow");
+    event!(Level::ERROR, "Prevent stackoverflow");
     Err(ErrorHandling::CouldNotGetLine)
 }
 
 fn write_to_file(response: Vec<Form>) -> Result<(), ErrorHandling> {
     let mut response = response;
     response.sort_by(|a, b| {
-        b.data.context
+        b.data.1.context
             .line_range
             .start
-            .cmp(&a.data.context.line_range.start)
+            .cmp(&a.data.1.context.line_range.start)
     });
-
+    /* 
     //Typical representation of file as vector of lines
     for each in response {
-        let path = each.data.context.filepath;
+        let path = each.data.1.context.filepath;
         let file =
             fs::read_to_string(&path).context(InvalidIoOperationsSnafu)?;
         let as_vec = FileExtractor::string_to_vector(&file);
         FileExtractor::write_to_vecstring(
             path,
             as_vec,
-            each.data.context.line_range.start,
+            each.data.1.context.line_range.start,
             each.new_comment,
         )?;
     }
+    */
     Ok(())
 }
