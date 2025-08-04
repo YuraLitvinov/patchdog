@@ -17,3 +17,4 @@ gemini-rust = "0.4.2"
 regex = { workspace = true }
 uuid = { workspace = true }
 yaml-rust2 = { workspace = true }
+tracing = { workspace = true }

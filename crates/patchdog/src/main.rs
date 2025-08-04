@@ -1,5 +1,6 @@
 use crate::cli::cli_patch_to_agent;
 use rust_parsing::error::ErrorBinding;
+use tracing_subscriber;
 pub mod binding;
 pub mod cli;
 
@@ -14,6 +15,7 @@ pub mod tests;
 //Accepts relative path from inside folder
 async fn main() -> Result<(), ErrorBinding> {
     dotenv::dotenv().ok();
+    tracing_subscriber::fmt::init();
     cli_patch_to_agent().await?;
     Ok(())
 }

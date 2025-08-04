@@ -1,4 +1,4 @@
-use crate::error::{ErrorHandling, InvalidIoOperationsSnafu, InvalidItemParsingSnafu};
+use crate::error::ErrorHandling;
 use crate::file_parsing::{FileExtractor, Files};
 use crate::object_range::{LineRange, Name, ObjectRange};
 use proc_macro2::TokenStream;
@@ -7,7 +7,6 @@ use quote::ToTokens;
 use rustc_lexer::TokenKind;
 use rustc_lexer::tokenize;
 use serde::Serialize;
-use snafu::ResultExt;
 use std::path::{Path, PathBuf};
 use std::{fs, vec};
 use syn::spanned::Spanned;
@@ -15,6 +14,7 @@ use syn::{AngleBracketedGenericArguments, PathArguments, Type, TypePath};
 use syn::{File, ReturnType};
 use syn::{FnArg, parse_str};
 use syn::{ImplItem, Item};
+use tracing::{event, Level};
 /*
 1. Парсер патчей
 2. Раст парсер
@@ -72,8 +72,8 @@ impl RustParser for RustItemParser {
 ///
 /// A `Result` containing a vector of `ObjectRange` structs, or an `ErrorHandling` if any error occurred.
     fn parse_rust_file(src: &Path) -> Result<Vec<ObjectRange>, ErrorHandling> {
-        let file = fs::read_to_string(src).context(InvalidIoOperationsSnafu)?;
-        let ast: File = parse_str(&file).context(InvalidItemParsingSnafu { str_source: src })?;
+        let file = fs::read_to_string(src)?;
+        let ast: File = parse_str(&file)?;
         visit_items(&ast.items)
     }
 
@@ -87,10 +87,7 @@ impl RustParser for RustItemParser {
 ///
 /// A `Result` containing a vector of `ObjectRange` structs, or an `ErrorHandling` if any error occurred.
     fn parse_all_rust_items(src: &str) -> Result<Vec<ObjectRange>, ErrorHandling> {
-        let src_format_error = format!("{:#?}", &src);
-        let ast: File = parse_str(src).context(InvalidItemParsingSnafu {
-            str_source: src_format_error,
-        })?;
+        let ast: File = parse_str(src)?;
         let mut comments = comment_lexer(src)?;
         let mut visited = visit_items(&ast.items)?;
         visited.append(&mut comments);
@@ -122,9 +119,7 @@ impl RustParser for RustItemParser {
 ///
 /// A `Result` containing a `FunctionSignature` struct, or an `ErrorHandling` if any error occurred.
     fn rust_function_parser(src: &str) -> Result<FunctionSignature, ErrorHandling> {
-        let ast: File = parse_str(src).context(InvalidItemParsingSnafu {
-            str_source: &src.to_string(),
-        })?;
+        let ast: File = parse_str(src)?;
         function_parse(&ast.items)
     }
 
@@ -138,10 +133,7 @@ impl RustParser for RustItemParser {
 ///
 /// A `Result` containing an `ObjectRange` struct representing the first item, or an `ErrorHandling` if any error occurred.
     fn rust_item_parser(src: &str) -> Result<ObjectRange, ErrorHandling> {
-        let src_format_error = format!("{:#?}", &src);
-        let ast: File = parse_str(src).context(InvalidItemParsingSnafu {
-            str_source: src_format_error,
-        })?;
+        let ast: File = parse_str(src)?;
         let binding: Vec<ObjectRange> = visit_items(&ast.items)?;
         let visited: &ObjectRange = binding
             .first()
@@ -168,9 +160,7 @@ impl RustParser for RustItemParser {
 ///
 /// A `Result` containing the parsed `File` AST, or an `ErrorHandling` if any error occurred.
     fn rust_ast(src: &str) -> Result<File, ErrorHandling> {
-        let ast: File = parse_str(src).context(InvalidItemParsingSnafu {
-            str_source: &src.to_string(),
-        })?;
+        let ast: File = parse_str(src)?;
         Ok(ast)
     }
 
@@ -360,7 +350,7 @@ fn function_parse(items: &[Item]) -> Result<FunctionSignature, ErrorHandling> {
             })
         }
     } else {
-        println!("{items:#?}");
+        event!(Level::ERROR, "{items:#?}");
         Err(ErrorHandling::NotFunction)
     }
 }
@@ -645,7 +635,7 @@ fn visit_items(items: &[Item]) -> Result<Vec<ObjectRange>, ErrorHandling> {
                                 ],
                             });
                         }
-                        _ => println!("Other impl object"),
+                        _ => event!(Level::INFO, "Other impl object"),
                     }
                 }
             }
@@ -733,7 +723,7 @@ fn visit_items(items: &[Item]) -> Result<Vec<ObjectRange>, ErrorHandling> {
                     ],
                 });
             }
-            _ => println!("Other item"),
+            _ => event!(Level::INFO, "Other item"),
         }
     }
 

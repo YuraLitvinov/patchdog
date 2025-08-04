@@ -1,4 +1,3 @@
-use crate::binding::rust_parsing::error::CouldNotGetLineSnafu;
 use ai_interactions::parse_json::ChangeFromPatch;
 use gemini::gemini::{ContextData, SingleFunctionData};
 use git_parsing::{Hunk, get_easy_hunk, match_patch_with_parse};
@@ -7,7 +6,8 @@ use rust_parsing::ObjectRange;
 use rust_parsing::error::{ErrorBinding, InvalidIoOperationsSnafu, InvalidReadFileOperationSnafu};
 use rust_parsing::file_parsing::{FileExtractor, Files};
 use rust_parsing::rust_parser::{RustItemParser, RustParser};
-use snafu::{OptionExt, ResultExt};
+use snafu::{ResultExt};
+use tracing::{event, Level};
 use std::{
     env, fs,
     ops::Range,
@@ -42,7 +42,7 @@ pub fn changes_from_patch(
 ) -> Result<Vec<SingleFunctionData>, ErrorBinding> {
     let mut singlerequestdata: Vec<SingleFunctionData> = Vec::new();
     for each in exported_from_file {
-        println!("{:?}", &each.filename);
+        event!(Level::INFO, "{:?}", &each.filename);
         let file = fs::read_to_string(&each.filename).context(InvalidIoOperationsSnafu)?;
         let vectorized = FileExtractor::string_to_vector(&file);
         for obj in each.range {
@@ -122,8 +122,8 @@ pub fn get_patch_data(
     for difference in export {
         let parsed = RustItemParser::parse_rust_file(&difference.filename)?;
         for each_parsed in &parsed {
-            let range = each_parsed.line_start().context(CouldNotGetLineSnafu)?
-                ..each_parsed.line_end().context(CouldNotGetLineSnafu)?;
+            let range = each_parsed.line_start()?
+                ..each_parsed.line_end()?;
             if difference.line.iter().any(|line| range.contains(line)) {
                 vector_of_changed.push(range);
             }
@@ -158,8 +158,7 @@ fn store_objects(
             let list_of_unique_files =
                 get_easy_hunk(patch_src, &change_line.change_at_hunk.filename())?;
             let path = relative_path.join(change_line.change_at_hunk.filename());
-            let file = fs::read_to_string(&path)
-                .context(InvalidReadFileOperationSnafu { file_path: &path })?;
+            let file = fs::read_to_string(&path)?;
             let parsed = RustItemParser::parse_all_rust_items(&file)?;
             vec_of_surplus.push(FullDiffInfo {
                 name: change_line.change_at_hunk.filename(),

@@ -6,3 +6,4 @@ edition = "2024"
 [dependencies]
 snafu = { workspace = true }
 git2 = "0.20.2"
+tracing = { workspace = true }

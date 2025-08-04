@@ -1,5 +1,6 @@
 use git2::{Diff, Patch};
 use snafu::{OptionExt, ResultExt, Snafu};
+use tracing::{event, Level};
 use std::{
     collections::HashSet,
     ffi::OsStr,
@@ -15,7 +16,11 @@ pub enum Git2ErrorHandling {
     },
     PatchExportError,
 }
-
+impl From<git2::Error> for Git2ErrorHandling {
+    fn from (e: git2::Error) -> Self {
+       return Git2ErrorHandling::Git2Error { source: e }
+    }   
+}
 #[derive(Clone, Hash, Eq, PartialEq, Debug)]
 pub enum HunkChange {
     Add,
@@ -60,7 +65,7 @@ pub fn match_patch_with_parse(
 ) -> Result<Vec<Change>, Git2ErrorHandling> {
     let mut changes: Vec<Change> = Vec::new();
     let list_of_unique_files = read_non_repeting_functions(patch_src, relative_path)?;
-    let diff = Diff::from_buffer(patch_src).context(Git2Snafu)?;
+    let diff = Diff::from_buffer(patch_src)?;
     let changed = get_filenames(&diff)?;
     let mut hunks = git_get_hunks(diff, changed)?;
     hunks.sort_by_key(|a| a.filename());
@@ -77,14 +82,14 @@ pub fn match_patch_with_parse(
             }
         }
     }
-    println!("Quantity of hunks: {}", hunks.len());
-    println!("Quantity of changes: {}", changes.len());
+    event!(Level::INFO, "Quantity of hunks: {}", hunks.len());
+    event!(Level::INFO, "Quantity of changes: {}", changes.len());
     Ok(changes)
 }
 
 pub fn get_easy_hunk(patch_src: &[u8], at_file_path: &str) -> Result<Vec<Hunk>, Git2ErrorHandling> {
     let mut vec_of_hunks: Vec<Hunk> = Vec::new();
-    let diff = Diff::from_buffer(patch_src).context(Git2Snafu)?;
+    let diff = Diff::from_buffer(patch_src)?;
     let filenames = get_filenames(&diff)?;
     let hunks = git_get_hunks(diff, filenames)?;
     vec_of_hunks.sort_by_key(|hunk| hunk.filename.to_owned());
@@ -126,14 +131,13 @@ fn git_get_hunks(
     let mut hunk_tuple: Vec<Hunk> = Vec::new();
     //i returns tuple
     for i in diff.deltas().enumerate() {
-        let patch = Patch::from_diff(&diff, i.0).context(Git2Snafu)?;
+        let patch = Patch::from_diff(&diff, i.0)?;
         let patch_ref = patch.as_ref().context(PatchExportSnafu)?;
         for hunk_idx in 0..patch_ref.num_hunks() {
-            let (_hunk, _) = patch_ref.hunk(hunk_idx).context(Git2Snafu)?;
-            for line_idx in 0..patch_ref.num_lines_in_hunk(hunk_idx).context(Git2Snafu)? {
+            let (_hunk, _) = patch_ref.hunk(hunk_idx)?;
+            for line_idx in 0..patch_ref.num_lines_in_hunk(hunk_idx)? {
                 let line = patch_ref
-                    .line_in_hunk(hunk_idx, line_idx)
-                    .context(Git2Snafu)?;
+                    .line_in_hunk(hunk_idx, line_idx)?;
                 let line_processed: usize = line.new_lineno().unwrap_or(0) as usize;
                 let change = match line.origin() {
                     '+' => HunkChange::Add,

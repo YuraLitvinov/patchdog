@@ -1,5 +1,7 @@
 use serde::Serialize;
 
+use crate::{error::{CouldNotGetLineSnafu}};
+
 #[derive(Debug, Clone, serde::Deserialize, Serialize)]
 pub enum LineRange {
     Start(usize),
@@ -40,20 +42,20 @@ impl ObjectRange {
         }
         None
     }
-    pub fn line_start(&self) -> Option<usize> {
+    pub fn line_start(&self) -> Result<usize, CouldNotGetLineSnafu> {
         for r in &self.line_ranges {
             if let LineRange::Start(val) = r {
-                return Some(*val);
+                return Ok(*val);
             }
         }
-        None
+        Err(CouldNotGetLineSnafu)
     }
-    pub fn line_end(&self) -> Option<usize> {
+    pub fn line_end(&self) -> Result<usize, CouldNotGetLineSnafu> {
         for r in &self.line_ranges {
             if let LineRange::End(val) = r {
-                return Some(*val);
+                return Ok(*val);
             }
         }
-        None
+        Err(CouldNotGetLineSnafu)
     }
 }

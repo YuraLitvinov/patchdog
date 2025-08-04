@@ -21,3 +21,4 @@ serde_json = { workspace = true }
 ai_interactions = { path = "../ai_interactions"}
 regex = { workspace = true }
 uuid = { workspace = true }
+tracing-subscriber = { version = "0.3.19", features = ["fmt"] }

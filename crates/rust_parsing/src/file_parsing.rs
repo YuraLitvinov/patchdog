@@ -1,9 +1,9 @@
 use crate::error::{
-    CouldNotGetLineSnafu, ErrorHandling, InvalidIoOperationsSnafu, LineOutOfBoundsSnafu,
+    ErrorHandling, InvalidIoOperationsSnafu, LineOutOfBoundsSnafu,
     SeekerFailedSnafu,
 };
 use crate::object_range::ObjectRange;
-use snafu::{OptionExt, ResultExt, ensure};
+use snafu::{ResultExt, ensure};
 use std::{fs::File, io::Write, path::PathBuf};
 //Advanced matching. This inefficient method is chosen due to error: look-around, including look-ahead and look-behind, is not supported
 /*
@@ -114,8 +114,8 @@ impl Files for FileExtractor {
         line_number: usize,
     ) -> Result<bool, ErrorHandling> {
         for each in parsed {
-            if each.line_start().context(CouldNotGetLineSnafu)? <= line_number
-                && line_number <= each.line_end().context(CouldNotGetLineSnafu)?
+            if each.line_start()? <= line_number
+                && line_number <= each.line_end()?
             {
                 return Ok(false);
             }
@@ -171,19 +171,19 @@ impl Files for FileExtractor {
             let found = seeker_for_comments(
                 from_line,
                 new_previous[i],
-                each.line_end().context(CouldNotGetLineSnafu)?,
+                each.line_end()?,
                 &src,
             );
             if found.is_err() {
                 i += 1;
-                let previous_end_line = each.line_end().context(CouldNotGetLineSnafu)? + 1;
+                let previous_end_line = each.line_end()? + 1;
                 new_previous.push(previous_end_line);
                 continue;
             }
             let extracted = extract_by_line(
                 &src,
                 &new_previous[i],
-                &each.line_end().context(CouldNotGetLineSnafu)?,
+                &each.line_end()?,
             );
             return Ok(extracted);
         }
@@ -194,8 +194,8 @@ impl Files for FileExtractor {
 //If it does, then object is printed with extract_by_line
 
 fn seeker(line_number: usize, item: &ObjectRange, src: &[String]) -> Result<String, ErrorHandling> {
-    let line_start = item.line_start().context(CouldNotGetLineSnafu)?;
-    let line_end = item.line_end().context(CouldNotGetLineSnafu)?;
+    let line_start = item.line_start()?;
+    let line_end = item.line_end()?;
     ensure!(
         line_start <= line_number && line_end >= line_number,
         SeekerFailedSnafu { line_number }

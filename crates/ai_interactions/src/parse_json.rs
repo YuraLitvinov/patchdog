@@ -7,7 +7,7 @@ use snafu::{OptionExt, ResultExt};
 use std::ops::Range;
 use std::path::PathBuf;
 use std::{env, fs};
-use tracing::{event, span, Level};
+use tracing::{event, instrument, Level};
 
 #[derive(Debug, Clone)]
 pub struct ChangeFromPatch {
@@ -26,6 +26,7 @@ pub struct ChangeFromPatch {
 /// # Returns
 ///
 /// A `Result` containing a vector of `ChangeFromPatch` structs, or an `ErrorHandling` if any error occurred during file parsing or IO operations.
+#[instrument]
 pub fn make_export(filenames: &Vec<PathBuf>) -> Result<Vec<ChangeFromPatch>, ErrorHandling> {
     let mut output_vec: Vec<ChangeFromPatch> = Vec::new();
     let mut vector_of_changed: Vec<Range<usize>> = Vec::new();
@@ -38,8 +39,8 @@ pub fn make_export(filenames: &Vec<PathBuf>) -> Result<Vec<ChangeFromPatch>, Err
         match parsed_file {
             Ok(value) => {
                 for each_object in value {
-                    let range = each_object.line_start().context(CouldNotGetLineSnafu)?
-                        ..each_object.line_end().context(CouldNotGetLineSnafu)?;
+                    let range = each_object.line_start()?
+                        ..each_object.line_end()?;
                     vector_of_changed.push(range);
                 }
                 output_vec.push({
@@ -77,7 +78,7 @@ pub fn justify_presence(
 ) -> Result<Vec<bool>, ErrorBinding> {
     let mut vecbool: Vec<bool> = Vec::new();
     for each_item in exported_from_file {
-        let file = fs::read_to_string(&each_item.filename).context(InvalidIoOperationsSnafu)?;
+        let file = fs::read_to_string(&each_item.filename)?;
         let vectorized = FileExtractor::string_to_vector(&file);
         for object in each_item.range {
             //object.start - 1 is a relatively safe operation, as line number never starts with 0

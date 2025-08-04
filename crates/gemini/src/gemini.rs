@@ -1,10 +1,8 @@
 use ai_interactions::return_prompt;
 use async_trait::async_trait;
 use gemini_rust::Gemini;
-use rust_parsing::error::{ErrorBinding, ParseErrSnafu, SerdeSnafu};
-use rust_parsing::{ErrorHandling, error::GeminiRustSnafu, error::StdVarSnafu};
+use rust_parsing::ErrorHandling;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
-use snafu::ResultExt;
 use std::collections::HashMap;
 use std::ops::Range;
 use std::path::PathBuf;
@@ -100,12 +98,12 @@ impl MappedRequest {
 /// # Returns
 ///
 /// A new `MappedRequest` struct.
-    pub fn new() -> MappedRequest {
-        MappedRequest {
-            remaining_capacity: var("TOKENS_PER_MIN").context(StdVarSnafu).unwrap().parse::<usize>().unwrap() / 
-                var("REQUEST_PER_MIN").context(StdVarSnafu).unwrap().parse::<usize>().unwrap(),
+    pub fn new() -> Result<MappedRequest, ErrorHandling> {
+        Ok(MappedRequest {
+            remaining_capacity: var("TOKENS_PER_MIN")?.parse::<usize>()? / 
+                var("REQUESTS_PER_MIN")?.parse::<usize>()?,
             data: HashMap::new(),
-        }
+        })
     }
 /// Adds a `SingleFunctionData` struct to the internal data HashMap, generating a new UUID for each entry.
 ///
@@ -136,7 +134,7 @@ impl Default for MappedRequest {
 ///
 /// A new instance of the struct.
     fn default() -> Self {
-        Self::new()
+        Self::new().unwrap()
     }
 }
 
@@ -167,12 +165,12 @@ impl PreparingRequests {
 /// # Returns
 ///
 /// A new `PreparingRequests` struct.
-    pub fn new() -> PreparingRequests {
-        PreparingRequests {
-            remaining_capacity: var("TOKENS_PER_MIN").context(StdVarSnafu).unwrap().parse::<usize>().unwrap() / 
-                var("REQUEST_PER_MIN").context(StdVarSnafu).unwrap().parse::<usize>().unwrap() - return_prompt().unwrap().len(),
+    pub fn new() -> Result<PreparingRequests, ErrorHandling> {
+        Ok(PreparingRequests {
+            remaining_capacity: var("TOKENS_PER_MIN")?.parse::<usize>()? / 
+                var("REQUESTS_PER_MIN")?.parse::<usize>()? - return_prompt()?.len(),
             data: vec![],
-        }
+        })
     }
 /// Adds a `SingleFunctionData` struct to the internal data vector if there is enough remaining capacity.
 ///
@@ -202,7 +200,7 @@ impl Default for PreparingRequests {
 ///
 /// A new instance of the struct.
     fn default() -> Self {
-        Self::new()
+        Self::new().unwrap()
     }
 }
 
@@ -238,7 +236,7 @@ impl Default for GoogleGemini {
 ///
 /// A new instance of the struct.
     fn default() -> Self {
-        Self::new()
+        Self::new().unwrap()
     }
 }
 /// Converts a `serde_json::Value` to a specified type.
@@ -272,14 +270,14 @@ impl GoogleGemini {
 /// # Returns
 ///
 /// A new `GoogleGemini` struct.
-    pub fn new() -> GoogleGemini {
-        GoogleGemini {
+    pub fn new() -> Result<GoogleGemini, ErrorHandling> {
+        Ok(GoogleGemini {
             preparing_requests: PreparingRequests {
-                remaining_capacity: var("TOKENS_PER_MIN").context(StdVarSnafu).unwrap().parse::<usize>().unwrap() / 
-                var("REQUEST_PER_MIN").context(StdVarSnafu).unwrap().parse::<usize>().unwrap(),
+                remaining_capacity: var("TOKENS_PER_MIN")?.parse::<usize>()? / 
+                var("REQUESTS_PER_MIN")?.parse::<usize>()?,
                 data: vec![],
             },
-        }
+        })
     }
 /// Sends batches of requests to the Google Gemini API.
 ///
@@ -303,7 +301,7 @@ impl GoogleGemini {
                         data: each.clone(),
                     });
                 }
-                let as_json = serde_json::to_string_pretty(&vec).context(SerdeSnafu)?;
+                let as_json = serde_json::to_string_pretty(&vec)?;
                 match GoogleGemini::req_res(&as_json, &return_prompt()?).await {
                     //Handling exclusive case, where one of the requests may fail
                     Ok(r) => {
@@ -326,14 +324,12 @@ impl GoogleGemini {
 
     pub fn assess_batch_readiness(
         batch: Vec<MappedRequest>,
-    ) -> Result<Vec<WaitForTimeout>, ErrorBinding> {
+    ) -> Result<Vec<WaitForTimeout>, ErrorHandling> {
         //Architecture: batch[BIG_NUMBER..len()-1]
         //Next: batch[0..4]
         let mut await_response: Vec<WaitForTimeout> = vec![];
-        let request_per_min = var("REQUEST_PER_MIN")
-            .context(StdVarSnafu)?
-            .parse::<usize>()
-            .context(ParseErrSnafu)?;
+        let request_per_min = var("REQUESTS_PER_MIN")?
+            .parse::<usize>()?;
         if batch.len() > request_per_min {
             let mut size: usize = batch.len();
             for _ in 1..=batch.len().div_ceil(request_per_min) {
@@ -365,16 +361,14 @@ impl GoogleGemini {
     }
 
     pub async fn req_res(file_content: &str, arguments: &str) -> Result<String, ErrorHandling> {
-        let api_key = var("API_KEY_GEMINI").context(StdVarSnafu)?;
-        let model = var("GEMINI_MODEL").context(StdVarSnafu)?;  
+        let api_key = var("API_KEY_GEMINI")?;
+        let model = var("GEMINI_MODEL")?;  
         let client = Gemini::with_model(api_key, model)
             .generate_content()
             .with_system_prompt(arguments)
             .with_user_message(file_content)
             .execute()
-            .await
-            .context(GeminiRustSnafu)?;
-
+            .await?;
         Ok(client.text())
     }
 
@@ -385,7 +379,7 @@ impl GoogleGemini {
         request: Vec<SingleFunctionData>,
     ) -> Result<Vec<PreparingRequests>, ErrorHandling> {
         let mut batches: Vec<PreparingRequests> = Vec::new();
-        let mut preparing_requests = PreparingRequests::new();
+        let mut preparing_requests = PreparingRequests::new()?;
         for data in request {
             if !preparing_requests.function_add(data.clone()) {
                 //Preserving overflow of preparing request to next iter
@@ -393,7 +387,7 @@ impl GoogleGemini {
                     batches.push(preparing_requests);
                 }
                 //Reinitializing preparing_requests to free the buffer
-                preparing_requests = PreparingRequests::new();
+                preparing_requests = PreparingRequests::new()?;
 
                 // Attempt to push
                 if !preparing_requests.function_add(data) {
@@ -415,7 +409,7 @@ impl GoogleGemini {
         request: Vec<SingleFunctionData>,
     ) -> Result<Vec<MappedRequest>, ErrorHandling> {
         let mut batches: Vec<MappedRequest> = Vec::new();
-        let mut mapped_requests = MappedRequest::new();
+        let mut mapped_requests = MappedRequest::new()?;
         for data in request {
             if !mapped_requests.function_add(data.clone()) {
                 //Preserving overflow of preparing request to next iter
@@ -423,7 +417,7 @@ impl GoogleGemini {
                     batches.push(mapped_requests);
                 }
                 //Reinitializing preparing_requests to free the buffer
-                mapped_requests = MappedRequest::new();
+                mapped_requests = MappedRequest::new()?;
 
                 // Attempt to push
                 if !mapped_requests.function_add(data) {

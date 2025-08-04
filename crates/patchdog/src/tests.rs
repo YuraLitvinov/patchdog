@@ -17,7 +17,6 @@ mod tests {
     #[test]
     fn test_parse() {
         let source = fs::read_to_string(PATH_BASE)
-            .context(InvalidIoOperationsSnafu)
             .expect("File read failed");
         let parsed = RustItemParser::parse_all_rust_items(&source).expect("Parsing failed");
         for object in parsed {

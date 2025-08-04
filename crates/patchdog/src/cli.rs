@@ -7,12 +7,10 @@ use rust_parsing::error::ErrorBinding;
 use rust_parsing::error::ErrorHandling;
 use rust_parsing::file_parsing::REGEX;
 use rust_parsing::file_parsing::{FileExtractor, Files};
-use syn::token::Le;
-use tracing::{event, Level, span};
+use tracing::{event, Level};
 use std::collections::HashMap;
 use std::{path::PathBuf, fs};
 use rust_parsing::error::InvalidIoOperationsSnafu;
-use snafu::ResultExt;
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None, group(
     ArgGroup::new("path")
@@ -44,9 +42,9 @@ pub async fn cli_patch_to_agent() -> Result<(), ErrorBinding> {
     let patch = binding::patch_data_argument(commands.file_patch)?;
     event!(Level::INFO, "type: {:#?}", commands.type_rust);
     let request = changes_from_patch(patch, commands.type_rust, commands.name_rust)?;
-    event!(Level::INFO, "Request len: {}", &request.len()); 
+    event!(Level::INFO, "Requests length: {}", &request.len()); 
     let responses_collected = call(request).await?;
-    event!(Level::INFO, "{}", responses_collected.len());
+    event!(Level::INFO, "Responses collected: {}", responses_collected.len());
     write_to_file(responses_collected)?;
     Ok(())
 }
@@ -92,7 +90,7 @@ async fn call(
 ) -> Result<Vec<Form>, ErrorBinding> {
     let mut responses_collected = Vec::new();
     let mut collect_error = HashMap::new();
-    let mut new_buffer = GoogleGemini::new();
+    let mut new_buffer = GoogleGemini::new()?;
     let batch = new_buffer.prepare_map(request.clone())?;
     let prepared = GoogleGemini::assess_batch_readiness(batch)?;
     let response = GoogleGemini::send_batches(&prepared).await?;
@@ -157,10 +155,7 @@ fn match_response(
             }
         }
     }
-
-    event!(Level::ERROR, "Failed to match response");
     Err(ErrorHandling::CouldNotGetLine)
-
 }
 
 //Here we should form a structure, that would consist of request metadata and new comment
@@ -211,7 +206,7 @@ fn fallback_repair(output: Vec<String>) -> Result<Vec<Response>, ErrorHandling> 
             }
         };
     }
-    event!(Level::ERROR, "Prevent stackoverflow");
+
     Err(ErrorHandling::CouldNotGetLine)
 }
 
@@ -223,12 +218,14 @@ fn write_to_file(response: Vec<Form>) -> Result<(), ErrorHandling> {
             .start
             .cmp(&a.data.1.context.line_range.start)
     });
+    event!(Level::INFO, "Quantity of responses: {}", response.len());
+    println!("{:#?}", response);
     /* 
     //Typical representation of file as vector of lines
     for each in response {
         let path = each.data.1.context.filepath;
         let file =
-            fs::read_to_string(&path).context(InvalidIoOperationsSnafu)?;
+            fs::read_to_string(&path)?;
         let as_vec = FileExtractor::string_to_vector(&file);
         FileExtractor::write_to_vecstring(
             path,
