@@ -1,4 +1,4 @@
-use ai_interactions::{return_prompt, YamlRead};
+use ai_interactions::{YamlRead, return_prompt};
 use async_trait::async_trait;
 use gemini_rust::Gemini;
 use rust_parsing::ErrorHandling;
@@ -201,9 +201,7 @@ impl PreparingRequests {
     /// A new `PreparingRequests` struct.
     pub fn new() -> Result<PreparingRequests, ErrorHandling> {
         Ok(PreparingRequests {
-            remaining_capacity: 
-                return_prompt()?.tokens 
-                / return_prompt()?.requests
+            remaining_capacity: return_prompt()?.tokens / return_prompt()?.requests
                 - return_prompt()?.model.len()
                 - return_prompt()?.prompt.len(),
             data: vec![],
@@ -333,8 +331,7 @@ impl GoogleGemini {
     pub fn new() -> Result<GoogleGemini, ErrorHandling> {
         Ok(GoogleGemini {
             preparing_requests: PreparingRequests {
-                remaining_capacity: return_prompt()?.tokens
-                    / return_prompt()?.requests,
+                remaining_capacity: return_prompt()?.tokens / return_prompt()?.requests,
                 data: vec![],
             },
         })

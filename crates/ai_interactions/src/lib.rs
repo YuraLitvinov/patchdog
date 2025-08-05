@@ -7,7 +7,7 @@ pub struct YamlRead {
     pub prompt: String,
     pub model: String,
     pub tokens: usize,
-    pub requests: usize
+    pub requests: usize,
 }
 /// Reads the 'prompt' value from a 'config.yaml' file and returns it as a `String`.
 /// If the file cannot be read, the YAML cannot be loaded, or the 'prompt' key is not found, an empty `String` is returned or an `ErrorHandling` is propagated.
@@ -60,6 +60,11 @@ pub fn return_prompt() -> Result<YamlRead, ErrorHandling> {
             requests,
         })
     } else {
-        Ok(YamlRead { prompt: "".to_string(), model: "".to_string(), tokens: 0, requests: 0 })
+        Ok(YamlRead {
+            prompt: "".to_string(),
+            model: "".to_string(),
+            tokens: 0,
+            requests: 0,
+        })
     }
 }

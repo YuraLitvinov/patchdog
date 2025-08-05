@@ -147,43 +147,43 @@ impl From<CouldNotGetLineSnafu> for ErrorBinding {
 
 impl From<std::io::Error> for ErrorHandling {
     fn from(e: std::io::Error) -> Self {
-         ErrorHandling::InvalidIoOperations { source: e }
+        ErrorHandling::InvalidIoOperations { source: e }
     }
 }
 impl From<std::io::Error> for ErrorBinding {
     fn from(e: std::io::Error) -> Self {
-         ErrorBinding::RustParsing(ErrorHandling::InvalidIoOperations { source: e })
+        ErrorBinding::RustParsing(ErrorHandling::InvalidIoOperations { source: e })
     }
 }
 
 impl From<ScanError> for ErrorHandling {
     fn from(e: ScanError) -> Self {
-         ErrorHandling::YamlError { source: e }
+        ErrorHandling::YamlError { source: e }
     }
 }
 impl From<VarError> for ErrorHandling {
     fn from(e: VarError) -> Self {
-         ErrorHandling::StdVarError { source: e }
+        ErrorHandling::StdVarError { source: e }
     }
 }
 
 impl From<ParseIntError> for ErrorHandling {
     fn from(e: ParseIntError) -> Self {
-         ErrorHandling::ParseErr { source: e }
+        ErrorHandling::ParseErr { source: e }
     }
 }
 impl From<Error> for ErrorHandling {
     fn from(e: Error) -> Self {
-         ErrorHandling::GeminiRustError { source: e }
+        ErrorHandling::GeminiRustError { source: e }
     }
 }
 impl From<serde_json::Error> for ErrorHandling {
     fn from(e: serde_json::Error) -> Self {
-         ErrorHandling::SerdeError { source: e }
+        ErrorHandling::SerdeError { source: e }
     }
 }
 impl From<syn::Error> for ErrorHandling {
     fn from(e: syn::Error) -> Self {
-         ErrorHandling::InvalidRustParse { source: e }
+        ErrorHandling::InvalidRustParse { source: e }
     }
 }
