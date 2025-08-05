@@ -24,3 +24,7 @@ jobs:
         API_KEY_GEMINI: ${{ secrets.API_KEY_GEMINI }}
     - name: cleanup patch
       run: rm patch.patch
+    - name: create pull request
+      run: gh pr create -B ${{ github.base_ref }} -H ${{ github.head_ref }} --title 'Merge PR $(date)' --body 'Created by patchdog - AI Engine!'
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
