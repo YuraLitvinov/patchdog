@@ -1,11 +1,11 @@
 use git2::{Diff, Patch};
 use snafu::{OptionExt, ResultExt, Snafu};
-use tracing::{event, Level};
 use std::{
     collections::HashSet,
     ffi::OsStr,
     path::{Path, PathBuf},
 };
+use tracing::{Level, event};
 
 #[derive(Debug, Snafu)]
 #[snafu(visibility(pub))]
@@ -17,9 +17,9 @@ pub enum Git2ErrorHandling {
     PatchExportError,
 }
 impl From<git2::Error> for Git2ErrorHandling {
-    fn from (e: git2::Error) -> Self {
-       return Git2ErrorHandling::Git2Error { source: e }
-    }   
+    fn from(e: git2::Error) -> Self {
+        Git2ErrorHandling::Git2Error { source: e }
+    }
 }
 #[derive(Clone, Hash, Eq, PartialEq, Debug)]
 pub enum HunkChange {
@@ -49,16 +49,17 @@ pub struct Change {
     pub change_at_hunk: Hunk,
 }
 
-/// Matches a patch file with parsed Rust items and generates a vector of `Change` structs.
+/// Parses a Git patch and matches the changes described within it against parsed Rust items.
+/// It identifies unique files, extracts hunks from the diff, sorts them, and then creates `Change` structs for each matching hunk, indicating the quantity of changes and the hunk details.
 ///
 /// # Arguments
 ///
-/// * `relative_path`: The relative path to the file.
-/// * `patch_src`: A slice of bytes representing the patch source.
+/// * `relative_path`: The `Path` representing the base directory for resolving file paths in the patch.
+/// * `patch_src`: A byte slice (`&[u8]`) containing the raw content of the Git patch.
 ///
 /// # Returns
 ///
-/// A `Result` containing a vector of `Change` structs, or a `Git2ErrorHandling` if any error occurred.
+/// A `Result` containing a `Vec<Change>` representing the matched changes, or a `Git2ErrorHandling` if any error occurs during diff parsing or hunk extraction.
 pub fn match_patch_with_parse(
     relative_path: &Path,
     patch_src: &[u8],
@@ -102,6 +103,16 @@ pub fn get_easy_hunk(patch_src: &[u8], at_file_path: &str) -> Result<Vec<Hunk>, 
     Ok(vec_of_hunks)
 }
 
+/// Extracts and collects the new filenames from a Git diff object.
+/// It iterates through the deltas (changes) in the diff and retrieves the path of the new file for each delta.
+///
+/// # Arguments
+///
+/// * `diff`: A reference to a `Diff<'static>` object representing the Git difference.
+///
+/// # Returns
+///
+/// A `Result` containing a `Vec<String>` of filenames, or a `Git2ErrorHandling` if an error occurs during path processing.
 fn get_filenames(diff: &Diff<'static>) -> Result<Vec<String>, Git2ErrorHandling> {
     let mut vector_of_filenames: Vec<String> = Vec::new();
     for delta in diff.deltas() {
@@ -114,16 +125,17 @@ fn get_filenames(diff: &Diff<'static>) -> Result<Vec<String>, Git2ErrorHandling>
     }
     Ok(vector_of_filenames)
 }
-/// Extracts hunks from a Git diff, associating them with filenames and line changes.
+/// Extracts hunk information from a Git diff, associating each hunk with its filename, line number, and type of change (addition or modification).
+/// It iterates through patches and their hunks, processing each line to determine if it's an addition or modification.
 ///
 /// # Arguments
 ///
-/// * `diff`: A Git diff object.
-/// * `vector_of_filenames`: A vector of filenames.
+/// * `diff`: A `Diff<'static>` object representing the Git difference.
+/// * `vector_of_filenames`: A `Vec<String>` containing the filenames associated with the diff, used to link hunks to their respective files.
 ///
 /// # Returns
 ///
-/// A `Result` containing a vector of `Hunk` structs, or a `Git2ErrorHandling` if any error occurred.
+/// A `Result` containing a `Vec<Hunk>` with detailed change information for each line, or a `Git2ErrorHandling` if an error occurs during patch or hunk extraction.
 fn git_get_hunks(
     diff: Diff<'static>,
     vector_of_filenames: Vec<String>,
@@ -136,8 +148,7 @@ fn git_get_hunks(
         for hunk_idx in 0..patch_ref.num_hunks() {
             let (_hunk, _) = patch_ref.hunk(hunk_idx)?;
             for line_idx in 0..patch_ref.num_lines_in_hunk(hunk_idx)? {
-                let line = patch_ref
-                    .line_in_hunk(hunk_idx, line_idx)?;
+                let line = patch_ref.line_in_hunk(hunk_idx, line_idx)?;
                 let line_processed: usize = line.new_lineno().unwrap_or(0) as usize;
                 let change = match line.origin() {
                     '+' => HunkChange::Add,

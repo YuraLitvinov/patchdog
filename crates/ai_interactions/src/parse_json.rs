@@ -7,7 +7,7 @@ use snafu::{OptionExt, ResultExt};
 use std::ops::Range;
 use std::path::PathBuf;
 use std::{env, fs};
-use tracing::{event, instrument, Level};
+use tracing::{Level, event};
 
 #[derive(Debug, Clone)]
 pub struct ChangeFromPatch {
@@ -17,16 +17,19 @@ pub struct ChangeFromPatch {
 
 //Makes an export structure from patch
 //It takes list of files and processes them into objects containing git changes that could be worked with
-/// Processes a list of filenames, parses each Rust file, and generates a vector of `ChangeFromPatch` structs.
+/// Processes a list of Rust filenames, parses each file to identify code item line ranges, and aggregates this information into a structured format.
+/// For each provided file path, the function attempts to read and parse the Rust source code. It then extracts the start and end line numbers for various Rust code items found within the file (e.g., functions, structs, enums).
+/// Files that cause parsing errors or non-critical I/O errors during this process will be skipped, and a warning will be logged.
 ///
 /// # Arguments
 ///
-/// * `filenames`: A vector of `PathBuf`s representing the filenames to process.
+/// * `filenames` - A reference to a `Vec<PathBuf>`, where each `PathBuf` represents the path to a Rust source file to be processed.
 ///
 /// # Returns
 ///
-/// A `Result` containing a vector of `ChangeFromPatch` structs, or an `ErrorHandling` if any error occurred during file parsing or IO operations.
-#[instrument]
+/// A `Result` which is:
+/// - `Ok(Vec<ChangeFromPatch>)`: A vector of `ChangeFromPatch` structs. Each `ChangeFromPatch` contains the path to a processed file and a vector of `Range<usize>` objects, with each range representing the start and end line numbers of a detected code item within that file.
+/// - `Err(ErrorHandling)`: An `ErrorHandling` enum variant if a critical I/O error occurs, such as being unable to determine the current directory (`InvalidIoOperationsSnafu`). Individual file parsing errors or read errors result in the file being skipped and a warning logged, not an `Err` return.
 pub fn make_export(filenames: &Vec<PathBuf>) -> Result<Vec<ChangeFromPatch>, ErrorHandling> {
     let mut output_vec: Vec<ChangeFromPatch> = Vec::new();
     let mut vector_of_changed: Vec<Range<usize>> = Vec::new();
@@ -39,8 +42,7 @@ pub fn make_export(filenames: &Vec<PathBuf>) -> Result<Vec<ChangeFromPatch>, Err
         match parsed_file {
             Ok(value) => {
                 for each_object in value {
-                    let range = each_object.line_start()?
-                        ..each_object.line_end()?;
+                    let range = each_object.line_start()?..each_object.line_end()?;
                     vector_of_changed.push(range);
                 }
                 output_vec.push({
@@ -60,17 +62,18 @@ pub fn make_export(filenames: &Vec<PathBuf>) -> Result<Vec<ChangeFromPatch>, Err
     Ok(output_vec)
 }
 
-/// Checks if code objects of specified types and names are present in a given set of files.
+/// Verifies the presence of specific Rust code objects (filtered by type and name) within the code ranges extracted from a list of files.
+/// It reads each file, extracts relevant code segments based on provided ranges, parses them as Rust items, and then checks if their type and name match the desired criteria.
 ///
 /// # Arguments
 ///
-/// * `exported_from_file`: A vector of `ChangeFromPatch` structs.
-/// * `rust_type`: A vector of strings representing the desired types.
-/// * `rust_name`: A vector of strings representing the desired names.
+/// * `exported_from_file`: A `Vec<ChangeFromPatch>` representing files and their changed line ranges to check.
+/// * `rust_type`: A `Vec<String>` containing the types of Rust objects to look for (e.g., "fn", "struct").
+/// * `rust_name`: A `Vec<String>` containing the names of Rust objects to look for.
 ///
 /// # Returns
 ///
-/// A `Result` containing a vector of booleans indicating presence, or an `ErrorBinding` if any error occurred.
+/// A `Result` containing a `Vec<bool>`, where `true` indicates a matching object was found in the corresponding range, or an `ErrorBinding` if any file or parsing error occurs.
 pub fn justify_presence(
     exported_from_file: Vec<ChangeFromPatch>,
     rust_type: Vec<String>,

@@ -1,6 +1,6 @@
 use serde::Serialize;
 
-use crate::{error::{CouldNotGetLineSnafu}};
+use crate::error::CouldNotGetLineSnafu;
 
 #[derive(Debug, Clone, serde::Deserialize, Serialize)]
 pub enum LineRange {

@@ -15,22 +15,15 @@ jobs:
     - uses: actions/checkout@v4
       with:
         fetch-depth: 2
-    - name: move into directory
-      run: cd /home/runner/work/patchdog/patchdog
     - name: make patch
       run: git diff HEAD~1 HEAD > patch.patch
-    - name: checking out branch
-      run: git checkout HEAD
-    - name: make env
-      run: echo "API_KEY_GEMINI=${{ secrets.API_KEY_GEMINI }}" >> .env
-    - name: echo env
-      run: echo "GEMINI_MODEL=${{ secrets.GEMINI_MODEL }}" >> .env
     - name: run patchdog
       run: cargo run -- --file-patch patch.patch
+      env:
+        API_KEY_GEMINI: ${{ secrets.API_KEY_GEMINI }}
+        GEMINI_MODEL: ${{ secrets.GEMINI_MODEL }}
     - name: cleanup patch
       run: rm patch.patch
-    - name: cleanup env
-      run: rm .env
     - name: create pull request
       run: gh pr create -B ${{ github.base_ref }} -H ${{ github.head_ref }} --title 'Merge PR $(date)' --body 'Created by patchdog - AI Engine!'
       env:

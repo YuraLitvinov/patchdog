@@ -1,16 +1,18 @@
 use crate::binding::{self, changes_from_patch};
 use clap::ArgGroup;
 use clap::Parser;
-use gemini::gemini::{GoogleGemini, Response, SingleFunctionData, WaitForTimeout};
+use gemini::gemini::Request;
+use gemini::gemini::{GoogleGemini, RawResponse, SingleFunctionData, WaitForTimeout};
 use regex::Regex;
 use rust_parsing::error::ErrorBinding;
 use rust_parsing::error::ErrorHandling;
 use rust_parsing::file_parsing::REGEX;
 use rust_parsing::file_parsing::{FileExtractor, Files};
-use tracing::{event, Level};
+use serde::Deserialize;
+use serde::Serialize;
 use std::collections::HashMap;
-use std::{path::PathBuf, fs};
-use rust_parsing::error::InvalidIoOperationsSnafu;
+use std::{fs, path::PathBuf};
+use tracing::{Level, event};
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None, group(
     ArgGroup::new("path")
@@ -25,45 +27,54 @@ struct Mode {
     #[arg(long, num_args=1..,  requires = "file_patch")]
     name_rust: Vec<String>,
 }
-#[derive(Debug, PartialEq, Eq)]
-struct Form {
-    is_full: bool,
-    data: (String, SingleFunctionData), 
-    new_comment: String
+#[derive(Debug, PartialEq, Eq, Deserialize, Serialize)]
+struct LinkedResponse {
+    data: Request,
+    new_comment: String,
 }
 
-/// Processes command-line arguments, extracts code changes, sends them to an AI agent, receives the responses, and writes them to a file.
+#[derive(Debug)]
+struct ResponseForm {
+    data: SingleFunctionData,
+    new_comment: String,
+}
+
+/// The primary asynchronous function for the CLI application. It parses command-line arguments, processes a specified patch file to identify Rust code changes, sends these changes to an external AI agent for processing, and then writes the agent's responses back to the relevant files.
 ///
 /// # Returns
 ///
-/// A `Result` indicating whether the process was successful, or an `ErrorBinding` if any error occurred.
+/// An `Ok(())` on successful execution, or an `ErrorBinding` if any step in the process (CLI parsing, patch processing, agent communication, or file writing) fails.
 pub async fn cli_patch_to_agent() -> Result<(), ErrorBinding> {
     let commands = Mode::parse();
     let patch = binding::patch_data_argument(commands.file_patch)?;
     event!(Level::INFO, "type: {:#?}", commands.type_rust);
     let request = changes_from_patch(patch, commands.type_rust, commands.name_rust)?;
-    event!(Level::INFO, "Requests length: {}", &request.len()); 
+    event!(Level::INFO, "Requests length: {}", &request.len());
     let responses_collected = call(request).await?;
-    event!(Level::INFO, "Responses collected: {}", responses_collected.len());
+    event!(
+        Level::INFO,
+        "Responses collected: {}",
+        responses_collected.len()
+    );
     write_to_file(responses_collected)?;
     Ok(())
 }
 
-/// Collects responses from a string using a regular expression.
+/// Collects and deserializes `RawResponse` objects from a string. It uses a predefined regular expression (`REGEX`) to find JSON-like structures within the input string and attempts to parse each match into a `RawResponse` struct. It logs warnings for any parsing failures and skips problematic entries.
 ///
 /// # Arguments
 ///
-/// * `response`: The response string.
+/// * `response`: A string slice (`&str`) containing the raw response, potentially with multiple JSON objects.
 ///
 /// # Returns
 ///
-/// A `Result` containing a vector of `Response` structs, or an `ErrorHandling` if any error occurred.
-pub fn collect_response(response: &str) -> Result<Vec<Response>, ErrorHandling> {
+/// A `Result` containing a `Vec<RawResponse>` of successfully parsed responses, or an `ErrorHandling` if the regex compilation fails (though this is unlikely given `unwrap()` is used).
+pub fn collect_response(response: &str) -> Result<Vec<RawResponse>, ErrorHandling> {
     let re = Regex::new(REGEX).unwrap();
     let mut response_from_regex = vec![];
     for cap in re.captures_iter(response) {
         let a = cap.get(0).unwrap().as_str();
-        let to_struct = serde_json::from_str::<Response>(a);
+        let to_struct = serde_json::from_str::<RawResponse>(a);
         match to_struct {
             Ok(ok) => {
                 response_from_regex.push(ok);
@@ -76,128 +87,161 @@ pub fn collect_response(response: &str) -> Result<Vec<Response>, ErrorHandling> 
     }
     Ok(response_from_regex)
 }
-/// Sends a batch of requests to the Google Gemini API and collects the responses.
+
+/// Manages the process of sending requests to the Google Gemini API, handling batching, API calls, and response matching.
+/// It initializes a pool of requests, organizes them into batches, sends these batches to the API, and then attempts to match the API responses back to the original requests.
+/// Requests that fail to receive a valid response are recursively retried.
 ///
 /// # Arguments
 ///
-/// * `request`: A vector of `SingleFunctionData` structs representing the requests to send.
+/// * `request`: A `Vec<Request>` containing the functions or code snippets to be processed by the API.
 ///
 /// # Returns
 ///
-/// A `Result` containing a vector of `Form` structs representing the successful responses, or an `ErrorBinding` if any error occurred.
-async fn call(
-    request: Vec<SingleFunctionData>,
-) -> Result<Vec<Form>, ErrorBinding> {
+/// An asynchronous `Result` containing a `Vec<ResponseForm>` with the original request data linked to the new comments generated by the API, or an `ErrorBinding` if a critical error occurs during processing or API communication.
+async fn call(request: Vec<Request>) -> Result<Vec<ResponseForm>, ErrorBinding> {
     let mut responses_collected = Vec::new();
-    let mut collect_error = HashMap::new();
+    let mut pool_of_requests = HashMap::new();
+    request.clone().into_iter().for_each(|each| {
+        pool_of_requests.insert(each.uuid, each.data);
+    });
     let mut new_buffer = GoogleGemini::new()?;
-    let batch = new_buffer.prepare_map(request.clone())?;
+    let batch = new_buffer.prepare_map(request)?;
     let prepared = GoogleGemini::assess_batch_readiness(batch)?;
     let response = GoogleGemini::send_batches(&prepared).await?;
     for each in response {
         event!(Level::DEBUG, each);
         let matches = match_response(&each, &prepared)?;
         for matched in matches {
-            if matched.is_full {
-                responses_collected.push(
-                    Form {
-                        is_full: matched.is_full,
-                        data: matched.data,
-                        new_comment: matched.new_comment
-                    });
-            } else {
-                collect_error.insert(matched.data.0, matched.data.1);
-                event!(Level::WARN, "Propagated a response mismatch");
+            let clear_element = pool_of_requests.remove(&matched.data.uuid).ok_or("None");
+            match clear_element {
+                Ok(ok) => responses_collected.push(ResponseForm {
+                    data: ok,
+                    new_comment: matched.new_comment,
+                }),
+                Err(_) => continue,
             }
         }
     }
-    
-    if !collect_error.is_empty() && collect_error.len() < request.len() {
-        event!(Level::WARN, "Quantity of bad responses: {}", collect_error.len());
-        let as_vec = collect_error
-            .into_values()
+    if !pool_of_requests.is_empty() {
+        event!(
+            Level::WARN,
+            "Quantity of bad responses: {}",
+            pool_of_requests.len()
+        );
+        let as_vec = pool_of_requests
+            .into_iter()
+            .map(|(k, v)| Request { uuid: k, data: v })
             .collect();
         let collect_error = Box::pin(call(as_vec)).await?;
         responses_collected.extend(collect_error);
+        Ok(responses_collected)
+    } else {
+        Ok(responses_collected)
     }
-    
-    Ok(responses_collected)
 }
-/// Matches a response string with prepared requests and returns a vector of `Form` structs.
+
+/// Matches an API response string (expected to contain JSON data) with the initially prepared requests.
+/// It first attempts to directly deserialize the response into `Vec<RawResponse>`. If that fails, it tries a `fallback_repair` mechanism to fix malformed JSON. Once deserialized, it calls `match_request_response` to link responses to requests.
 ///
 /// # Arguments
 ///
-/// * `response`: The response string.
-/// * `prepared`: A vector of `WaitForTimeout` structs representing prepared requests.
+/// * `response`: A string slice (`&str`) containing the raw API response.
+/// * `prepared`: A reference to a `Vec<WaitForTimeout>` containing the initially prepared request batches, used for matching responses.
 ///
 /// # Returns
 ///
-/// A `Result` containing a vector of `Form` structs, or an `ErrorHandling` if any error occurred.
+/// A `Result` containing a `Vec<LinkedResponse>` where each `LinkedResponse` links original request data with new comment, or an `ErrorHandling` if deserialization or matching fails.
 fn match_response(
     response: &str,
     prepared: &Vec<WaitForTimeout>,
-) -> Result<Vec<Form>, ErrorHandling> {
-    let response_from_regex = collect_response(response)?;
-    match serde_json::from_str::<Vec<Response>>(response) {
+) -> Result<Vec<LinkedResponse>, ErrorHandling> {
+    match serde_json::from_str::<Vec<RawResponse>>(response) {
         Ok(ok) => {
-            if response_from_regex.len() == ok.len() {
-                let res = match_request_response(prepared, &ok)?;
-                return Ok(res);
-            }
+            let from_reg = collect_response(response)?;
+            let res = match_request_response(prepared, &from_reg, &ok)?;
+            Ok(res)
         }
         Err(_) => {
             let as_vec = FileExtractor::string_to_vector(response);
             let a = &as_vec[1..as_vec.len() - 1];
             let to_struct = fallback_repair(a.to_vec())?;
-            if response_from_regex.len() == to_struct.len() {
-                let res = match_request_response(prepared, &to_struct)?;
-                return Ok(res);
-            }
+            let from_reg = collect_response(response)?;
+            let res = match_request_response(prepared, &from_reg, &to_struct)?;
+            Ok(res)
         }
     }
-    Err(ErrorHandling::CouldNotGetLine)
 }
 
-//Here we should form a structure, that would consist of request metadata and new comment
-/// Matches requests and responses based on UUIDs.
+/// Matches the raw responses received from the API with the original prepared requests.
+/// It iterates through the prepared request batches and their contained requests. For each original request, it attempts to find a corresponding raw response using the UUID, then creates a `LinkedResponse` that combines the original request data with the new comment from the response.
 ///
 /// # Arguments
 ///
-/// * `prepared`: A vector of `WaitForTimeout` structs representing prepared requests.
-/// * `uuid`: A vector of `Response` structs representing responses.
+/// * `prepared`: A reference to a `Vec<WaitForTimeout>` representing the prepared batches of requests.
+/// * `_response_raw_regex`: A reference to a `Vec<RawResponse>` obtained via regex parsing (currently unused, commented out logic shows it was part of a merge strategy).
+/// * `response_raw_serial`: A slice of `RawResponse` structs obtained via direct JSON deserialization, used for matching.
 ///
 /// # Returns
 ///
-/// A `Result` containing a vector of `Form` structs, or an `ErrorHandling` if any error occurred.
+/// A `Result` containing a `Vec<LinkedResponse>` of matched request-response pairs, or an `ErrorHandling` if an unexpected error occurs.
 fn match_request_response(
     prepared: &Vec<WaitForTimeout>,
-    uuid: &[Response],
-) -> Result<Vec<Form>, ErrorHandling> {
-let mut matched = vec![];
-        let mut set = HashMap::new();
-        for each in uuid.to_owned() {
-            set.insert(each.uuid, each.new_comment);
-        }
-        for prepare in prepared {
-            for req in &prepare.prepared_requests {
-                for each in &req.data {
-                    if let Some(found) = set.iter().find(|item| item.0 == each.0) {
-                        matched.push(Form { is_full: true, data: (each.0.to_owned(), each.1.clone()), new_comment: found.1.to_string() });
-                    }
+    _response_raw_regex: &[RawResponse],
+    response_raw_serial: &[RawResponse],
+) -> Result<Vec<LinkedResponse>, ErrorHandling> {
+    let mut matched = vec![];
+    /*
+    let regex_set: HashMap<String, String> = response_raw_regex
+        .into_iter()
+        .map(|each| (each.uuid.clone(), each.new_comment.clone()))
+        .collect();
+    let mut serial_set: HashMap<String, String> = response_raw_serial
+        .into_iter()
+        .map(|each| (each.uuid.clone(), each.new_comment.clone()))
+        .collect();
+    regex_set.clone().
+        into_iter()
+        .for_each(|(k,v)| { serial_set.insert(k, v); });
+    if regex_set.len() == serial_set.len() {}
+        */
+    for prepare in prepared {
+        for req in &prepare.prepared_requests {
+            for each in &req.data {
+                if let Some(found) = response_raw_serial
+                    .iter()
+                    .find(|item| item.uuid == each.uuid)
+                {
+                    matched.push(LinkedResponse {
+                        data: each.to_owned(),
+                        new_comment: found.new_comment.to_string(),
+                    });
                 }
+            }
         }
-        }
-        Ok(matched)
+    }
+    Ok(matched)
 }
 
-fn fallback_repair(output: Vec<String>) -> Result<Vec<Response>, ErrorHandling> {
+/// Attempts to repair a malformed JSON output string (provided as a vector of lines) to make it deserializable into a `Vec<RawResponse>`.
+/// It iteratively removes lines from the end of the input vector and appends a closing JSON array and object delimiter (`}]`) until the resulting string can be successfully parsed by `serde_json`.
+/// This is a fallback mechanism for poorly formatted API responses.
+///
+/// # Arguments
+///
+/// * `output`: A `Vec<String>` representing the lines of the potentially malformed JSON output.
+///
+/// # Returns
+///
+/// A `Result` containing a `Vec<RawResponse>` if a repair is successful, or an `ErrorHandling::CouldNotGetLine` if no valid JSON can be formed after exhausting all repair attempts.
+fn fallback_repair(output: Vec<String>) -> Result<Vec<RawResponse>, ErrorHandling> {
     let mut clone_out = output;
     for _ in 0..clone_out.len() {
         clone_out.pop();
         let mut clone_clone = clone_out.clone();
         //Fixing broken delimiters in returned JSON here
         clone_clone.push("}]".to_string());
-        let _ = match serde_json::from_str::<Vec<Response>>(&clone_clone.join("\n")) {
+        let _ = match serde_json::from_str::<Vec<RawResponse>>(&clone_clone.join("\n")) {
             Ok(res) => {
                 return Ok(res);
             }
@@ -206,34 +250,43 @@ fn fallback_repair(output: Vec<String>) -> Result<Vec<Response>, ErrorHandling> 
             }
         };
     }
-
+    event!(Level::WARN, "Here");
     Err(ErrorHandling::CouldNotGetLine)
 }
 
-fn write_to_file(response: Vec<Form>) -> Result<(), ErrorHandling> {
+/// Writes the generated comments from `ResponseForm` structs back into their respective source files.
+/// The responses are sorted by their line range (in descending order) to prevent issues with line number shifts during insertion.
+/// For each response, it reads the original file, inserts the `new_comment` at the specified line index, and then writes the modified content back to the file.
+///
+/// # Arguments
+///
+/// * `response`: A `Vec<ResponseForm>` containing the original function data and the new comments to be inserted.
+///
+/// # Returns
+///
+/// A `Result` indicating success (`Ok(())`) or an `ErrorHandling` if any file I/O or writing operation fails.
+fn write_to_file(response: Vec<ResponseForm>) -> Result<(), ErrorHandling> {
     let mut response = response;
     response.sort_by(|a, b| {
-        b.data.1.context
+        b.data
+            .metadata
             .line_range
             .start
-            .cmp(&a.data.1.context.line_range.start)
+            .cmp(&a.data.metadata.line_range.start)
     });
     event!(Level::INFO, "Quantity of responses: {}", response.len());
-    println!("{:#?}", response);
-    /* 
     //Typical representation of file as vector of lines
     for each in response {
-        let path = each.data.1.context.filepath;
-        let file =
-            fs::read_to_string(&path)?;
+        let path = each.data.metadata.filepath;
+        let file = fs::read_to_string(&path)?;
         let as_vec = FileExtractor::string_to_vector(&file);
         FileExtractor::write_to_vecstring(
             path,
             as_vec,
-            each.data.1.context.line_range.start,
+            each.data.metadata.line_range.start,
             each.new_comment,
         )?;
     }
-    */
+
     Ok(())
 }

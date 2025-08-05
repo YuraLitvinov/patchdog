@@ -1,6 +1,5 @@
 use crate::error::{
-    ErrorHandling, InvalidIoOperationsSnafu, LineOutOfBoundsSnafu,
-    SeekerFailedSnafu,
+    ErrorHandling, InvalidIoOperationsSnafu, LineOutOfBoundsSnafu, SeekerFailedSnafu,
 };
 use crate::object_range::ObjectRange;
 use snafu::{ResultExt, ensure};
@@ -14,7 +13,7 @@ pub const REGEX: &str = r#"\{\s*("uuid"\s*:\s*"[^"]*"\s*,\s*"fn_name"\s*:\s*"[^"
 |\s*"new_comment"\s*:\s*"[^"]*"\s*,\s*"uuid"\s*:\s*"[^"]*"\s*,\s*"fn_name"\s*:\s*"[^"]*"
 |\s*"new_comment"\s*:\s*"[^"]*"\s*,\s*"fn_name"\s*:\s*"[^"]*"\s*,\s*"uuid"\s*:\s*"[^"]*")\s*\}"#;
 */
-pub const REGEX: &str = r#"\{\s*"uuid"\s*:\s*"[^"]*"\s*,\s*"fn_name"\s*:\s*"[^"]*"\s*,\s*"new_comment"\s*:\s*"[^"]*"\s*\}"#;
+pub const REGEX: &str = r#"\{\s*"uuid"\s*:\s*"[^"]*"\s*,\s*"new_comment"\s*:\s*"[^"]*"\s*\}|\{\s*"new_comment"\s*:\s*"[^"]*"\s*,\s*"uuid"\s*:\s*"[^"]*"\s*\}"#;
 pub struct FileExtractor;
 pub trait Files {
     fn check_for_valid_object(
@@ -49,18 +48,20 @@ pub trait Files {
 }
 
 impl Files for FileExtractor {
-/// Writes a vector of strings to a file, inserting a changed element at a specific line index.
-///
-/// # Arguments
-///
-/// * `path`: The path to the file to write to.
-/// * `source`: The vector of strings to write.
-/// * `line_index`: The index at which to insert the changed element.
-/// * `changed_element`: The changed element to insert.
-///
-/// # Returns
-///
-/// A `Result` indicating whether the operation was successful, or an `ErrorHandling` if any error occurred.
+    /// Writes a given vector of strings (representing file content) to a specified file path.
+    /// Before writing, it inserts a `changed_element` string at a specific `line_index` (adjusting for 0-based indexing).
+    /// Each string in the modified vector is written as a new line in the file.
+    ///
+    /// # Arguments
+    ///
+    /// * `path`: A `PathBuf` specifying the target file path.
+    /// * `source`: A `Vec<String>` containing the lines of the file content.
+    /// * `line_index`: The 1-based line number at which `changed_element` should be inserted.
+    /// * `changed_element`: The `String` to be inserted into the file content.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` indicating success (`Ok(())`) or an `ErrorHandling` if file creation or writing fails.
     fn write_to_vecstring(
         path: PathBuf,
         mut source: Vec<String>,
@@ -76,17 +77,18 @@ impl Files for FileExtractor {
     }
 
     //Assuming str_source can be of different size at runtime, there is sense to only include pushing at begin, represented by true and end, represented by false
-/// Pushes a string to a vector of strings, preserving whitespace.
-///
-/// # Arguments
-///
-/// * `str_source`: The vector of strings to push to.
-/// * `push`: The string to push.
-/// * `push_where`: Whether to push to the beginning or end.
-///
-/// # Returns
-///
-/// A `Result` containing the updated vector of strings, or an `ErrorHandling` if any error occurred.
+    /// Inserts a new string (`push`) into a vector of strings (`str_source`) either at the beginning or at the end.
+    /// It intelligently preserves the leading whitespace of the first line of the original source to maintain consistent indentation for the inserted string.
+    ///
+    /// # Arguments
+    ///
+    /// * `str_source`: A slice of `String`s representing the original source code lines.
+    /// * `push`: The `String` to be inserted.
+    /// * `push_where`: A boolean flag; `true` inserts at the beginning, `false` inserts at the end.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` containing the modified `Vec<String>`, or an `ErrorHandling` if the `str_source` is empty (preventing whitespace determination) or other unexpected errors occur during string manipulation.
     fn push_to_vector(
         str_source: &[String],
         push: String,
@@ -114,9 +116,7 @@ impl Files for FileExtractor {
         line_number: usize,
     ) -> Result<bool, ErrorHandling> {
         for each in parsed {
-            if each.line_start()? <= line_number
-                && line_number <= each.line_end()?
-            {
+            if each.line_start()? <= line_number && line_number <= each.line_end()? {
                 return Ok(false);
             }
         }
@@ -130,17 +130,19 @@ impl Files for FileExtractor {
 
     //Main entry for seeker and extract_by_line, roams through Vec<ObjectRange> seeking for the object that fits
     //the requested line number. If it finds no match, then LineOutOfBounds error is thrown
-/// Exports an object from a given source code based on line number.
-///
-/// # Arguments
-///
-/// * `line_number`: The line number of the object to export.
-/// * `visited`: A slice of `ObjectRange` structs representing the parsed items.
-/// * `src`: A slice of strings representing the source code lines.
-///
-/// # Returns
-///
-/// A `Result` containing the exported object as a string, or an `ErrorHandling` if the object was not found.
+    /// Exports a specific Rust code object from a given source string based on its line number.
+    /// It iterates through a slice of `ObjectRange` structs (representing parsed items) to find the object that encompasses the `line_number`.
+    /// Once found, it extracts the relevant lines from the source string vector and returns them as a single string.
+    ///
+    /// # Arguments
+    ///
+    /// * `line_number`: The 1-based line number used to identify the target object.
+    /// * `visited`: A slice of `ObjectRange` structs representing the parsed items within the source.
+    /// * `src`: A slice of `String`s representing the lines of the full source code.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` containing the extracted object's code as a `String`, or an `ErrorHandling` if no object is found at the specified line or an error occurs during extraction.
     fn export_object(
         line_number: usize,
         visited: &[ObjectRange],
@@ -168,23 +170,14 @@ impl Files for FileExtractor {
         new_previous.push(1);
         let mut i = 0;
         for each in parsed {
-            let found = seeker_for_comments(
-                from_line,
-                new_previous[i],
-                each.line_end()?,
-                &src,
-            );
+            let found = seeker_for_comments(from_line, new_previous[i], each.line_end()?, &src);
             if found.is_err() {
                 i += 1;
                 let previous_end_line = each.line_end()? + 1;
                 new_previous.push(previous_end_line);
                 continue;
             }
-            let extracted = extract_by_line(
-                &src,
-                &new_previous[i],
-                &each.line_end()?,
-            );
+            let extracted = extract_by_line(&src, &new_previous[i], &each.line_end()?);
             return Ok(extracted);
         }
         Err(ErrorHandling::LineOutOfBounds { line_number: 0 })

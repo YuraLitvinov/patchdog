@@ -5,10 +5,23 @@ fn regular_function() {}
 pub fn public_function() {}
 
 // Function with return type
+/// A simple function that returns a fixed integer value.
+/// This function performs no complex operations and serves as a minimal example or placeholder.
+///
+/// # Returns
+///
+/// An `i32` integer with the value `0`.
 /// A simple function with a return type of i32.  Likely a placeholder.
 fn function_with_return() -> i32 {
     0
 }
+/// A basic function that takes no arguments and returns nothing.
+/// Its body is empty, meaning it performs no operations.
+/// This function is typically used as a stub or a required implementation placeholder.
+///
+/// # Returns
+///
+/// This function returns nothing (`()`).
 /// An empty function, likely a placeholder or stub.
 fn required_function() {
 }

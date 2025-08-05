@@ -1,9 +1,9 @@
 use gemini_rust::Error;
 use git_parsing::Git2ErrorHandling;
 use snafu::Snafu;
-use yaml_rust2::ScanError;
 use std::{env::VarError, num::ParseIntError, path::PathBuf};
 use syn;
+use yaml_rust2::ScanError;
 
 #[derive(Debug, Snafu)]
 #[snafu(visibility(pub))]
@@ -23,7 +23,7 @@ pub enum ErrorHandling {
         in_line: usize,
         from: String,
     },
-    #[snafu(display("{line_number}"))] 
+    #[snafu(display("{line_number}"))]
     LineOutOfBounds {
         line_number: usize,
     },
@@ -39,7 +39,7 @@ pub enum ErrorHandling {
     GeminiRustError {
         source: gemini_rust::Error,
     },
-    #[snafu(display("{source} in {file_path:#?}"))]   
+    #[snafu(display("{source} in {file_path:#?}"))]
     InvalidReadFileOperation {
         source: std::io::Error,
         file_path: PathBuf,
@@ -49,11 +49,11 @@ pub enum ErrorHandling {
         source: syn::Error,
         str_source: PathBuf,
     },
-        #[snafu(display("{source:#?}"))]
+    #[snafu(display("{source:#?}"))]
     InvalidRustParse {
         source: syn::Error,
     },
-#[snafu(display("Couldn't seek object at line: {line_number}"))]
+    #[snafu(display("Couldn't seek object at line: {line_number}"))]
     SeekerFailed {
         line_number: usize,
     },
@@ -67,22 +67,22 @@ pub enum ErrorHandling {
     CouldNotGetObject {
         err_kind: String,
     },
-    #[snafu(display("{source}"))] 
+    #[snafu(display("{source}"))]
     SerdeError {
         source: serde_json::error::Error,
     },
-    #[snafu(display("{source}"))] 
+    #[snafu(display("{source}"))]
     UuidError {
         source: uuid::Error,
     },
-    #[snafu(display("{source}"))]    
+    #[snafu(display("{source}"))]
     YamlError {
         source: yaml_rust2::scanner::ScanError,
     },
-    #[snafu(display("{source}"))] 
+    #[snafu(display("{source}"))]
     ParseErr {
         source: ParseIntError,
-    }
+    },
 }
 
 #[derive(Debug)]
@@ -92,30 +92,40 @@ pub enum ErrorBinding {
 }
 
 impl From<Git2ErrorHandling> for ErrorBinding {
-/// Creates a new `ErrorBinding` from a given `Git2ErrorHandling`.
-///
-/// # Arguments
-///
-/// * `git`: The `Git2ErrorHandling` to convert.
-///
-/// # Returns
-///
-/// A new `ErrorBinding`.
+    /// Implements the `From` trait, allowing a `Git2ErrorHandling` error to be implicitly converted into an `ErrorBinding`.
+    /// Specifically, it wraps the `Git2ErrorHandling` within the `ErrorBinding::GitParsing` variant.
+    ///
+    /// # Arguments
+    ///
+    /// * `git`: The `Git2ErrorHandling` error to convert.
+    ///
+    /// # Returns
+    ///
+    /// A new `ErrorBinding` instance containing the provided Git error.
+    /// Creates a new `ErrorBinding` from a given `Git2ErrorHandling`.
+    ///
+    /// # Arguments
+    ///
+    /// * `git`: The `Git2ErrorHandling` to convert.
+    ///
+    /// # Returns
+    ///
+    /// A new `ErrorBinding`.
     fn from(git: Git2ErrorHandling) -> Self {
         ErrorBinding::GitParsing(git)
     }
 }
 
 impl From<ErrorHandling> for ErrorBinding {
-/// Creates a new `ErrorBinding` from a given `ErrorHandling`.
-///
-/// # Arguments
-///
-/// * `rust`: The `ErrorHandling` to convert.
-///
-/// # Returns
-///
-/// A new `ErrorBinding`.
+    /// Creates a new `ErrorBinding` from a given `ErrorHandling`.
+    ///
+    /// # Arguments
+    ///
+    /// * `rust`: The `ErrorHandling` to convert.
+    ///
+    /// # Returns
+    ///
+    /// A new `ErrorBinding`.
     fn from(rust: ErrorHandling) -> Self {
         ErrorBinding::RustParsing(rust)
     }
@@ -123,58 +133,57 @@ impl From<ErrorHandling> for ErrorBinding {
 
 impl From<CouldNotGetLineSnafu> for ErrorHandling {
     fn from(e: CouldNotGetLineSnafu) -> Self {
-        return e.into()
+        let e: ErrorHandling = e.into();
+        e
     }
 }
 
 impl From<CouldNotGetLineSnafu> for ErrorBinding {
     fn from(e: CouldNotGetLineSnafu) -> Self {
-        return e.into()
-        
+        let e: ErrorBinding = e.into();
+        e
     }
 }
 
 impl From<std::io::Error> for ErrorHandling {
     fn from(e: std::io::Error) -> Self {
-        return ErrorHandling::InvalidIoOperations { source: e }
+         ErrorHandling::InvalidIoOperations { source: e }
     }
 }
 impl From<std::io::Error> for ErrorBinding {
     fn from(e: std::io::Error) -> Self {
-        return ErrorBinding::RustParsing(ErrorHandling::InvalidIoOperations { source: e })
+         ErrorBinding::RustParsing(ErrorHandling::InvalidIoOperations { source: e })
     }
 }
 
 impl From<ScanError> for ErrorHandling {
     fn from(e: ScanError) -> Self {
-        return ErrorHandling::YamlError { source: e }
+         ErrorHandling::YamlError { source: e }
     }
 }
 impl From<VarError> for ErrorHandling {
     fn from(e: VarError) -> Self {
-        return ErrorHandling::StdVarError { source: e }
+         ErrorHandling::StdVarError { source: e }
     }
 }
 
 impl From<ParseIntError> for ErrorHandling {
     fn from(e: ParseIntError) -> Self {
-     return ErrorHandling::ParseErr { source: e }
+         ErrorHandling::ParseErr { source: e }
     }
-    
 }
 impl From<Error> for ErrorHandling {
     fn from(e: Error) -> Self {
-        return ErrorHandling::GeminiRustError { source: e }
+         ErrorHandling::GeminiRustError { source: e }
     }
 }
 impl From<serde_json::Error> for ErrorHandling {
     fn from(e: serde_json::Error) -> Self {
-        return ErrorHandling::SerdeError { source: e }
+         ErrorHandling::SerdeError { source: e }
     }
-    
 }
 impl From<syn::Error> for ErrorHandling {
     fn from(e: syn::Error) -> Self {
-        return  ErrorHandling::InvalidRustParse { source: e } 
+         ErrorHandling::InvalidRustParse { source: e }
     }
 }
