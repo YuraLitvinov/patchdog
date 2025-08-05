@@ -276,6 +276,7 @@ fn write_to_file(response: Vec<ResponseForm>) -> Result<(), ErrorHandling> {
     });
     event!(Level::INFO, "Quantity of responses: {}", response.len());
     //Typical representation of file as vector of lines
+    /* 
     for each in response {
         let path = each.data.metadata.filepath;
         let file = fs::read_to_string(&path)?;
@@ -287,6 +288,6 @@ fn write_to_file(response: Vec<ResponseForm>) -> Result<(), ErrorHandling> {
             each.new_comment,
         )?;
     }
-
+    */
     Ok(())
 }

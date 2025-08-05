@@ -10,7 +10,8 @@ jobs:
   build:
 
     runs-on: ubuntu-latest
-
+    permissions:
+      contents: write
     steps:
     - uses: actions/checkout@v4
       with:
@@ -21,10 +22,5 @@ jobs:
       run: cargo run -- --file-patch patch.patch
       env:
         API_KEY_GEMINI: ${{ secrets.API_KEY_GEMINI }}
-        GEMINI_MODEL: ${{ secrets.GEMINI_MODEL }}
     - name: cleanup patch
       run: rm patch.patch
-    - name: create pull request
-      run: gh pr create -B ${{ github.base_ref }} -H ${{ github.head_ref }} --title 'Merge PR $(date)' --body 'Created by patchdog - AI Engine!'
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

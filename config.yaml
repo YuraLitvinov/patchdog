@@ -23,3 +23,7 @@ prompt: |
             "new_comment": ""
         } 
     ]
+GEMINI_MODEL: models/gemini-2.5-flash
+TOKENS_PER_MIN: 250000
+REQUESTS_PER_MIN: 10
+OPENAI_MODEL: gpt-3.5-turbo

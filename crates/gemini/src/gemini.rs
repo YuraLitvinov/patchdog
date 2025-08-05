@@ -1,4 +1,4 @@
-use ai_interactions::return_prompt;
+use ai_interactions::{return_prompt, YamlRead};
 use async_trait::async_trait;
 use gemini_rust::Gemini;
 use rust_parsing::ErrorHandling;
@@ -122,8 +122,7 @@ impl MappedRequest {
     /// A new `MappedRequest` struct.
     pub fn new() -> Result<MappedRequest, ErrorHandling> {
         Ok(MappedRequest {
-            remaining_capacity: var("TOKENS_PER_MIN")?.parse::<usize>()?
-                / var("REQUESTS_PER_MIN")?.parse::<usize>()?,
+            remaining_capacity: return_prompt()?.tokens / return_prompt()?.requests,
             data: Vec::<Request>::new(),
         })
     }
@@ -202,9 +201,11 @@ impl PreparingRequests {
     /// A new `PreparingRequests` struct.
     pub fn new() -> Result<PreparingRequests, ErrorHandling> {
         Ok(PreparingRequests {
-            remaining_capacity: var("TOKENS_PER_MIN")?.parse::<usize>()?
-                / var("REQUESTS_PER_MIN")?.parse::<usize>()?
-                - return_prompt()?.len(),
+            remaining_capacity: 
+                return_prompt()?.tokens 
+                / return_prompt()?.requests
+                - return_prompt()?.model.len()
+                - return_prompt()?.prompt.len(),
             data: vec![],
         })
     }
@@ -332,8 +333,8 @@ impl GoogleGemini {
     pub fn new() -> Result<GoogleGemini, ErrorHandling> {
         Ok(GoogleGemini {
             preparing_requests: PreparingRequests {
-                remaining_capacity: var("TOKENS_PER_MIN")?.parse::<usize>()?
-                    / var("REQUESTS_PER_MIN")?.parse::<usize>()?,
+                remaining_capacity: return_prompt()?.tokens
+                    / return_prompt()?.requests,
                 data: vec![],
             },
         })
@@ -355,7 +356,7 @@ impl GoogleGemini {
         for single_request in request {
             for each in &single_request.prepared_requests {
                 let as_json = serde_json::to_string_pretty(&each.data)?;
-                match GoogleGemini::req_res(&as_json, &return_prompt()?).await {
+                match GoogleGemini::req_res(&as_json, return_prompt()?).await {
                     //Handling exclusive case, where one of the requests may fail
                     Ok(r) => {
                         response.push(r);
@@ -391,7 +392,7 @@ impl GoogleGemini {
         //Architecture: batch[BIG_NUMBER..len()-1]
         //Next: batch[0..4]
         let mut await_response: Vec<WaitForTimeout> = vec![];
-        let request_per_min = var("REQUESTS_PER_MIN")?.parse::<usize>()?;
+        let request_per_min = return_prompt()?.requests;
         if batch.len() > request_per_min {
             let mut size: usize = batch.len();
             for _ in 1..=batch.len().div_ceil(request_per_min) {
@@ -432,12 +433,12 @@ impl GoogleGemini {
     /// # Returns
     ///
     /// An asynchronous `Result` containing the generated text response as a `String`, or an `ErrorHandling` if API key/model retrieval, request execution, or response processing fails.
-    pub async fn req_res(file_content: &str, arguments: &str) -> Result<String, ErrorHandling> {
+    pub async fn req_res(file_content: &str, arguments: YamlRead) -> Result<String, ErrorHandling> {
         let api_key = var("API_KEY_GEMINI")?;
-        let model = var("GEMINI_MODEL")?;
+        let model = return_prompt()?.model;
         let client = Gemini::with_model(api_key, model)
             .generate_content()
-            .with_system_prompt(arguments)
+            .with_system_prompt(arguments.prompt)
             .with_user_message(file_content)
             .execute()
             .await?;
