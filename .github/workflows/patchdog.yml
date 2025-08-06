@@ -1,8 +1,8 @@
 name: Run patchdog - AI engine
 
 on:
-  pull_request:
-
+  pull_request_review:
+    types: [submitted]
 env:
   CARGO_TERM_COLOR: always
 
@@ -10,21 +10,24 @@ jobs:
   build:
 
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
+    permissions: write-all
+
     steps:
     - uses: actions/checkout@v4
       with:
-        fetch-depth: 2
+        ref: ${{ github.head_ref }}
+        fetch-depth: 0
+    - name: fetch branch
+      run: git fetch origin ${{ github.base_ref }}:${{ github.base_ref }}
     - name: make patch
-      run: git diff HEAD~1 HEAD > patch.patch
+      run: git diff origin/${{ github.base_ref }}...${{ github.head_ref }} > patch.patch
     - name: run patchdog
       run: cargo run -- --file-patch patch.patch
       env:
         API_KEY_GEMINI: ${{ secrets.API_KEY_GEMINI }}
     - name: cleanup patch
       run: rm patch.patch
-    - name: create pull request
-      run: gh pr create -B ${{ github.base_ref }} -H ${{ github.head_ref }} --title 'Merge PR $(date)' --body 'Created by patchdog - AI Engine!'
+    - name: update pull request
+      run: gh pr update-branch ${{ github.event.pull_request.number }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

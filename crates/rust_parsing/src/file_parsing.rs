@@ -116,7 +116,7 @@ impl Files for FileExtractor {
         line_number: usize,
     ) -> Result<bool, ErrorHandling> {
         for each in parsed {
-            if each.line_start()? <= line_number && line_number <= each.line_end()? {
+            if each.line_ranges.start <= line_number && line_number <= each.line_ranges.end {
                 return Ok(false);
             }
         }
@@ -170,14 +170,14 @@ impl Files for FileExtractor {
         new_previous.push(1);
         let mut i = 0;
         for each in parsed {
-            let found = seeker_for_comments(from_line, new_previous[i], each.line_end()?, &src);
+            let found = seeker_for_comments(from_line, new_previous[i], each.line_ranges.end, &src);
             if found.is_err() {
                 i += 1;
-                let previous_end_line = each.line_end()? + 1;
+                let previous_end_line = each.line_ranges.end + 1;
                 new_previous.push(previous_end_line);
                 continue;
             }
-            let extracted = extract_by_line(&src, &new_previous[i], &each.line_end()?);
+            let extracted = extract_by_line(&src, &new_previous[i], &each.line_ranges.end);
             return Ok(extracted);
         }
         Err(ErrorHandling::LineOutOfBounds { line_number: 0 })
@@ -187,8 +187,8 @@ impl Files for FileExtractor {
 //If it does, then object is printed with extract_by_line
 
 fn seeker(line_number: usize, item: &ObjectRange, src: &[String]) -> Result<String, ErrorHandling> {
-    let line_start = item.line_start()?;
-    let line_end = item.line_end()?;
+    let line_start = item.line_ranges.start;
+    let line_end = item.line_ranges.end;
     ensure!(
         line_start <= line_number && line_end >= line_number,
         SeekerFailedSnafu { line_number }

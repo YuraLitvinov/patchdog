@@ -383,7 +383,7 @@ impl GoogleGemini {
     /// # Returns
     ///
     /// A `Result` containing a `Vec<WaitForTimeout>` of prepared batches, or an `ErrorHandling` if `REQUESTS_PER_MIN` cannot be parsed from environment variables.
-    pub fn assess_batch_readiness(
+    pub fn request_manager(
         batch: Vec<MappedRequest>,
     ) -> Result<Vec<WaitForTimeout>, ErrorHandling> {
         //Architecture: batch[BIG_NUMBER..len()-1]
@@ -440,49 +440,6 @@ impl GoogleGemini {
             .execute()
             .await?;
         Ok(client.text())
-    }
-
-    // The idea as I see it is: we provide AI Agent with filled out JSON where all the function names are already mapped and
-    // the only goal there is to actually to turn in the JSON and receive it back with written in comments
-    /// Organizes a vector of `SingleFunctionData` requests into a series of `PreparingRequests` batches.
-    /// It iterates through the requests, adding them to the current `PreparingRequests` instance until its capacity is full.
-    /// Once a batch is full or all requests are processed, the `PreparingRequests` instance is pushed to the `batches` vector, and a new `PreparingRequests` is initialized.
-    ///
-    /// # Arguments
-    ///
-    /// * `request`: A `Vec<SingleFunctionData>` representing the individual requests to be batched.
-    ///
-    /// # Returns
-    ///
-    /// A `Result` containing a `Vec<PreparingRequests>` of the organized batches, or an `ErrorHandling` if an error occurs during `PreparingRequests` initialization.
-    pub fn prepare_batches(
-        &mut self,
-        request: Vec<SingleFunctionData>,
-    ) -> Result<Vec<PreparingRequests>, ErrorHandling> {
-        let mut batches: Vec<PreparingRequests> = Vec::new();
-        let mut preparing_requests = PreparingRequests::new()?;
-        for data in request {
-            if !preparing_requests.function_add(data.clone()) {
-                //Preserving overflow of preparing request to next iter
-                if !preparing_requests.data.is_empty() {
-                    batches.push(preparing_requests);
-                }
-                //Reinitializing preparing_requests to free the buffer
-                preparing_requests = PreparingRequests::new()?;
-
-                // Attempt to push
-                if !preparing_requests.function_add(data) {
-                    // Here should be handled the case, where single object exceeds token limit
-                    //Which is likely would not be possible
-                }
-            }
-        }
-
-        // Last unempty request
-        if !preparing_requests.data.is_empty() {
-            batches.push(preparing_requests);
-        }
-        Ok(batches)
     }
 
     /// Organizes a vector of `Request` structs into a series of `MappedRequest` batches.

@@ -79,7 +79,7 @@ async fn call(request: Vec<Request>) -> Result<Vec<ResponseForm>, ErrorBinding> 
     });
     let mut new_buffer = GoogleGemini::new()?;
     let batch = new_buffer.prepare_map(request)?;
-    let prepared = GoogleGemini::assess_batch_readiness(batch)?;
+    let prepared = GoogleGemini::request_manager(batch)?;
     let response = GoogleGemini::send_batches(&prepared).await?;
     for each in response {
         event!(Level::DEBUG, each);
@@ -191,29 +191,29 @@ fn match_request_response(
     singlerun_response: &[RawResponse],
 ) -> Result<Vec<LinkedResponse>, ErrorHandling> {
     let single_set: HashMap<String, String> = cherrypicked_response
-        .into_iter()
+        .iter()
         .map(|each| (each.uuid.clone(), each.new_comment.clone()))
         .collect();
     let mut multi_set: HashMap<String, String> = singlerun_response
-        .into_iter()
+        .iter()
         .map(|each| (each.uuid.clone(), each.new_comment.clone()))
         .collect();
-    single_set.clone().
-        into_iter()
-        .for_each(|(k,v)| { multi_set.insert(k, v); });
+    single_set.clone().into_iter().for_each(|(k, v)| {
+        multi_set.insert(k, v);
+    });
     if single_set.len() == multi_set.len() {
         let collected = matching(prepared, singlerun_response);
         Ok(collected)
-    }
-    else {
+    } else {
         let combined = single_set
             .iter()
-            .filter_map(|(k,v)| {
-                multi_set.remove(k).map(|_| (k.clone(),v.clone()))
-            })
+            .filter_map(|(k, v)| multi_set.remove(k).map(|_| (k.clone(), v.clone())))
             .collect::<HashMap<String, String>>()
             .into_iter()
-            .map(|(k,v)| { RawResponse {uuid: k, new_comment: v} })
+            .map(|(k, v)| RawResponse {
+                uuid: k,
+                new_comment: v,
+            })
             .collect::<Vec<RawResponse>>();
         let collected = matching(prepared, &combined);
         Ok(collected)
@@ -225,10 +225,7 @@ fn matching(prepared: &Vec<WaitForTimeout>, response: &[RawResponse]) -> Vec<Lin
     for prepare in prepared {
         for req in &prepare.prepared_requests {
             for each in &req.data {
-                if let Some(found) = response
-                    .iter()
-                    .find(|item| item.uuid == each.uuid)
-                {
+                if let Some(found) = response.iter().find(|item| item.uuid == each.uuid) {
                     matched.push(LinkedResponse {
                         data: each.to_owned(),
                         new_comment: found.new_comment.to_string(),

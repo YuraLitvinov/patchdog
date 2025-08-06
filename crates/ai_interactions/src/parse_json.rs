@@ -1,9 +1,6 @@
-use rust_parsing::error::{
-    CouldNotGetLineSnafu, ErrorBinding, ErrorHandling, InvalidIoOperationsSnafu,
-};
+use rust_parsing::error::{ErrorBinding, ErrorHandling};
 use rust_parsing::file_parsing::{FileExtractor, Files};
 use rust_parsing::rust_parser::{RustItemParser, RustParser};
-use snafu::{OptionExt, ResultExt};
 use std::ops::Range;
 use std::path::PathBuf;
 use std::{env, fs};
@@ -34,15 +31,14 @@ pub fn make_export(filenames: &Vec<PathBuf>) -> Result<Vec<ChangeFromPatch>, Err
     let mut output_vec: Vec<ChangeFromPatch> = Vec::new();
     let mut vector_of_changed: Vec<Range<usize>> = Vec::new();
     for filename in filenames {
-        let path = env::current_dir()
-            .context(InvalidIoOperationsSnafu)?
+        let path = env::current_dir()?
             .join(filename);
 
         let parsed_file = RustItemParser::parse_rust_file(&path);
         match parsed_file {
             Ok(value) => {
                 for each_object in value {
-                    let range = each_object.line_start()?..each_object.line_end()?;
+                    let range = each_object.line_ranges.start..each_object.line_ranges.end;
                     vector_of_changed.push(range);
                 }
                 output_vec.push({
@@ -91,8 +87,8 @@ pub fn justify_presence(
             //Calling at index 0 because parsed_file consists of a single object
             //Does a recursive check, whether the item is still a valid Rust code
             let parsed_file = &RustItemParser::parse_all_rust_items(&item.join("\n"))?[0];
-            let obj_type_to_compare = &parsed_file.object_type().context(CouldNotGetLineSnafu)?;
-            let obj_name_to_compare = &parsed_file.object_name().context(CouldNotGetLineSnafu)?;
+            let obj_type_to_compare = &parsed_file.names.type_name;
+            let obj_name_to_compare = &parsed_file.names.name;
             if rust_type
                 .iter()
                 .any(|obj_type| obj_type_to_compare == obj_type)

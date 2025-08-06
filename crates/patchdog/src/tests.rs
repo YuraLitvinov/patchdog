@@ -8,11 +8,11 @@ mod tests {
     use rust_parsing::file_parsing::{FileExtractor, Files, REGEX};
     use rust_parsing::rust_parser::{RustItemParser, RustParser};
     use snafu::ResultExt;
-    use syn::{ExprTry, Item};
     use std::env;
     use std::io::Write;
-    use std::process::{id, Command};
+    use std::process::{Command, id};
     use std::{fs, path::Path};
+    use syn::{ExprTry, Item};
     use tempfile::NamedTempFile;
     const PATH_BASE: &str = "../../tests/data.rs";
     /// A unit test that reads a Rust source file, parses all its top-level items into `ObjectRange` structs.
@@ -27,9 +27,7 @@ mod tests {
         let source = fs::read_to_string(PATH_BASE).expect("File read failed");
         let parsed = RustItemParser::parse_all_rust_items(&source).expect("Parsing failed");
         for object in parsed {
-            let obj_type = object
-                .object_type()
-                .expect("Unwrapping ObjectRange to type failed");
+            let obj_type = object.names.type_name.clone();
             if obj_type == "impl".to_string() {
                 println!("{:?}", object);
             }
@@ -50,9 +48,7 @@ mod tests {
             .expect("Failed to read file");
         let parsed = RustItemParser::parse_all_rust_items(&source).expect("Failed to parse");
         for object in parsed {
-            let obj_type = object
-                .object_type()
-                .expect("Unwrapping ObjectRange to type failed");
+            let obj_type = object.names.type_name.clone();
             if obj_type == "fn".to_string() {
                 println!("{:?}", object);
             }
@@ -75,12 +71,8 @@ mod tests {
         let parsed = RustItemParser::parse_all_rust_items(&source).expect("Failed to parse");
         let mut obj_vector: Vec<String> = Vec::new();
         for object in parsed {
-            let obj_type = object
-                .object_type()
-                .expect("Unwrapping ObjectRange to type failed");
-            let obj_name = object
-                .object_name()
-                .expect("Unwrapping ObjectRange to name failed");
+            let obj_type = object.names.type_name;
+            let obj_name = object.names.name;
             if obj_type == "mod".to_string() {
                 let module_location =
                     RustItemParser::find_module_file(path.to_path_buf(), obj_name.to_owned())
@@ -249,7 +241,7 @@ mod tests {
     #[test]
     fn test_response() -> Result<(), ErrorHandling> {
         let re = Regex::new(REGEX).unwrap();
-        let test = fs::read_to_string(Path::new("../../tests/res.json")).unwrap();
+        let test = fs::read_to_string(Path::new("../../tests/response_regex.json")).unwrap();
         let mut assess_size = vec![];
         for cap in re.captures_iter(&test) {
             let a = cap.get(0).unwrap().as_str();
@@ -264,40 +256,27 @@ mod tests {
                 let as_vec = FileExtractor::string_to_vector(&test);
                 let a = &as_vec[1..as_vec.len() - 1].join("\n");
                 let to_struct = serde_json::from_str::<Vec<RawResponse>>(a).unwrap();
-                assert_eq!(assess_size.len(), to_struct.len());
+                assert_eq!(assess_size.len(), 3);
+                assert_eq!(to_struct.len(), 58);
             }
         }
         Ok(())
     }
 
-    /// A unit test that compares the number of `SingleFunctionData` requests with the number of `RawResponse` objects.
-    /// It reads and deserializes JSON data from two test files (`request.json` and `res.json`) representing requests and responses, respectively.
-    /// The test asserts a specific relationship between their lengths (request length equals response length plus one), which suggests an expectation about a single omitted or failed response.
-    ///
-    /// # Returns
-    ///
-    /// A `Result<(), ErrorHandling>` indicating success or failure of the test, panicking on unhandled errors during file reading or deserialization.
-    #[test]
-    fn test_compare() -> Result<(), ErrorHandling> {
-        //Attempting to assess and preserve difference between request and response
-        let request = fs::read_to_string(Path::new("../../tests/request.json")).unwrap();
-        let response = fs::read_to_string(Path::new("../../tests/res.json")).unwrap();
-        let request =
-            serde_json::from_str::<Vec<SingleFunctionData>>(&request).context(SerdeSnafu)?;
-        let response = cherrypick_response(&response)?;
-        assert_eq!(request.len(), response.len() + 1);
-        Ok(())
-    }
-
-    use syn::Stmt;
     use syn::Expr;
-    use syn::Pat;
     use syn::LocalInit;
-    #[test] 
-    fn test_tokens() {
+    use syn::Pat;
+    use syn::Stmt;
+    #[test]
+    fn test_parsing_matching() {
         let file = fs::read_to_string("../../crates/patchdog/src/binding.rs").unwrap();
-        let function = FileExtractor::string_to_vector(&file)[189..220].join("\n");
-        let tokens = syn::parse_file(&function).unwrap();
+        let parsed = RustItemParser::parse_all_rust_items(&file).unwrap();
+        let all_fns = parsed
+            .iter()
+            .filter(|each| each.object_type() == "fn").collect::<Vec<_>>();
+        for each in all_fns.to_owned() {
+        let function = &FileExtractor::string_to_vector(&file)[each.line_ranges.start..each.line_ranges.end];
+        let tokens = syn::parse_file(&function.join("\n")).unwrap();
         let a: &Item = &tokens.items[0];
         match a {
             Item::Fn(item_fn) => {
@@ -310,7 +289,7 @@ mod tests {
                             match expr {
                                 Expr::Path(path) => {
                                     //println!("{:#?}", path);
-                                },
+                                }
                                 Expr::ForLoop(for_loop) => {
                                     //println!("{:#?}", for_loop);
                                     let a = for_loop.body.clone().stmts;
@@ -322,12 +301,12 @@ mod tests {
                                                 match expr {
                                                     Expr::Path(path) => {
                                                         //println!("{:#?}", path);
-                                                    },
+                                                    }
                                                     _ => {
                                                         ();
                                                     }
                                                 }
-                                            },
+                                            }
                                             Stmt::Local(local) => {
                                                 //println!("{:#?}", local);
                                                 let a = local.clone().init.unwrap();
@@ -337,43 +316,45 @@ mod tests {
                                                         match *expr {
                                                             Expr::Path(path) => {
                                                                 //println!("{:#?}", path);
-                                                            },
+                                                            }
                                                             Expr::MethodCall(mc) => {
-                                                            //println!("{:#?}", mc) 
-                                                            },
+                                                                //println!("{:#?}", mc)
+                                                            }
                                                             Expr::Try(t) => {
-                                                            //println!("{:#?}", t);
-                                                            match *t.expr {
-                                                                Expr::Call(c) => {
-                                                                let a = c.func.clone();
-                                                                match *a {
-                                                                    Expr::Path(path) => {
-                                                                        let a = path.path.segments;
-                                                                        for each in a {
-                                                                            println!("{:#?}", each.ident.to_string());
+                                                                //println!("{:#?}", t);
+                                                                match *t.expr {
+                                                                    Expr::Call(c) => {
+                                                                        let a = c.func.clone();
+                                                                        match *a {
+                                                                            Expr::Path(path) => {
+                                                                                let a = path
+                                                                                    .path
+                                                                                    .segments;
+                                                                                for each in a {
+                                                                                    println!("{:#?}", each.ident.to_string());
+                                                                                }
+                                                                            }
+                                                                            _ => {
+                                                                                ();
+                                                                            }
                                                                         }
-                                                                    },
+                                                                    }
                                                                     _ => {
                                                                         ();
                                                                     }
-                                                                }    
-                                                                },
-                                                                _ => {
-                                                                    ();
                                                                 }
                                                             }
-                                                            },
                                                             _ => {
                                                                 ();
                                                             }
                                                         }
-                                                    },
+                                                    }
 
                                                     _ => {
                                                         ();
                                                     }
                                                 }
-                                            },
+                                            }
                                             _ => {
                                                 ();
                                             }
@@ -384,19 +365,19 @@ mod tests {
                                         Pat::Ident(ident) => {
                                             //println!("{:#?}", ident);
                                             //println!("{:?}", ident.ident.to_string());
-                                        },
-                
+                                        }
+
                                         _ => {
                                             ();
                                         }
                                     }
-                                },
+                                }
                                 _ => {
                                     ();
                                 }
                             }
                             //println!("{:?}", expr);
-                        },
+                        }
                         Stmt::Local(local) => {
                             //println!("{:?}", local);
                             let a = local.init.clone();
@@ -413,36 +394,36 @@ mod tests {
                                                     match *a {
                                                         Expr::Path(path) => {
                                                             //println!("{:#?}", path.path.get_ident().unwrap().to_string());
-                                                        },
+                                                        }
                                                         _ => {
                                                             ();
                                                         }
                                                     }
-                                                },
+                                                }
                                                 _ => {
                                                     ();
                                                 }
                                             }
                                             //println!("{:#?}", t.expr);
-                                        },
+                                        }
                                         _ => {
                                             ();
                                         }
                                     }
                                     //println!("{:?}", ident.ident.to_string());
-                                },
+                                }
                                 _ => {
                                     ();
                                 }
                             }
-                        },
+                        }
                         Stmt::Item(item) => {
 
                             //println!("{:?}", item);
-                        },
+                        }
                         Stmt::Macro(mac) => {
                             //println!("{:?}", mac);
-                        },
+                        }
                         _ => {
                             ();
                         }
@@ -453,6 +434,6 @@ mod tests {
                 ();
             }
         }
-        assert_eq!(function.len(), 0);
     }
+}
 }

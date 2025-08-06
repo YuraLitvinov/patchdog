@@ -1,14 +1,15 @@
 use crate::error::ErrorHandling;
 use crate::file_parsing::{FileExtractor, Files};
-use crate::object_range::{LineRange, Name, ObjectRange};
+use crate::object_range::{Name, ObjectRange};
 use proc_macro2::TokenStream;
 use proc_macro2::{Spacing, TokenTree};
 use quote::ToTokens;
 use rustc_lexer::TokenKind;
 use rustc_lexer::tokenize;
 use serde::Serialize;
+use std::ops::Range;
 use std::path::{Path, PathBuf};
-use std::{fs, vec};
+use std::fs;
 use syn::spanned::Spanned;
 use syn::{AngleBracketedGenericArguments, PathArguments, Type, TypePath};
 use syn::{File, ReturnType};
@@ -93,20 +94,7 @@ impl RustParser for RustItemParser {
         let mut comments = comment_lexer(src)?;
         let mut visited = visit_items(&ast.items)?;
         visited.append(&mut comments);
-        visited.sort_by_key(|line_obj| {
-            line_obj
-                .line_ranges
-                .iter()
-                .filter_map(|linerange| {
-                    if let LineRange::Start(n) = linerange {
-                        Some(*n)
-                    } else {
-                        None
-                    }
-                })
-                .min()
-                .unwrap_or(usize::MAX)
-        });
+        visited.sort_by(|a, b| a.line_ranges.start.cmp(&b.line_ranges.start));
 
         Ok(visited)
     }
@@ -142,14 +130,14 @@ impl RustParser for RustItemParser {
             .first()
             .ok_or(ErrorHandling::LineOutOfBounds { line_number: 0 })?;
         Ok(ObjectRange {
-            line_ranges: vec![
-                LineRange::Start(visited.line_start().unwrap()),
-                LineRange::End(visited.line_end().unwrap()),
-            ],
-            names: vec![
-                Name::TypeName(visited.object_type().unwrap()),
-                Name::Name(visited.object_name().unwrap()),
-            ],
+            line_ranges: Range {
+                start: visited.line_start(),
+                end: visited.line_end(),
+            },
+            names: Name {
+                type_name: visited.object_type(),
+                name: visited.object_name(),
+            },
         })
     }
 
@@ -208,9 +196,7 @@ impl RustParser for RustItemParser {
 pub fn comment_lexer(source_vector: &str) -> Result<Vec<ObjectRange>, ErrorHandling> {
     let vectorized = FileExtractor::string_to_vector(source_vector);
     let mut comment_vector: Vec<ObjectRange> = Vec::new();
-    let mut line_number = 0;
-    for source in vectorized {
-        line_number += 1;
+    for (line_number, source) in vectorized.into_iter().enumerate() {
         let tokenized = tokenize(&source);
         for each in tokenized {
             match each.kind {
@@ -218,47 +204,38 @@ pub fn comment_lexer(source_vector: &str) -> Result<Vec<ObjectRange>, ErrorHandl
                 TokenKind::BlockComment { terminated } => {
                     if terminated {
                         comment_vector.push(ObjectRange {
-                            line_ranges: vec![
-                                LineRange::Start(line_number),
-                                LineRange::End(line_number),
-                            ],
-                            names: vec![
-                                Name::TypeName("CommentBlockSingeLine".to_string()),
-                                Name::Name("Comment".to_string()),
-                            ],
+                            line_ranges: Range { start: line_number, end: line_number },
+                            names: Name {
+                                type_name: "CommentBlockSingeLine".to_string(),
+                                name: "Comment".to_string(),
+                            },
                         });
                     } else {
                         comment_vector.push(ObjectRange {
-                            line_ranges: vec![LineRange::Start(line_number), LineRange::End(0)],
-                            names: vec![
-                                Name::TypeName("CommentBlockMultiLine".to_string()),
-                                Name::Name("Comment".to_string()),
-                            ],
+                            line_ranges: Range { start: line_number, end: 0 },
+                            names: Name {
+                                type_name: "CommentBlockMultiLine".to_string(),
+                                name: "Comment".to_string(),
+                            },
                         });
                     };
                 }
                 TokenKind::Slash => {
                     comment_vector.push(ObjectRange {
-                        line_ranges: vec![
-                            LineRange::Start(line_number),
-                            LineRange::End(line_number),
-                        ],
-                        names: vec![
-                            Name::TypeName("CommentBlockMultiLineEnd".to_string()),
-                            Name::Name("Refers to index - 1 (CommentBlockMultiLine)".to_string()),
-                        ],
+                        line_ranges: Range { start: line_number, end: line_number },
+                        names: Name {
+                            type_name: "CommentBlockMultiLineEnd".to_string(),
+                            name: "Refers to index - 1 (CommentBlockMultiLine)".to_string(),
+                        },
                     });
                 }
                 TokenKind::LineComment => {
                     comment_vector.push(ObjectRange {
-                        line_ranges: vec![
-                            LineRange::Start(line_number),
-                            LineRange::End(line_number),
-                        ],
-                        names: vec![
-                            Name::TypeName("LineComment".to_string()),
-                            Name::Name("Comment".to_string()),
-                        ],
+                        line_ranges: Range { start: line_number, end: line_number },
+                        names: Name {
+                            type_name: "LineComment".to_string(),
+                            name: "Comment".to_string(),
+                        },
                     });
                 }
 
@@ -266,14 +243,11 @@ pub fn comment_lexer(source_vector: &str) -> Result<Vec<ObjectRange>, ErrorHandl
                     starts_with_number: _,
                 } => {
                     comment_vector.push(ObjectRange {
-                        line_ranges: vec![
-                            LineRange::Start(line_number),
-                            LineRange::End(line_number),
-                        ],
-                        names: vec![
-                            Name::TypeName("LifetimeIndicator".to_string()),
-                            Name::Name("Comment".to_string()),
-                        ],
+                        line_ranges: Range { start: line_number, end: line_number },
+                        names: Name {
+                            type_name: "LifetimeIndicator".to_string(),
+                            name: "Comment".to_string(),
+                        },
                     });
                 }
 
@@ -281,29 +255,15 @@ pub fn comment_lexer(source_vector: &str) -> Result<Vec<ObjectRange>, ErrorHandl
             }
         }
     }
-    let target_type_name = "CommentBlockMultiLineEnd";
-    let target_type_name2 = "CommentBlockMultiLine";
-    let mut excess_index_pos = 0;
-    if let Some(pos) = comment_vector.iter().position(|obj| {
-        obj.names
-            .iter()
-            .any(|name| matches!(name, Name::TypeName(s) if s == target_type_name))
-    }) {
-        excess_index_pos = pos;
+    let multi_line = "CommentBlockMultiLine";
+    let multi_line_end = "CommentBlockMultiLineEnd";
+    let mut found_position = 0;
+    if let Some(pos) = comment_vector.iter().position(|obj| obj.names.type_name == multi_line) {
+        found_position = pos;
     }
-    if let Some(pos) = comment_vector.iter().position(|obj| {
-        obj.names
-            .iter()
-            .any(|name| matches!(name, Name::TypeName(s) if s == target_type_name2))
-    }) {
-        comment_vector[pos]
-            .line_ranges
-            .retain(|r| !matches!(r, LineRange::End(0)));
-        let borrow = &comment_vector[excess_index_pos].line_end().expect("err");
-        comment_vector[pos]
-            .line_ranges
-            .push(LineRange::End(*borrow));
-        comment_vector.remove(excess_index_pos);
+    if let Some(pos) = comment_vector.iter().position(|obj| obj.names.type_name == multi_line_end) {
+        comment_vector[found_position].line_ranges.end = comment_vector[pos].line_end();
+        comment_vector.remove(pos);
     }
 
     Ok(comment_vector)
@@ -493,78 +453,60 @@ fn visit_items(items: &[Item]) -> Result<Vec<ObjectRange>, ErrorHandling> {
         match item {
             Item::Struct(s) => {
                 object_line.push(ObjectRange {
-                    line_ranges: vec![
-                        LineRange::Start(s.span().start().line),
-                        LineRange::End(s.span().end().line),
-                    ],
-                    names: vec![
-                        Name::TypeName("struct".to_string()),
-                        Name::Name(s.ident.to_string()),
-                    ],
+                    line_ranges: Range { start: s.span().start().line, end: s.span().end().line },
+                    names: Name {
+                        type_name: "struct".to_string(),
+                        name: s.ident.to_string(),
+                    },
                 });
             }
             Item::Enum(e) => {
                 object_line.push(ObjectRange {
-                    line_ranges: vec![
-                        LineRange::Start(e.span().start().line),
-                        LineRange::End(e.span().end().line),
-                    ],
-                    names: vec![
-                        Name::TypeName("enum".to_string()),
-                        Name::Name(e.ident.to_string()),
-                    ],
+                    line_ranges: Range { start: e.span().start().line, end: e.span().end().line },
+                    names: Name {
+                        type_name: "enum".to_string(),
+                        name: e.ident.to_string(),
+                    },
                 });
             }
             Item::Fn(f) => {
                 object_line.push(ObjectRange {
-                    line_ranges: vec![
-                        LineRange::Start(f.span().start().line),
-                        LineRange::End(f.span().end().line),
-                    ],
-                    names: vec![
-                        Name::TypeName("fn".to_string()),
-                        Name::Name(f.sig.ident.to_string()),
-                    ],
+                    line_ranges: Range { start: f.span().start().line, end: f.span().end().line },
+                    names: Name {
+                        type_name: "fn".to_string(),
+                        name: f.sig.ident.to_string(),
+                    },
                 });
             }
             Item::Mod(m) => match &m.content {
                 Some((_, items)) => {
                     object_line.push(ObjectRange {
-                        line_ranges: vec![
-                            LineRange::Start(m.span().start().line),
-                            LineRange::End(m.span().end().line),
-                        ],
-                        names: vec![
-                            Name::TypeName("mod".to_string()),
-                            Name::Name(m.ident.to_string()),
-                        ],
+                        line_ranges: Range { start: m.span().start().line, end: m.span().end().line },
+                        names: Name {
+                            type_name: "mod".to_string(),
+                            name: m.ident.to_string(),
+                        },
                     });
                     object_line.extend(visit_items(items)?);
                 }
                 None => {
                     object_line.push(ObjectRange {
-                        line_ranges: vec![
-                            LineRange::Start(m.span().start().line),
-                            LineRange::End(m.span().end().line),
-                        ],
-                        names: vec![
-                            Name::TypeName("mod".to_string()),
-                            Name::Name(m.ident.to_string()),
-                        ],
+                        line_ranges: Range { start: m.span().start().line, end: m.span().end().line },
+                        names: Name {
+                            type_name: "mod".to_string(),
+                            name: m.ident.to_string(),
+                        },
                     });
                 }
             },
             Item::Use(u) => {
                 if let syn::UseTree::Path(path) = u.tree.to_owned() {
                     object_line.push(ObjectRange {
-                        line_ranges: vec![
-                            LineRange::Start(path.span().start().line),
-                            LineRange::End(path.span().end().line),
-                        ],
-                        names: vec![
-                            Name::TypeName("use".to_string()),
-                            Name::Name(path.ident.to_string()),
-                        ],
+                        line_ranges: Range { start: path.span().start().line, end: path.span().end().line },
+                        names: Name {
+                            type_name: "use".to_string(),
+                            name: path.ident.to_string(),
+                        },
                     });
                 }
             }
@@ -579,72 +521,57 @@ fn visit_items(items: &[Item]) -> Result<Vec<ObjectRange>, ErrorHandling> {
                     None => "matches struct".to_string(),
                 };
                 object_line.push(ObjectRange {
-                    line_ranges: vec![
-                        LineRange::Start(i.span().start().line),
-                        LineRange::End(i.span().end().line),
-                    ],
-                    names: vec![Name::TypeName("impl".to_string()), Name::Name(trait_name)],
+                    line_ranges: Range { start: i.span().start().line, end: i.span().end().line },
+                    names: Name {
+                        type_name: "impl".to_string(),
+                        name: trait_name,
+                    },
                 });
                 for each_block in &i.items {
                     match each_block {
                         ImplItem::Fn(f) => {
                             object_line.push(ObjectRange {
-                                line_ranges: vec![
-                                    LineRange::Start(f.span().start().line),
-                                    LineRange::End(f.span().end().line),
-                                ],
-                                names: vec![
-                                    Name::TypeName("fn".to_string()),
-                                    Name::Name(f.sig.ident.to_string()),
-                                ],
+                                line_ranges: Range { start: f.span().start().line, end: f.span().end().line },
+                                names: Name {
+                                    type_name: "fn".to_string(),
+                                    name: f.sig.ident.to_string(),
+                                },
                             });
                         }
                         ImplItem::Const(c) => {
                             object_line.push(ObjectRange {
-                                line_ranges: vec![
-                                    LineRange::Start(c.span().start().line),
-                                    LineRange::End(c.span().end().line),
-                                ],
-                                names: vec![
-                                    Name::TypeName("const".to_string()),
-                                    Name::Name(c.ident.to_string()),
-                                ],
+                                line_ranges: Range { start: c.span().start().line, end: c.span().end().line },
+                                names: Name {
+                                    type_name: "const".to_string(),
+                                    name: c.ident.to_string(),
+                                },
                             });
                         }
                         ImplItem::Type(t) => {
                             object_line.push(ObjectRange {
-                                line_ranges: vec![
-                                    LineRange::Start(t.span().start().line),
-                                    LineRange::End(t.span().end().line),
-                                ],
-                                names: vec![
-                                    Name::TypeName("type".to_string()),
-                                    Name::Name(t.ident.to_string()),
-                                ],
+                                line_ranges: Range { start: t.span().start().line, end: t.span().end().line },
+                                names: Name {
+                                    type_name: "type".to_string(),
+                                    name: t.ident.to_string(),
+                                },
                             });
                         }
                         ImplItem::Macro(m) => {
                             object_line.push(ObjectRange {
-                                line_ranges: vec![
-                                    LineRange::Start(m.span().start().line),
-                                    LineRange::End(m.span().end().line),
-                                ],
-                                names: vec![
-                                    Name::TypeName("macro".to_string()),
-                                    Name::Name(format!("{:?}", m.mac.path)),
-                                ],
+                                line_ranges: Range { start: m.span().start().line, end: m.span().end().line },
+                                names: Name {
+                                    type_name: "macro".to_string(),
+                                    name: format!("{:?}", m.mac.path),
+                                },
                             });
                         }
                         ImplItem::Verbatim(v) => {
                             object_line.push(ObjectRange {
-                                line_ranges: vec![
-                                    LineRange::Start(v.span().start().line),
-                                    LineRange::End(v.span().end().line),
-                                ],
-                                names: vec![
-                                    Name::TypeName("verbatim".to_string()),
-                                    Name::Name(v.to_string()),
-                                ],
+                                line_ranges: Range { start: v.span().start().line, end: v.span().end().line },
+                                names: Name {
+                                    type_name: "verbatim".to_string(),
+                                    name: v.to_string(),
+                                },
                             });
                         }
                         _ => event!(Level::INFO, "Other impl object"),
@@ -653,86 +580,65 @@ fn visit_items(items: &[Item]) -> Result<Vec<ObjectRange>, ErrorHandling> {
             }
             Item::Trait(t) => {
                 object_line.push(ObjectRange {
-                    line_ranges: vec![
-                        LineRange::Start(t.span().start().line),
-                        LineRange::End(t.span().end().line),
-                    ],
-                    names: vec![
-                        Name::TypeName("trait".to_string()),
-                        Name::Name(t.ident.to_string()),
-                    ],
+                    line_ranges: Range { start: t.span().start().line, end: t.span().end().line },
+                    names: Name {
+                        type_name: "trait".to_string(),
+                        name: t.ident.to_string(),
+                    },
                 });
             }
             Item::Type(t) => {
                 object_line.push(ObjectRange {
-                    line_ranges: vec![
-                        LineRange::Start(t.span().start().line),
-                        LineRange::End(t.span().end().line),
-                    ],
-                    names: vec![
-                        Name::TypeName("type".to_string()),
-                        Name::Name(t.ident.to_string()),
-                    ],
+                    line_ranges: Range { start: t.span().start().line, end: t.span().end().line },
+                    names: Name {
+                        type_name: "type".to_string(),
+                        name: t.ident.to_string(),
+                    },
                 });
             }
             Item::Union(u) => {
                 object_line.push(ObjectRange {
-                    line_ranges: vec![
-                        LineRange::Start(u.span().start().line),
-                        LineRange::End(u.span().end().line),
-                    ],
-                    names: vec![
-                        Name::TypeName("union".to_string()),
-                        Name::Name(u.ident.to_string()),
-                    ],
+                    line_ranges: Range { start: u.span().start().line, end: u.span().end().line },
+                    names: Name {
+                        type_name: "union".to_string(),
+                        name: u.ident.to_string(),
+                    },
                 });
             }
             Item::Const(c) => {
                 object_line.push(ObjectRange {
-                    line_ranges: vec![
-                        LineRange::Start(c.span().start().line),
-                        LineRange::End(c.span().end().line),
-                    ],
-                    names: vec![
-                        Name::TypeName("const".to_string()),
-                        Name::Name(c.ident.to_string()),
-                    ],
+                    line_ranges: Range { start: c.span().start().line, end: c.span().end().line },
+                    names: Name {
+                        type_name: "const".to_string(),
+                        name: c.ident.to_string(),
+                    },
                 });
             }
             Item::Macro(m) => {
                 object_line.push(ObjectRange {
-                    line_ranges: vec![
-                        LineRange::Start(m.span().start().line),
-                        LineRange::End(m.span().end().line),
-                    ],
-                    names: vec![
-                        Name::TypeName("macro".to_string()),
-                        Name::Name(format!("{:?}", m.mac.path)),
-                    ],
+                    line_ranges: Range { start: m.span().start().line, end: m.span().end().line },
+                    names: Name {
+                        type_name: "macro".to_string(),
+                        name: format!("{:?}", m.mac.path),
+                    },
                 });
             }
             Item::ExternCrate(c) => {
                 object_line.push(ObjectRange {
-                    line_ranges: vec![
-                        LineRange::Start(c.span().start().line),
-                        LineRange::End(c.span().end().line),
-                    ],
-                    names: vec![
-                        Name::TypeName("extern crate".to_string()),
-                        Name::Name(c.ident.to_string()),
-                    ],
+                    line_ranges: Range { start: c.span().start().line, end: c.span().end().line },
+                    names: Name {
+                        type_name: "extern crate".to_string(),
+                        name: c.ident.to_string(),
+                    },
                 });
             }
             Item::Static(s) => {
                 object_line.push(ObjectRange {
-                    line_ranges: vec![
-                        LineRange::Start(s.span().start().line),
-                        LineRange::End(s.span().end().line),
-                    ],
-                    names: vec![
-                        Name::TypeName("static".to_string()),
-                        Name::Name(s.ident.to_string()),
-                    ],
+                    line_ranges: Range { start: s.span().start().line, end: s.span().end().line },
+                    names: Name {
+                        type_name: "static".to_string(),
+                        name: s.ident.to_string(),
+                    },
                 });
             }
             _ => event!(Level::INFO, "Other item"),

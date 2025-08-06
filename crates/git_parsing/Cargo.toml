@@ -7,3 +7,4 @@ edition = "2024"
 snafu = { workspace = true }
 git2 = "0.20.2"
 tracing = { workspace = true }
+rayon = { workspace = true }

@@ -1,11 +1,11 @@
 use git2::{Diff, Patch};
-use snafu::{OptionExt, ResultExt, Snafu};
+use rayon::prelude::*;
+use snafu::{OptionExt, Snafu};
 use std::{
     collections::HashSet,
     ffi::OsStr,
     path::{Path, PathBuf},
 };
-use tracing::{Level, event};
 
 #[derive(Debug, Snafu)]
 #[snafu(visibility(pub))]
@@ -22,14 +22,14 @@ impl From<git2::Error> for Git2ErrorHandling {
     }
 }
 #[derive(Clone, Hash, Eq, PartialEq, Debug)]
-pub enum HunkChange {
+pub enum ChangeType {
     Add,
     Remove,
     Modify,
 }
 #[derive(Clone, Hash, Eq, PartialEq, Debug)]
 pub struct Hunk {
-    pub change: HunkChange,
+    pub change: ChangeType,
     pub line: usize,
     pub filename: String,
 }
@@ -43,56 +43,43 @@ impl Hunk {
     }
 }
 
-#[derive(Debug)]
-pub struct Change {
-    pub quantity: usize,
-    pub change_at_hunk: Hunk,
-}
-
-/// Parses a Git patch and matches the changes described within it against parsed Rust items.
-/// It identifies unique files, extracts hunks from the diff, sorts them, and then creates `Change` structs for each matching hunk, indicating the quantity of changes and the hunk details.
-///
-/// # Arguments
-///
-/// * `relative_path`: The `Path` representing the base directory for resolving file paths in the patch.
-/// * `patch_src`: A byte slice (`&[u8]`) containing the raw content of the Git patch.
-///
-/// # Returns
-///
-/// A `Result` containing a `Vec<Change>` representing the matched changes, or a `Git2ErrorHandling` if any error occurs during diff parsing or hunk extraction.
 pub fn match_patch_with_parse(
     relative_path: &Path,
-    patch_src: &[u8],
-) -> Result<Vec<Change>, Git2ErrorHandling> {
-    let mut changes: Vec<Change> = Vec::new();
+    patch_src: &Diff<'static>,
+) -> Result<Vec<Hunk>, Git2ErrorHandling> {
     let list_of_unique_files = read_non_repeting_functions(patch_src, relative_path)?;
-    let diff = Diff::from_buffer(patch_src)?;
-    let changed = get_filenames(&diff)?;
-    let mut hunks = git_get_hunks(diff, changed)?;
+    let changed = get_filenames(patch_src)?;
+    let mut hunks = git_get_hunks(patch_src, changed)?;
     hunks.sort_by_key(|a| a.filename());
-    for each_unique in list_of_unique_files.iter() {
-        let mut count = 0;
-        for each in &hunks {
-            let full_path = relative_path.join(each.filename());
-            if full_path == Path::new(&each_unique) {
-                count += 1;
-                changes.push(Change {
-                    quantity: count,
-                    change_at_hunk: each.to_owned(),
-                });
+    let changes: Vec<Hunk> = list_of_unique_files
+        .par_iter()
+        .map(|each_unique| {
+            let collected = hunks.par_iter().find_first(|each| {
+                let full_path = relative_path.join(each.filename());
+                full_path == Path::new(&each_unique)
+            });
+            if let Some(collected) = collected {
+                collected.to_owned()
+            } else {
+                //Here returning Remove, as it is mitigated afterwards
+                Hunk {
+                    change: ChangeType::Remove,
+                    line: 0,
+                    filename: String::new(),
+                }
             }
-        }
-    }
-    event!(Level::INFO, "Quantity of hunks: {}", hunks.len());
-    event!(Level::INFO, "Quantity of changes: {}", changes.len());
+        })
+        .collect::<Vec<Hunk>>();
     Ok(changes)
 }
 
-pub fn get_easy_hunk(patch_src: &[u8], at_file_path: &str) -> Result<Vec<Hunk>, Git2ErrorHandling> {
+pub fn get_easy_hunk(
+    patch_src: &Diff<'static>,
+    at_file_path: &str,
+) -> Result<Vec<Hunk>, Git2ErrorHandling> {
     let mut vec_of_hunks: Vec<Hunk> = Vec::new();
-    let diff = Diff::from_buffer(patch_src)?;
-    let filenames = get_filenames(&diff)?;
-    let hunks = git_get_hunks(diff, filenames)?;
+    let filenames = get_filenames(patch_src)?;
+    let hunks = git_get_hunks(patch_src, filenames)?;
     vec_of_hunks.sort_by_key(|hunk| hunk.filename.to_owned());
 
     for hunk in hunks {
@@ -125,6 +112,7 @@ fn get_filenames(diff: &Diff<'static>) -> Result<Vec<String>, Git2ErrorHandling>
     }
     Ok(vector_of_filenames)
 }
+
 /// Extracts hunk information from a Git diff, associating each hunk with its filename, line number, and type of change (addition or modification).
 /// It iterates through patches and their hunks, processing each line to determine if it's an addition or modification.
 ///
@@ -137,22 +125,22 @@ fn get_filenames(diff: &Diff<'static>) -> Result<Vec<String>, Git2ErrorHandling>
 ///
 /// A `Result` containing a `Vec<Hunk>` with detailed change information for each line, or a `Git2ErrorHandling` if an error occurs during patch or hunk extraction.
 fn git_get_hunks(
-    diff: Diff<'static>,
+    diff: &Diff<'static>,
     vector_of_filenames: Vec<String>,
 ) -> Result<Vec<Hunk>, Git2ErrorHandling> {
     let mut hunk_tuple: Vec<Hunk> = Vec::new();
     //i returns tuple
     for i in diff.deltas().enumerate() {
-        let patch = Patch::from_diff(&diff, i.0)?;
+        let patch = Patch::from_diff(diff, i.0)?;
         let patch_ref = patch.as_ref().context(PatchExportSnafu)?;
         for hunk_idx in 0..patch_ref.num_hunks() {
             let (_hunk, _) = patch_ref.hunk(hunk_idx)?;
             for line_idx in 0..patch_ref.num_lines_in_hunk(hunk_idx)? {
                 let line = patch_ref.line_in_hunk(hunk_idx, line_idx)?;
-                let line_processed: usize = line.new_lineno().unwrap_or(0) as usize;
+                let line_processed = line.new_lineno().unwrap_or(0) as usize;
                 let change = match line.origin() {
-                    '+' => HunkChange::Add,
-                    ' ' => HunkChange::Modify,
+                    '+' => ChangeType::Add,
+                    ' ' => ChangeType::Modify,
                     _ => continue,
                 };
                 hunk_tuple.push(Hunk {
@@ -165,14 +153,14 @@ fn git_get_hunks(
     }
     Ok(hunk_tuple)
 }
+
 fn read_non_repeting_functions(
-    patch_src: &[u8],
+    patch_src: &Diff<'static>,
     relative_path: &Path,
 ) -> Result<Vec<PathBuf>, Git2ErrorHandling> {
     let mut vec_of_files: Vec<PathBuf> = Vec::new();
-    let diff = Diff::from_buffer(patch_src).context(Git2Snafu)?;
-    let filenames = get_filenames(&diff)?;
-    let hunks = git_get_hunks(diff, filenames)?;
+    let filenames = get_filenames(patch_src)?;
+    let hunks = git_get_hunks(patch_src, filenames)?;
     let mut seen = HashSet::new();
     let unique_files = hunks
         .into_iter()
