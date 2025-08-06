@@ -31,6 +31,7 @@ jobs:
     - name: cleanup patch
       run: rm patch.patch
     - name: update pull request
-      run: git diff HEAD > ${{ github.event.pull_request.number }}.patch
+      run: git diff HEAD 
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        
