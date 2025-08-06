@@ -16,22 +16,27 @@ jobs:
       pull-requests: write
 
     steps:
-    - uses: actions/checkout@v4
-      with:
-        ref: ${{ github.head_ref }}
-        fetch-depth: 0
-    - name: fetch branch
-      run: git fetch origin ${{ github.base_ref }}
-    - name: make patch
-      run: git diff origin/${{ github.base_ref }}...${{ github.head_ref }} > patch.patch
-    - name: run patchdog
-      run: cargo run -- --file-patch patch.patch
-      env:
-        API_KEY_GEMINI: ${{ secrets.API_KEY_GEMINI }}
-    - name: cleanup patch
-      run: rm patch.patch
-    - name: update pull request
-      run: git diff HEAD 
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+      - name: fetch branch
+        run: git fetch origin ${{ github.base_ref }}
+      - name: make patch
+        run: git diff origin/${{ github.base_ref }}...${{ github.head_ref }} > patch.patch
+      - name: run patchdog
+        run: cargo run -- --file-patch patch.patch
+        env:
+          API_KEY_GEMINI: ${{ secrets.API_KEY_GEMINI }}
+      - name: cleanup patch
+        run: rm patch.patch
+      - name: update pull request
+        run: git diff HEAD > patch.patch 
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload patch file
+        uses: actions/upload-artifact@v3
+        with:
+          name: patch-file
+          path: patch.patch
         
