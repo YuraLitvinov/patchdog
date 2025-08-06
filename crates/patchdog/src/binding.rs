@@ -1,13 +1,13 @@
-use crate::binding::rust_parsing::error::CouldNotGetLineSnafu;
 use ai_interactions::parse_json::ChangeFromPatch;
-use gemini::gemini::{ContextData, SingleFunctionData};
+use gemini::gemini::{Context, Metadata, Request, SingleFunctionData};
 use git_parsing::{Hunk, get_easy_hunk, match_patch_with_parse};
+use git2::Diff;
+use rayon::prelude::*;
 use rust_parsing;
 use rust_parsing::ObjectRange;
-use rust_parsing::error::{ErrorBinding, InvalidIoOperationsSnafu, InvalidReadFileOperationSnafu};
+use rust_parsing::error::ErrorBinding;
 use rust_parsing::file_parsing::{FileExtractor, Files};
 use rust_parsing::rust_parser::{RustItemParser, RustParser};
-use snafu::{OptionExt, ResultExt};
 use std::{
     env, fs,
     ops::Range,
@@ -24,75 +24,94 @@ pub struct Difference {
     pub line: Vec<usize>,
 }
 
-/// Extracts relevant code changes from a list of `ChangeFromPatch` structs, filtering by type and name.
+struct LocalChange {
+    filename: PathBuf,
+    range: Range<usize>,
+    file: String,
+}
+
+/// Transforms a collection of file changes (`ChangeFromPatch`) into a vector of `Request` objects.
+/// It reads the content of each affected file, extracts specific code snippets based on line ranges,
+/// parses these snippets to identify Rust functions or items, and then filters them based on `rust_type` or `rust_name`.
+/// Each matching item is then wrapped into a `Request` struct with a unique UUID, function data, and metadata.
 ///
 /// # Arguments
 ///
-/// * `exported_from_file`: A vector of `ChangeFromPatch` structs.
-/// * `rust_type`: A vector of strings representing the desired types.
-/// * `rust_name`: A vector of strings representing the desired names.
+/// * `exported_from_file` - A `Vec<ChangeFromPatch>` containing file paths and ranges of changes.
+/// * `rust_type` - A `Vec<String>` of desired Rust item types to filter for.
+/// * `rust_name` - A `Vec<String>` of desired Rust item names to filter for.
 ///
 /// # Returns
 ///
-/// A `Result` containing a vector of `SingleFunctionData` structs, or an `ErrorBinding` if any error occurred.
+/// A `Result<Vec<Request>, ErrorBinding>`:
+/// - `Ok(Vec<Request>)`: A vector of `Request` objects representing the filtered and transformed code changes.
+/// - `Err(ErrorBinding)`: If file reading, string manipulation, or Rust item parsing fails.
 pub fn changes_from_patch(
     exported_from_file: Vec<ChangeFromPatch>,
     rust_type: Vec<String>,
     rust_name: Vec<String>,
-) -> Result<Vec<SingleFunctionData>, ErrorBinding> {
-    let mut singlerequestdata: Vec<SingleFunctionData> = Vec::new();
-    for each in exported_from_file {
-        println!("{:?}", &each.filename);
-        let file = fs::read_to_string(&each.filename).context(InvalidIoOperationsSnafu)?;
-        let vectorized = FileExtractor::string_to_vector(&file);
-        for obj in each.range {
-            let item = &vectorized[obj.start - 1..obj.end];
-            //Calling at index 0 because parsed_file consists of a single object
-            //Does a recursive check, whether the item is still a valid Rust code
-            let parsed_file = &RustItemParser::rust_item_parser(&item.join("\n"))?;
-            let obj_type_to_compare = parsed_file.object_type().unwrap();
-            let obj_name_to_compare = parsed_file.object_name().unwrap();
-            if rust_type
-                .iter()
-                .any(|obj_type| &obj_type_to_compare == obj_type)
-                || rust_name
-                    .iter()
-                    .any(|obj_name| &obj_name_to_compare == obj_name)
+) -> Result<Vec<Request>, ErrorBinding> {
+    let tasks: Vec<LocalChange> = exported_from_file
+        .par_iter()
+        .flat_map(|each| {
+            each.range.par_iter().map(move |obj| LocalChange {
+                filename: each.filename.clone(),
+                range: obj.clone(),
+                file: fs::read_to_string(&each.filename).unwrap(),
+            })
+        })
+        .collect();
+    let singlerequestdata: Vec<Request> = tasks
+        .par_iter()
+        .filter_map(|each| {
+            let vectorized = FileExtractor::string_to_vector(&each.file);
+            let item = &vectorized[each.range.start - 1..each.range.end];
+            let parsed_file = RustItemParser::rust_item_parser(&item.join("\n")).ok()?;
+            let obj_type_to_compare = parsed_file.names.type_name;
+            let obj_name_to_compare = parsed_file.names.name;
+            if rust_type.iter().any(|t| &obj_type_to_compare == t)
+                || rust_name.iter().any(|n| &obj_name_to_compare == n)
             {
                 let as_string = item.join("\n");
-
-                singlerequestdata.push(SingleFunctionData {
-                    function_text: as_string,
-                    fn_name: obj_name_to_compare,
-                    context: ContextData {
-                        class_name: "".to_string(),
-                        filepath: each.filename.clone(),
-                        external_dependecies: vec![],
-                        old_comment: vec!["".to_string()],
-                        line_range: obj,
+                Some(Request {
+                    uuid: uuid::Uuid::new_v4().to_string(),
+                    data: SingleFunctionData {
+                        function_text: as_string,
+                        fn_name: obj_name_to_compare,
+                        context: Context {
+                            class_name: "".to_string(),
+                            external_dependecies: vec!["".to_string()],
+                            old_comment: vec!["".to_string()],
+                        },
+                        metadata: Metadata {
+                            filepath: each.filename.clone(),
+                            line_range: each.range.clone(),
+                        },
                     },
-                });
+                })
+            } else {
+                None
             }
-        }
-    }
+        })
+        .collect();
     Ok(singlerequestdata)
 }
 
-/// Reads patch data from a file and returns a vector of `ChangeFromPatch` structs.
+/// Retrieves parsed patch data from a specified patch file.
+/// It constructs the absolute path to the patch file and the relative working directory,
+/// then calls `get_patch_data` to process the patch.
 ///
 /// # Arguments
 ///
-/// * `path_to_patch`: The path to the patch file.
+/// * `path_to_patch` - A `PathBuf` indicating the path to the patch file.
 ///
 /// # Returns
 ///
-/// A `Result` containing a vector of `ChangeFromPatch` structs, or an `ErrorBinding` if any error occurred.
+/// A `Result<Vec<ChangeFromPatch>, ErrorBinding>`:
+/// - `Ok(Vec<ChangeFromPatch>)`: A vector containing details of changes extracted from the patch.
+/// - `Err(ErrorBinding)`: If the current directory cannot be determined or patch data extraction fails.
 pub fn patch_data_argument(path_to_patch: PathBuf) -> Result<Vec<ChangeFromPatch>, ErrorBinding> {
-    let path = env::current_dir().context(InvalidReadFileOperationSnafu {
-        file_path: &path_to_patch,
-    })?;
-
-    //let path = Path::new("/home/yurii-sama/embucket").to_path_buf();
+    let path = env::current_dir()?;
     let patch = get_patch_data(path.join(path_to_patch), path)?;
     Ok(patch)
 }
@@ -102,98 +121,113 @@ Pushes information from a patch into vector that contains lines
 at where there are unique changed objects reprensented with range<usize>
 and an according path each those ranges that has to be iterated only once
 */
-/// Extracts data from a patch file, creating a vector of `ChangeFromPatch` structs.
+/// Processes a Git patch to identify specific code changes within Rust files.
+/// It first exports the raw changes from the patch, then iterates through these differences.
+/// For each difference, it parses the corresponding Rust file and identifies actual Rust items (functions, structs, etc.)
+/// whose line ranges overlap with the reported changes in the patch.
+/// The result is a refined list of `ChangeFromPatch` objects containing only relevant Rust item ranges.
 ///
 /// # Arguments
 ///
-/// * `path_to_patch`: The path to the patch file.
-/// * `relative_path`: The relative path.
+/// * `path_to_patch` - A `PathBuf` indicating the path to the patch file.
+/// * `relative_path` - A `PathBuf` representing the relative base path from which files are referenced.
 ///
 /// # Returns
 ///
-/// A `Result` containing a vector of `ChangeFromPatch` structs, or an `ErrorBinding` if any error occurred.
+/// A `Result<Vec<ChangeFromPatch>, ErrorBinding>`:
+/// - `Ok(Vec<ChangeFromPatch>)`: A vector of `ChangeFromPatch` objects, each containing a filename and a vector of `Range<usize>` indicating the line ranges of identified Rust items that were changed by the patch.
+/// - `Err(ErrorBinding)`: If patch export fails or Rust file parsing encounters an error.
 pub fn get_patch_data(
     path_to_patch: PathBuf,
     relative_path: PathBuf,
 ) -> Result<Vec<ChangeFromPatch>, ErrorBinding> {
     let export = patch_export_change(path_to_patch, relative_path)?;
-    let mut export_difference: Vec<ChangeFromPatch> = Vec::new();
-    let mut vector_of_changed: Vec<Range<usize>> = Vec::new();
-    for difference in export {
-        let parsed = RustItemParser::parse_rust_file(&difference.filename)?;
-        for each_parsed in &parsed {
-            let range = each_parsed.line_start().context(CouldNotGetLineSnafu)?
-                ..each_parsed.line_end().context(CouldNotGetLineSnafu)?;
-            if difference.line.iter().any(|line| range.contains(line)) {
-                vector_of_changed.push(range);
-            }
-        }
-        export_difference.push(ChangeFromPatch {
-            range: vector_of_changed.to_owned(),
-            filename: difference.filename.to_owned(),
-        });
-        vector_of_changed.clear();
-    }
+    let export_difference = export
+        .par_iter()
+        .flat_map(|difference| {
+            let parsed = RustItemParser::parse_rust_file(&difference.filename).ok()?;
+            let vector_of_changed = parsed
+                .par_iter()
+                .flat_map(|each_parsed| {
+                    let range = each_parsed.line_start()..each_parsed.line_end();
+                    if difference.line.par_iter().any(|line| range.contains(line)) {
+                        Some(range)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            Some(ChangeFromPatch {
+                range: vector_of_changed,
+                filename: difference.filename.to_owned(),
+            })
+        })
+        .collect();
     Ok(export_difference)
 }
 
-/// Stores objects from a patch file into a vector of `FullDiffInfo` structs.
+/// Stores detailed information about changed objects in a Git patch.
+/// It parses the raw patch content, matches patch hunks with parsed Rust items, and for each changed file,
+/// it extracts relevant hunks and parses the file's Rust items to provide a comprehensive `FullDiffInfo`.
 ///
 /// # Arguments
 ///
-/// * `relative_path`: The relative path to the file.
-/// * `patch_src`: A slice of bytes representing the patch source.
+/// * `relative_path` - A reference to a `Path` indicating the base directory for relative file paths.
+/// * `patch_src` - A byte slice (`&[u8]`) containing the raw content of the patch file.
 ///
 /// # Returns
 ///
-/// A `Result` containing a vector of `FullDiffInfo` structs, or an `ErrorBinding` if any error occurred.
+/// A `Result<Vec<FullDiffInfo>, ErrorBinding>`:
+/// - `Ok(Vec<FullDiffInfo>)`: A vector of `FullDiffInfo` structs, each containing the filename, parsed object ranges within that file, and associated hunks.
+/// - `Err(ErrorBinding)`: If diff parsing, hunk matching, file reading, or Rust item parsing fails.
 fn store_objects(
     relative_path: &Path,
     patch_src: &[u8],
 ) -> Result<Vec<FullDiffInfo>, ErrorBinding> {
-    let mut vec_of_surplus: Vec<FullDiffInfo> = Vec::new();
-    let matched = match_patch_with_parse(relative_path, patch_src)?;
-    for change_line in &matched {
-        if change_line.quantity == 1 {
-            let list_of_unique_files =
-                get_easy_hunk(patch_src, &change_line.change_at_hunk.filename())?;
-            let path = relative_path.join(change_line.change_at_hunk.filename());
-            let file = fs::read_to_string(&path)
-                .context(InvalidReadFileOperationSnafu { file_path: &path })?;
-            let parsed = RustItemParser::parse_all_rust_items(&file)?;
-            vec_of_surplus.push(FullDiffInfo {
-                name: change_line.change_at_hunk.filename(),
+    let diff = Diff::from_buffer(patch_src).unwrap();
+    let changes = &match_patch_with_parse(relative_path, &diff)?;
+    let vec_of_surplus = changes
+        .iter()
+        .map(|change| {
+            let list_of_unique_files = get_easy_hunk(&diff, &change.filename()).unwrap();
+            let path = relative_path.join(change.filename());
+            let file = fs::read_to_string(&path).unwrap();
+            let parsed = RustItemParser::parse_all_rust_items(&file).unwrap();
+            FullDiffInfo {
+                name: change.filename(),
                 object_range: parsed,
                 hunk: list_of_unique_files,
-            });
-        }
-    }
-
+            }
+        })
+        .collect();
     Ok(vec_of_surplus)
 }
-/// Extracts changes from a patch file and returns a vector of `Difference` structs.
+
+/// Exports detailed line differences from a Git patch, focusing on identifying lines that introduce changes within Rust code objects.
+/// It reads the patch file, extracts general diff information, then iterates through each changed hunk.
+/// For each hunk, it reads the corresponding file, parses its Rust items, and checks if the changed lines within the hunk fall outside of existing, valid Rust objects (indicating new or significantly altered structures).
 ///
 /// # Arguments
 ///
-/// * `path_to_patch`: The path to the patch file.
-/// * `relative_path`: The relative path.
+/// * `path_to_patch` - A `PathBuf` specifying the path to the patch file.
+/// * `relative_path` - A `PathBuf` specifying the base directory for relative file paths.
 ///
 /// # Returns
 ///
-/// A `Result` containing a vector of `Difference` structs, or an `ErrorBinding` if any error occurred.
+/// A `Result<Vec<Difference>, ErrorBinding>`:
+/// - `Ok(Vec<Difference>)`: A vector of `Difference` structs, each containing the filename and a list of line numbers that represent changes not neatly contained within existing Rust objects.
+/// - `Err(ErrorBinding)`: If file reading, object storage, or Rust item parsing fails.
 fn patch_export_change(
     path_to_patch: PathBuf,
     relative_path: PathBuf,
 ) -> Result<Vec<Difference>, ErrorBinding> {
     let mut change_in_line: Vec<usize> = Vec::new();
     let mut line_and_file: Vec<Difference> = Vec::new();
-    let patch_text = fs::read(&path_to_patch).context(InvalidReadFileOperationSnafu {
-        file_path: path_to_patch,
-    })?;
+    let patch_text = fs::read(&path_to_patch)?;
     let each_diff = store_objects(&relative_path, &patch_text)?;
     for diff_hunk in &each_diff {
         let path_to_file = relative_path.to_owned().join(&diff_hunk.name);
-        let file = fs::read_to_string(&path_to_file).context(InvalidIoOperationsSnafu)?;
+        let file = fs::read_to_string(&path_to_file)?;
         let parsed = RustItemParser::parse_all_rust_items(&file)?;
         let path = path_to_file;
 

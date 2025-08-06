@@ -1,5 +1,6 @@
 use git2::{Diff, Patch};
-use snafu::{OptionExt, ResultExt, Snafu};
+use rayon::prelude::*;
+use snafu::{OptionExt, Snafu};
 use std::{
     collections::HashSet,
     ffi::OsStr,
@@ -15,16 +16,30 @@ pub enum Git2ErrorHandling {
     },
     PatchExportError,
 }
-
+impl From<git2::Error> for Git2ErrorHandling {
+/// Implements the `From` trait to convert a `git2::Error` into a `Git2ErrorHandling::Git2Error`.
+/// This provides a standardized way to integrate `git2` errors into the custom error handling system.
+///
+/// # Arguments
+///
+/// * `e` - The `git2::Error` to convert.
+///
+/// # Returns
+///
+/// A `Git2ErrorHandling::Git2Error` variant containing the original `git2::Error`.
+    fn from(e: git2::Error) -> Self {
+        Git2ErrorHandling::Git2Error { source: e }
+    }
+}
 #[derive(Clone, Hash, Eq, PartialEq, Debug)]
-pub enum HunkChange {
+pub enum ChangeType {
     Add,
     Remove,
     Modify,
 }
 #[derive(Clone, Hash, Eq, PartialEq, Debug)]
 pub struct Hunk {
-    pub change: HunkChange,
+    pub change: ChangeType,
     pub line: usize,
     pub filename: String,
 }
@@ -38,55 +53,72 @@ impl Hunk {
     }
 }
 
-#[derive(Debug)]
-pub struct Change {
-    pub quantity: usize,
-    pub change_at_hunk: Hunk,
-}
-
-/// Matches a patch file with parsed Rust items and generates a vector of `Change` structs.
+/// Matches parsed Rust code items with hunks from a Git patch.
+/// It first identifies unique Rust files involved in the patch, then retrieves all hunks.
+/// For each unique file, it finds the corresponding hunk and collects them.
+/// Hunks without a matching file are returned as `ChangeType::Remove` which are mitigated later.
 ///
 /// # Arguments
 ///
-/// * `relative_path`: The relative path to the file.
-/// * `patch_src`: A slice of bytes representing the patch source.
+/// * `relative_path` - A reference to a `Path` indicating the base directory for relative file paths.
+/// * `patch_src` - A reference to a `git2::Diff` object representing the Git patch.
 ///
 /// # Returns
 ///
-/// A `Result` containing a vector of `Change` structs, or a `Git2ErrorHandling` if any error occurred.
+/// A `Result<Vec<Hunk>, Git2ErrorHandling>`:
+/// - `Ok(Vec<Hunk>)`: A vector of `Hunk` structs, each representing a change in a Rust file that corresponds to a parsed item.
+/// - `Err(Git2ErrorHandling)`: If there are issues reading filenames, getting hunks, or other Git2-related errors.
 pub fn match_patch_with_parse(
     relative_path: &Path,
-    patch_src: &[u8],
-) -> Result<Vec<Change>, Git2ErrorHandling> {
-    let mut changes: Vec<Change> = Vec::new();
+    patch_src: &Diff<'static>,
+) -> Result<Vec<Hunk>, Git2ErrorHandling> {
     let list_of_unique_files = read_non_repeting_functions(patch_src, relative_path)?;
-    let diff = Diff::from_buffer(patch_src).context(Git2Snafu)?;
-    let changed = get_filenames(&diff)?;
-    let mut hunks = git_get_hunks(diff, changed)?;
+    let changed = get_filenames(patch_src)?;
+    let mut hunks = git_get_hunks(patch_src, changed)?;
     hunks.sort_by_key(|a| a.filename());
-    for each_unique in list_of_unique_files.iter() {
-        let mut count = 0;
-        for each in &hunks {
-            let full_path = relative_path.join(each.filename());
-            if full_path == Path::new(&each_unique) {
-                count += 1;
-                changes.push(Change {
-                    quantity: count,
-                    change_at_hunk: each.to_owned(),
-                });
+    let changes: Vec<Hunk> = list_of_unique_files
+        .par_iter()
+        .map(|each_unique| {
+            let collected = hunks.par_iter().find_first(|each| {
+                let full_path = relative_path.join(each.filename());
+                full_path == Path::new(&each_unique)
+            });
+            if let Some(collected) = collected {
+                collected.to_owned()
+            } else {
+                //Here returning Remove, as it is mitigated afterwards
+                Hunk {
+                    change: ChangeType::Remove,
+                    line: 0,
+                    filename: String::new(),
+                }
             }
-        }
-    }
-    println!("Quantity of hunks: {}", hunks.len());
-    println!("Quantity of changes: {}", changes.len());
+        })
+        .collect::<Vec<Hunk>>();
     Ok(changes)
 }
 
-pub fn get_easy_hunk(patch_src: &[u8], at_file_path: &str) -> Result<Vec<Hunk>, Git2ErrorHandling> {
+/// Extracts hunks from a Git patch that correspond to a specific file path.
+/// It first gets all filenames and hunks from the patch, then filters these hunks to include only those belonging to the specified `at_file_path`.
+/// The resulting vector of hunks is sorted by filename.
+///
+/// # Arguments
+///
+/// * `patch_src` - A reference to a `git2::Diff` object representing the Git patch.
+/// * `at_file_path` - A string slice (`&str`) representing the file path for which to retrieve hunks.
+///
+/// # Returns
+///
+/// A `Result<Vec<Hunk>, Git2ErrorHandling>`:
+/// - `Ok(Vec<Hunk>)`: A vector of `Hunk` structs that are part of the specified file.
+/// - `Err(Git2ErrorHandling)`: If there are issues getting filenames or hunks from the patch.
+pub fn get_easy_hunk(
+    patch_src: &Diff<'static>,
+    at_file_path: &str,
+) -> Result<Vec<Hunk>, Git2ErrorHandling> {
     let mut vec_of_hunks: Vec<Hunk> = Vec::new();
-    let diff = Diff::from_buffer(patch_src).context(Git2Snafu)?;
-    let filenames = get_filenames(&diff)?;
-    let hunks = git_get_hunks(diff, filenames)?;
+    let filenames = get_filenames(patch_src)?;
+    let hunks = git_get_hunks(patch_src, filenames)?;
     vec_of_hunks.sort_by_key(|hunk| hunk.filename.to_owned());
 
     for hunk in hunks {
@@ -97,6 +129,18 @@ pub fn get_easy_hunk(patch_src: &[u8], at_file_path: &str) -> Result<Vec<Hunk>, 
     Ok(vec_of_hunks)
 }
 
+/// Extracts the new file paths from a Git `Diff` object.
+/// It iterates through the deltas (changes) in the diff and collects the new file path for each delta.
+///
+/// # Arguments
+///
+/// * `diff` - A reference to a `git2::Diff` object.
+///
+/// # Returns
+///
+/// A `Result<Vec<String>, Git2ErrorHandling>`:
+/// - `Ok(Vec<String>)`: A vector of strings, where each string is the path of a new file or a modified file's new path in the diff.
+/// - `Err(Git2ErrorHandling)`: If there is an issue accessing file paths within the diff deltas.
 fn get_filenames(diff: &Diff<'static>) -> Result<Vec<String>, Git2ErrorHandling> {
     let mut vector_of_filenames: Vec<String> = Vec::new();
     for delta in diff.deltas() {
@@ -109,35 +153,38 @@ fn get_filenames(diff: &Diff<'static>) -> Result<Vec<String>, Git2ErrorHandling>
     }
     Ok(vector_of_filenames)
 }
-/// Extracts hunks from a Git diff, associating them with filenames and line changes.
+
+/// Extracts hunk information from a Git `Diff` object.
+/// It iterates through each delta in the diff, retrieves the patch for that delta, and then processes each hunk within the patch.
+/// For each line in a hunk, it determines the change type (Add, Modify, or continues if not relevant) and records the new line number and filename.
 ///
 /// # Arguments
 ///
-/// * `diff`: A Git diff object.
-/// * `vector_of_filenames`: A vector of filenames.
+/// * `diff` - A reference to a `git2::Diff` object.
+/// * `vector_of_filenames` - A `Vec<String>` containing the filenames corresponding to the deltas in the diff.
 ///
 /// # Returns
 ///
-/// A `Result` containing a vector of `Hunk` structs, or a `Git2ErrorHandling` if any error occurred.
+/// A `Result<Vec<Hunk>, Git2ErrorHandling>`:
+/// - `Ok(Vec<Hunk>)`: A vector of `Hunk` structs, each containing information about a change (change type, line number, filename).
+/// - `Err(Git2ErrorHandling)`: If there are issues creating patches, retrieving hunk or line information, or `PatchExportSnafu` occurs.
 fn git_get_hunks(
-    diff: Diff<'static>,
+    diff: &Diff<'static>,
     vector_of_filenames: Vec<String>,
 ) -> Result<Vec<Hunk>, Git2ErrorHandling> {
     let mut hunk_tuple: Vec<Hunk> = Vec::new();
     //i returns tuple
     for i in diff.deltas().enumerate() {
-        let patch = Patch::from_diff(&diff, i.0).context(Git2Snafu)?;
+        let patch = Patch::from_diff(diff, i.0)?;
         let patch_ref = patch.as_ref().context(PatchExportSnafu)?;
         for hunk_idx in 0..patch_ref.num_hunks() {
-            let (_hunk, _) = patch_ref.hunk(hunk_idx).context(Git2Snafu)?;
-            for line_idx in 0..patch_ref.num_lines_in_hunk(hunk_idx).context(Git2Snafu)? {
-                let line = patch_ref
-                    .line_in_hunk(hunk_idx, line_idx)
-                    .context(Git2Snafu)?;
-                let line_processed: usize = line.new_lineno().unwrap_or(0) as usize;
+            let (_hunk, _) = patch_ref.hunk(hunk_idx)?;
+            for line_idx in 0..patch_ref.num_lines_in_hunk(hunk_idx)? {
+                let line = patch_ref.line_in_hunk(hunk_idx, line_idx)?;
+                let line_processed = line.new_lineno().unwrap_or(0) as usize;
                 let change = match line.origin() {
-                    '+' => HunkChange::Add,
-                    ' ' => HunkChange::Modify,
+                    '+' => ChangeType::Add,
+                    ' ' => ChangeType::Modify,
                     _ => continue,
                 };
                 hunk_tuple.push(Hunk {
@@ -150,14 +197,28 @@ fn git_get_hunks(
     }
     Ok(hunk_tuple)
 }
+
+/// Reads unique Rust file paths from a Git patch, ensuring that only `.rs` files are considered.
+/// It first obtains all filenames and hunks from the patch, then filters for unique filenames.
+/// For each unique file, it checks if it has a `.rs` extension and constructs its full path relative to `relative_path`.
+///
+/// # Arguments
+///
+/// * `patch_src` - A reference to a `git2::Diff` object representing the Git patch.
+/// * `relative_path` - A reference to a `Path` indicating the base directory for relative file paths.
+///
+/// # Returns
+///
+/// A `Result<Vec<PathBuf>, Git2ErrorHandling>`:
+/// - `Ok(Vec<PathBuf>)`: A vector of unique `PathBuf`s corresponding to `.rs` files found in the patch.
+/// - `Err(Git2ErrorHandling)`: If there are issues getting filenames or hunks from the patch.
 fn read_non_repeting_functions(
-    patch_src: &[u8],
+    patch_src: &Diff<'static>,
     relative_path: &Path,
 ) -> Result<Vec<PathBuf>, Git2ErrorHandling> {
     let mut vec_of_files: Vec<PathBuf> = Vec::new();
-    let diff = Diff::from_buffer(patch_src).context(Git2Snafu)?;
-    let filenames = get_filenames(&diff)?;
-    let hunks = git_get_hunks(diff, filenames)?;
+    let filenames = get_filenames(patch_src)?;
+    let hunks = git_get_hunks(patch_src, filenames)?;
     let mut seen = HashSet::new();
     let unique_files = hunks
         .into_iter()

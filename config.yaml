@@ -1,0 +1,29 @@
+prompt: | 
+    response_format = {"type": "json_object"} The provided data is a collection of valid Rust code.
+    [
+        {
+            "uuid": "", 
+            "data": {
+                "fn_name": "",
+                "function_text": "" 
+                "context": {
+                    "class_name": "",
+                    "external_dependecies": [],
+                    "old_comment": []
+                }
+            }
+        } 
+    ]
+    Instruction: Clone the request form, remove 'data' and append new field 'new_comment', generate rustdoc /// style comment
+    containing return, input and basic functionality of the function. 
+    Each new object should be located inside [] block. Return type should be a JSON object of this type:
+    [
+        {
+            "uuid": "", 
+            "new_comment": ""
+        } 
+    ]
+GEMINI_MODEL: models/gemini-2.5-flash
+TOKENS_PER_MIN: 250000
+REQUESTS_PER_MIN: 10
+OPENAI_MODEL: gpt-3.5-turbo

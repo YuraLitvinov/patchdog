@@ -12,7 +12,6 @@
   },
   {
     "uuid": "2ff01a0d-4f82-44dd-b208-fe5a94b0ceac",
-    "fn_name": "size",
     "new_comment": "/// Calculates the size of the `ContextData` struct.\n///\n/// # Parameters\n///\n/// `&self`: A reference to the `ContextData` instance.\n///\n/// # Return value\n/// `usize`: The calculated size."
   },
   {

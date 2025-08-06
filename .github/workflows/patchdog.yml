@@ -1,37 +1,44 @@
 name: Run patchdog - AI engine
 
 on:
+  pull_request_review:
+    types: [submitted]
   pull_request:
-
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
+  Run_patchdog:
 
     runs-on: ubuntu-latest
+    permissions: 
+      contents: write
+      pull-requests: write
 
     steps:
-    - uses: actions/checkout@v4
-      with:
-        fetch-depth: 2
-    - name: move into directory
-      run: cd /home/runner/work/patchdog/patchdog
-    - name: make patch
-      run: git diff HEAD~1 HEAD > patch.patch
-    - name: checking out branch
-      run: git checkout HEAD
-    - name: make env
-      run: echo "API_KEY_GEMINI=${{ secrets.API_KEY_GEMINI }}" >> .env
-    - name: echo env
-      run: echo "GEMINI_MODEL=${{ secrets.GEMINI_MODEL }}" >> .env
-    - name: run patchdog
-      run: cargo run -- --file-patch patch.patch
-    - name: cleanup patch
-      run: rm patch.patch
-    - name: cleanup env
-      run: rm .env
-    - name: create pull request
-      run: gh pr create -B ${{ github.base_ref }} -H ${{ github.head_ref }} --title 'Merge PR $(date)' --body 'Created by patchdog - AI Engine!'
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+      - name: fetch branch
+        run: git fetch origin ${{ github.base_ref }}
+      - name: make patch
+        run: git diff origin/${{ github.base_ref }}...${{ github.head_ref }} > patch.patch
+      - name: run patchdog
+        run: cargo run -- --file-patch patch.patch
+        env:
+          API_KEY_GEMINI: ${{ secrets.API_KEY_GEMINI }}
+      - name: show status
+        run: git status
+      - name: cleanup patch
+        run: rm patch.patch
+      - name: update pull request
+        run: git diff HEAD > patch.patch 
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload patch file
+        uses: actions/upload-artifact@v4
+        with:
+          name: patch-file
+          path: patch.patch
+        

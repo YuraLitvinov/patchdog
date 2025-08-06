@@ -28,6 +28,9 @@ snafu = "0.8.6"
 clap = { version = "4.5.41", features = ["derive", "cargo"] }
 regex = "1.11.1"
 uuid = { version = "1.17.0", features = ["v4"] }
+yaml-rust2 = "0.10.3"
+tracing = "0.1.41"
+rayon = "1.10.0"
 
 
 [workspace.lints.clippy]
