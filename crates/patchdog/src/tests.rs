@@ -1,6 +1,6 @@
 mod tests {
     use crate::binding;
-    use crate::cli::collect_response;
+    use crate::cli::cherrypick_response;
     use gemini::gemini::{RawResponse, SingleFunctionData};
     use regex::Regex;
     use rust_parsing::ErrorHandling;
@@ -8,9 +8,10 @@ mod tests {
     use rust_parsing::file_parsing::{FileExtractor, Files, REGEX};
     use rust_parsing::rust_parser::{RustItemParser, RustParser};
     use snafu::ResultExt;
+    use syn::{ExprTry, Item};
     use std::env;
     use std::io::Write;
-    use std::process::Command;
+    use std::process::{id, Command};
     use std::{fs, path::Path};
     use tempfile::NamedTempFile;
     const PATH_BASE: &str = "../../tests/data.rs";
@@ -233,19 +234,9 @@ mod tests {
     /// This test function does not return a value; it panics on unhandled errors during file reading, regex compilation, or JSON deserialization.
     #[test]
     fn test_regex() {
-        let re = Regex::new(REGEX).unwrap();
-        let test = fs::read_to_string(Path::new("../../tests/request.json")).unwrap();
-        let mut i = 0;
-        let mut assess_size = vec![];
-        for cap in re.captures_iter(&test) {
-            i += 1;
-            let a = cap.get(0).unwrap().as_str();
-            let to_struct = serde_json::from_str::<SingleFunctionData>(a).unwrap();
-            println!("{:#?}", to_struct);
-            assess_size.push(to_struct);
-        }
-        println!("{}", assess_size.len());
-        assert_eq!(i, assess_size.len());
+        let test = fs::read_to_string(Path::new("../../tests/response_regex.json")).unwrap();
+        let assess_size = cherrypick_response(&test).unwrap();
+        assert_eq!(assess_size.len(), 3);
     }
 
     /// A unit test designed to validate the parsing of API responses (expected to be JSON).
@@ -293,8 +284,175 @@ mod tests {
         let response = fs::read_to_string(Path::new("../../tests/res.json")).unwrap();
         let request =
             serde_json::from_str::<Vec<SingleFunctionData>>(&request).context(SerdeSnafu)?;
-        let response = collect_response(&response)?;
+        let response = cherrypick_response(&response)?;
         assert_eq!(request.len(), response.len() + 1);
         Ok(())
+    }
+
+    use syn::Stmt;
+    use syn::Expr;
+    use syn::Pat;
+    use syn::LocalInit;
+    #[test] 
+    fn test_tokens() {
+        let file = fs::read_to_string("../../crates/patchdog/src/binding.rs").unwrap();
+        let function = FileExtractor::string_to_vector(&file)[189..220].join("\n");
+        let tokens = syn::parse_file(&function).unwrap();
+        let a: &Item = &tokens.items[0];
+        match a {
+            Item::Fn(item_fn) => {
+                //println!("{:#?}", item_fn);
+                let a = &item_fn.block.stmts;
+                for each in a {
+                    match each {
+                        Stmt::Expr(expr, _) => {
+                            //println!("{:?}", expr);
+                            match expr {
+                                Expr::Path(path) => {
+                                    //println!("{:#?}", path);
+                                },
+                                Expr::ForLoop(for_loop) => {
+                                    //println!("{:#?}", for_loop);
+                                    let a = for_loop.body.clone().stmts;
+                                    //println!("{:#?}", a);
+                                    for each in a {
+                                        match each {
+                                            Stmt::Expr(expr, _) => {
+                                                //println!("{:?}", expr);
+                                                match expr {
+                                                    Expr::Path(path) => {
+                                                        //println!("{:#?}", path);
+                                                    },
+                                                    _ => {
+                                                        ();
+                                                    }
+                                                }
+                                            },
+                                            Stmt::Local(local) => {
+                                                //println!("{:#?}", local);
+                                                let a = local.clone().init.unwrap();
+                                                match a {
+                                                    LocalInit { expr, .. } => {
+                                                        //println!("{:?}", expr);
+                                                        match *expr {
+                                                            Expr::Path(path) => {
+                                                                //println!("{:#?}", path);
+                                                            },
+                                                            Expr::MethodCall(mc) => {
+                                                            //println!("{:#?}", mc) 
+                                                            },
+                                                            Expr::Try(t) => {
+                                                            //println!("{:#?}", t);
+                                                            match *t.expr {
+                                                                Expr::Call(c) => {
+                                                                let a = c.func.clone();
+                                                                match *a {
+                                                                    Expr::Path(path) => {
+                                                                        let a = path.path.segments;
+                                                                        for each in a {
+                                                                            println!("{:#?}", each.ident.to_string());
+                                                                        }
+                                                                    },
+                                                                    _ => {
+                                                                        ();
+                                                                    }
+                                                                }    
+                                                                },
+                                                                _ => {
+                                                                    ();
+                                                                }
+                                                            }
+                                                            },
+                                                            _ => {
+                                                                ();
+                                                            }
+                                                        }
+                                                    },
+
+                                                    _ => {
+                                                        ();
+                                                    }
+                                                }
+                                            },
+                                            _ => {
+                                                ();
+                                            }
+                                        }
+                                    }
+                                    let a = for_loop.clone().pat;
+                                    match *a {
+                                        Pat::Ident(ident) => {
+                                            //println!("{:#?}", ident);
+                                            //println!("{:?}", ident.ident.to_string());
+                                        },
+                
+                                        _ => {
+                                            ();
+                                        }
+                                    }
+                                },
+                                _ => {
+                                    ();
+                                }
+                            }
+                            //println!("{:?}", expr);
+                        },
+                        Stmt::Local(local) => {
+                            //println!("{:?}", local);
+                            let a = local.init.clone();
+                            //println!("{:#?}", a);
+                            match a {
+                                Some(LocalInit { expr, .. }) => {
+                                    //println!("{:#?}", expr);
+                                    match *expr {
+                                        Expr::Try(t) => {
+                                            let a = t.clone().expr;
+                                            match *a {
+                                                Expr::Call(call) => {
+                                                    let a = call.func;
+                                                    match *a {
+                                                        Expr::Path(path) => {
+                                                            //println!("{:#?}", path.path.get_ident().unwrap().to_string());
+                                                        },
+                                                        _ => {
+                                                            ();
+                                                        }
+                                                    }
+                                                },
+                                                _ => {
+                                                    ();
+                                                }
+                                            }
+                                            //println!("{:#?}", t.expr);
+                                        },
+                                        _ => {
+                                            ();
+                                        }
+                                    }
+                                    //println!("{:?}", ident.ident.to_string());
+                                },
+                                _ => {
+                                    ();
+                                }
+                            }
+                        },
+                        Stmt::Item(item) => {
+
+                            //println!("{:?}", item);
+                        },
+                        Stmt::Macro(mac) => {
+                            //println!("{:?}", mac);
+                        },
+                        _ => {
+                            ();
+                        }
+                    }
+                }
+            }
+            _ => {
+                ();
+            }
+        }
+        assert_eq!(function.len(), 0);
     }
 }

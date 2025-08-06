@@ -60,34 +60,6 @@ pub async fn cli_patch_to_agent() -> Result<(), ErrorBinding> {
     Ok(())
 }
 
-/// Collects and deserializes `RawResponse` objects from a string. It uses a predefined regular expression (`REGEX`) to find JSON-like structures within the input string and attempts to parse each match into a `RawResponse` struct. It logs warnings for any parsing failures and skips problematic entries.
-///
-/// # Arguments
-///
-/// * `response`: A string slice (`&str`) containing the raw response, potentially with multiple JSON objects.
-///
-/// # Returns
-///
-/// A `Result` containing a `Vec<RawResponse>` of successfully parsed responses, or an `ErrorHandling` if the regex compilation fails (though this is unlikely given `unwrap()` is used).
-pub fn collect_response(response: &str) -> Result<Vec<RawResponse>, ErrorHandling> {
-    let re = Regex::new(REGEX).unwrap();
-    let mut response_from_regex = vec![];
-    for cap in re.captures_iter(response) {
-        let a = cap.get(0).unwrap().as_str();
-        let to_struct = serde_json::from_str::<RawResponse>(a);
-        match to_struct {
-            Ok(ok) => {
-                response_from_regex.push(ok);
-            }
-            Err(e) => {
-                event!(Level::WARN, "{e}");
-                continue;
-            }
-        }
-    }
-    Ok(response_from_regex)
-}
-
 /// Manages the process of sending requests to the Google Gemini API, handling batching, API calls, and response matching.
 /// It initializes a pool of requests, organizes them into batches, sends these batches to the API, and then attempts to match the API responses back to the original requests.
 /// Requests that fail to receive a valid response are recursively retried.
@@ -111,7 +83,7 @@ async fn call(request: Vec<Request>) -> Result<Vec<ResponseForm>, ErrorBinding> 
     let response = GoogleGemini::send_batches(&prepared).await?;
     for each in response {
         event!(Level::DEBUG, each);
-        let matches = match_response(&each, &prepared)?;
+        let matches = matched_response(&each, &prepared)?;
         for matched in matches {
             let clear_element = pool_of_requests.remove(&matched.data.uuid).ok_or("None");
             match clear_element {
@@ -141,6 +113,34 @@ async fn call(request: Vec<Request>) -> Result<Vec<ResponseForm>, ErrorBinding> 
     }
 }
 
+/// Collects and deserializes `RawResponse` objects from a string. It uses a predefined regular expression (`REGEX`) to find JSON-like structures within the input string and attempts to parse each match into a `RawResponse` struct. It logs warnings for any parsing failures and skips problematic entries.
+///
+/// # Arguments
+///
+/// * `response`: A string slice (`&str`) containing the raw response, potentially with multiple JSON objects.
+///
+/// # Returns
+///
+/// A `Result` containing a `Vec<RawResponse>` of successfully parsed responses, or an `ErrorHandling` if the regex compilation fails (though this is unlikely given `unwrap()` is used).
+pub fn cherrypick_response(response: &str) -> Result<Vec<RawResponse>, ErrorHandling> {
+    let re = Regex::new(REGEX).unwrap();
+    let mut response_cherrypicked = vec![];
+    for cap in re.captures_iter(response) {
+        let a = cap.get(0).unwrap().as_str();
+        let to_struct = serde_json::from_str::<RawResponse>(a);
+        match to_struct {
+            Ok(ok) => {
+                response_cherrypicked.push(ok);
+            }
+            Err(e) => {
+                event!(Level::WARN, "{e}");
+                continue;
+            }
+        }
+    }
+    Ok(response_cherrypicked)
+}
+
 /// Matches an API response string (expected to contain JSON data) with the initially prepared requests.
 /// It first attempts to directly deserialize the response into `Vec<RawResponse>`. If that fails, it tries a `fallback_repair` mechanism to fix malformed JSON. Once deserialized, it calls `match_request_response` to link responses to requests.
 ///
@@ -152,13 +152,13 @@ async fn call(request: Vec<Request>) -> Result<Vec<ResponseForm>, ErrorBinding> 
 /// # Returns
 ///
 /// A `Result` containing a `Vec<LinkedResponse>` where each `LinkedResponse` links original request data with new comment, or an `ErrorHandling` if deserialization or matching fails.
-fn match_response(
+fn matched_response(
     response: &str,
     prepared: &Vec<WaitForTimeout>,
 ) -> Result<Vec<LinkedResponse>, ErrorHandling> {
     match serde_json::from_str::<Vec<RawResponse>>(response) {
         Ok(ok) => {
-            let from_reg = collect_response(response)?;
+            let from_reg = cherrypick_response(response)?;
             let res = match_request_response(prepared, &from_reg, &ok)?;
             Ok(res)
         }
@@ -166,7 +166,7 @@ fn match_response(
             let as_vec = FileExtractor::string_to_vector(response);
             let a = &as_vec[1..as_vec.len() - 1];
             let to_struct = fallback_repair(a.to_vec())?;
-            let from_reg = collect_response(response)?;
+            let from_reg = cherrypick_response(response)?;
             let res = match_request_response(prepared, &from_reg, &to_struct)?;
             Ok(res)
         }
@@ -187,28 +187,45 @@ fn match_response(
 /// A `Result` containing a `Vec<LinkedResponse>` of matched request-response pairs, or an `ErrorHandling` if an unexpected error occurs.
 fn match_request_response(
     prepared: &Vec<WaitForTimeout>,
-    _response_raw_regex: &[RawResponse],
-    response_raw_serial: &[RawResponse],
+    cherrypicked_response: &[RawResponse],
+    singlerun_response: &[RawResponse],
 ) -> Result<Vec<LinkedResponse>, ErrorHandling> {
-    let mut matched = vec![];
-    /*
-    let regex_set: HashMap<String, String> = response_raw_regex
+    let single_set: HashMap<String, String> = cherrypicked_response
         .into_iter()
         .map(|each| (each.uuid.clone(), each.new_comment.clone()))
         .collect();
-    let mut serial_set: HashMap<String, String> = response_raw_serial
+    let mut multi_set: HashMap<String, String> = singlerun_response
         .into_iter()
         .map(|each| (each.uuid.clone(), each.new_comment.clone()))
         .collect();
-    regex_set.clone().
+    single_set.clone().
         into_iter()
-        .for_each(|(k,v)| { serial_set.insert(k, v); });
-    if regex_set.len() == serial_set.len() {}
-        */
+        .for_each(|(k,v)| { multi_set.insert(k, v); });
+    if single_set.len() == multi_set.len() {
+        let collected = matching(prepared, singlerun_response);
+        Ok(collected)
+    }
+    else {
+        let combined = single_set
+            .iter()
+            .filter_map(|(k,v)| {
+                multi_set.remove(k).map(|_| (k.clone(),v.clone()))
+            })
+            .collect::<HashMap<String, String>>()
+            .into_iter()
+            .map(|(k,v)| { RawResponse {uuid: k, new_comment: v} })
+            .collect::<Vec<RawResponse>>();
+        let collected = matching(prepared, &combined);
+        Ok(collected)
+    }
+}
+
+fn matching(prepared: &Vec<WaitForTimeout>, response: &[RawResponse]) -> Vec<LinkedResponse> {
+    let mut matched = vec![];
     for prepare in prepared {
         for req in &prepare.prepared_requests {
             for each in &req.data {
-                if let Some(found) = response_raw_serial
+                if let Some(found) = response
                     .iter()
                     .find(|item| item.uuid == each.uuid)
                 {
@@ -220,9 +237,8 @@ fn match_request_response(
             }
         }
     }
-    Ok(matched)
+    matched
 }
-
 /// Attempts to repair a malformed JSON output string (provided as a vector of lines) to make it deserializable into a `Vec<RawResponse>`.
 /// It iteratively removes lines from the end of the input vector and appends a closing JSON array and object delimiter (`}]`) until the resulting string can be successfully parsed by `serde_json`.
 /// This is a fallback mechanism for poorly formatted API responses.
