@@ -1,0 +1,14 @@
+[
+    {
+        "uuid": "41b93b37-fa3d-4d90-ba93-d60fbacaf0da",
+        "new_comment": "/// Checks for the presence of specific Rust code objects (e.g., functions, structs)\n/// identified by their types and names within the provided `exported_from_file` data.\n/// It reads the content of each file and verifies if the specified objects exist within their\n/// respective line ranges.\n///\n/// # Arguments\n///\n/// * `exported_from_file`: A `Vec<ChangeFromPatch>` where each entry describes a file and its relevant code ranges.\n/// * `rust_type`: A `Vec<String>` containing the types of Rust objects (e.g., \"fn\", \"struct\") to search for.\n/// * `rust_name`: A `Vec<String>` containing the names of Rust objects to search for.\n///\n/// # Returns\n///\n/// A `Result` containing a `Vec<bool>` where `true` indicates the presence of a matching object\n/// and `false` indicates its absence, or an `ErrorBinding` if any file I/O or parsing error occurs." 
+    },
+    {
+        "uuid": "f2e81d06-c56f-4ac2-9a5f-836508d9e7f4",
+        "new_comment": "/// Reads the \"config.yaml\" file, extracts the \"prompt\" string from the YAML configuration,\n/// and returns it. If the prompt is not found or config is empty, an empty string is returned.\n///\n/// # Returns\n///\n/// A `Result` containing the prompt `String` from \"config.yaml\", or an `ErrorHandling` if\n/// file reading or YAML parsing fails."
+    },
+    {
+        "uuid": "5758d314-dd28-48c1-8b79-b0d15afb5fcb",
+        "new_comment": "/// Divides a given vector of `SingleFunctionData` into multiple `PreparingRequests` batches.\n/// Each batch is filled until its `remaining_capacity` is exhausted. If a single item\n/// exceeds the capacity of an empty batch, it's noted as a case that \"would not be possible\"\n/// in typical scenarios.\n///\n/// # Arguments\n///\n/// * `request`: A `Vec<SingleFunctionData>` representing the individual function data items to batch.\n///\n/// # Returns\n///\n/// A `Result` containing a `Vec<PreparingRequests>`, where each element is a\n/// filled batch of requests, or an `ErrorHandling` if an error occurs during\n/// `PreparingRequests` initialization."
+}
+]
