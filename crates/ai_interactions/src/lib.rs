@@ -9,6 +9,14 @@ pub struct YamlRead {
     pub tokens: usize,
     pub requests: usize,
 }
+/// Reads configuration values (prompt, model, tokens per minute, requests per minute) from a `config.yaml` file.
+/// It attempts to parse the file and extract these specific fields.
+///
+/// # Returns
+///
+/// A `Result<YamlRead, ErrorHandling>`:
+/// - `Ok(YamlRead)`: Contains the parsed `prompt` (String), `model` (String), `tokens` (usize), and `requests` (usize).
+/// - `Err(ErrorHandling)`: If the file cannot be read, YAML parsing fails, or expected keys are not found, propagating a relevant error.
 /// Reads the 'prompt' value from a 'config.yaml' file and returns it as a `String`.
 /// If the file cannot be read, the YAML cannot be loaded, or the 'prompt' key is not found, an empty `String` is returned or an `ErrorHandling` is propagated.
 ///

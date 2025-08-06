@@ -16,6 +16,15 @@ mod tests {
     use tempfile::NamedTempFile;
     const PATH_BASE: &str = "../../tests/data.rs";
 
+/// Tests the `parse_all_rust_items` function by reading a Rust file from `PATH_BASE` and parsing its contents.
+/// It then iterates through the parsed objects, printing `impl` objects.
+/// The test asserts `true` for `true`, which is a placeholder and does not validate the parsing logic itself.
+///
+/// # Panics
+///
+/// This test will panic if:
+/// - The file at `PATH_BASE` cannot be read.
+/// - `parse_all_rust_items` fails to parse the source.
     #[test]
     fn test_parse() {
         let source = fs::read_to_string(PATH_BASE).expect("File read failed");
@@ -30,6 +39,15 @@ mod tests {
         assert_eq!(true, true);
     }
 
+/// Tests the `parse_all_rust_items` function to find all function definitions in a Rust file.
+/// It reads a Rust file from `PATH_BASE`, parses its contents, and then iterates through the parsed objects.
+/// If an object is identified as a function (`"fn"`), its debug representation is printed.
+///
+/// # Panics
+///
+/// This test will panic if:
+/// - The file at `PATH_BASE` cannot be read.
+/// - `parse_all_rust_items` fails to parse the source.
     #[test]
     fn find_all_fn() {
         let source = fs::read_to_string(PATH_BASE)
@@ -44,6 +62,18 @@ mod tests {
         }
     }
 
+/// Tests the `find_module_file` function to ensure it correctly locates module files.
+/// It reads a test Rust file (`../../tests/lib.rs`), parses it to find module declarations.
+/// For each module found, it attempts to locate its corresponding file using `find_module_file`.
+/// The collected module file paths are then joined into a single string and compared against an `expected_behavior` string.
+///
+/// # Panics
+///
+/// This test will panic if:
+/// - The test file cannot be read.
+/// - Parsing of the test file fails.
+/// - `find_module_file` fails to locate a declared module file.
+/// - The assertion `assert_eq!` fails, indicating a mismatch between expected and actual module file paths.
     #[test]
     fn test_find_module_files() {
         let expected_behavior: &str = "../../tests/test_lib.rs\n../../tests/data.rs";
@@ -67,6 +97,14 @@ mod tests {
         assert_eq!(expected_behavior, obj_vector.join("\n"));
     }
 
+/// Tests the ability to read and construct file paths for arguments.
+/// It retrieves the current working directory, manipulates it to construct a mock `path_to_patch`,
+/// and then asserts `true` for `true`, which is a placeholder and does not perform active path validation.
+/// The commented-out `assert_eq!` suggests an original intention to validate the constructed path.
+///
+/// # Panics
+///
+/// This test will panic if `env::current_dir()` fails to retrieve the current directory.
     #[test]
     fn test_read_argument() {
         let mut path = env::current_dir().expect("couldn't get path");
@@ -82,6 +120,18 @@ mod tests {
         assert_eq!(true, true);
     }
 
+/// Tests the `get_patch_data` function by generating a Git patch and processing it.
+/// It retrieves the current working directory, generates a Git patch for the last commit using `git format-patch --stdout -1 HEAD`,
+/// writes this patch to a temporary file, and then calls `binding::get_patch_data` to process it.
+/// The extracted patch data is then printed to the console.
+///
+/// # Panics
+///
+/// This test will panic if:
+/// - `env::current_dir()` fails to retrieve the current directory.
+/// - The `git` command fails to execute or returns an error.
+/// - A temporary file cannot be created or written to.
+/// - `binding::get_patch_data` fails to process the patch.
     #[test]
     fn test_read_patch() {
         let mut path = env::current_dir()
@@ -108,6 +158,11 @@ mod tests {
         }
     }
 
+/// A placeholder test function intended for covering scenarios with empty objects.
+/// The commented-out code suggests an initial design involving `Name`, `LineRange`, and `ObjectRange` structs,
+/// but no actual test logic is implemented.
+///
+/// This test currently does nothing.
     #[test]
     fn test_cover_empty_object() {
         /*
@@ -117,6 +172,16 @@ mod tests {
         */
     }
 
+/// Tests the `parse_all_rust_items` function's ability to identify and parse comments within a Rust file.
+/// It reads a specific Rust file (`../../crates/patchdog/src/binding.rs`), parses its content,
+/// and then prints the debug representation of each parsed object, including comments.
+/// The comment `//block is of 94 symbols length` appears to be a note about expected content for testing.
+///
+/// # Panics
+///
+/// This test will panic if:
+/// - The specified file cannot be read.
+/// - `parse_all_rust_items` fails to parse the file content.
     #[test]
     fn find_comments() {
         //block is of 94 symbols length
@@ -151,6 +216,13 @@ mod tests {
       }
 }]}"#;
 
+/// A placeholder test function for validating the output from an AI agent.
+/// The commented-out code outlines a plan to:
+/// 1. Assess if the AI agent's JSON output is valid.
+/// 2. Implement recursive calls to retry if the output is invalid or missing required fields (filename, function name).
+/// The test currently returns `Ok(())` without executing any of the assessment logic.
+///
+/// This test currently does nothing.
     #[test]
     fn test_agent_out() -> Result<(), ErrorBinding> {
         /*
@@ -171,6 +243,16 @@ mod tests {
         Ok(())
     }
 
+/// Tests the `cherrypick_response` function's ability to extract specific JSON objects using a regex.
+/// It reads a test JSON file (`../../tests/response_regex.json`), applies `cherrypick_response` to it,
+/// and asserts that the number of extracted `RawResponse` objects is `3`.
+///
+/// # Panics
+///
+/// This test will panic if:
+/// - The test JSON file cannot be read.
+/// - `cherrypick_response` returns an error.
+/// - The assertion `assert_eq!` fails, meaning the number of extracted responses is not `3`.
     #[test]
     fn test_regex() {
         let test = fs::read_to_string(Path::new("../../tests/response_regex.json")).unwrap();
@@ -178,6 +260,15 @@ mod tests {
         assert_eq!(assess_size.len(), 3);
     }
 
+/// Tests various parsing scenarios for agent responses, including handling of malformed JSON.
+/// It uses a predefined regex (`REGEX`) to cherry-pick responses and also attempts direct JSON deserialization.
+/// If direct deserialization fails (as expected for certain test cases), it performs a fallback mechanism by manipulating the response string (removing first and last lines, joining) and re-attempts deserialization.
+/// Assertions check the lengths of the parsed results from both methods.
+///
+/// # Returns
+///
+/// An `Ok(())` on successful completion of the tests.
+/// An `Err(ErrorHandling)` if any file operation or parsing (including regex or JSON) fails unexpectedly.
     #[test]
     fn test_response() -> Result<(), ErrorHandling> {
         let re = Regex::new(REGEX).unwrap();
@@ -207,6 +298,19 @@ mod tests {
     use syn::LocalInit;
     use syn::Pat;
     use syn::Stmt;
+/// Tests advanced parsing and matching capabilities of Rust code, specifically focusing on function bodies and expressions.
+/// It reads a Rust file (`../../crates/patchdog/src/binding.rs`), parses all its items,
+/// filters for functions, and then for each function, it attempts to parse its body using `syn`.
+/// The test includes extensive pattern matching to explore various `Stmt` and `Expr` types within the AST, printing specific identifiers or debug information.
+/// This test primarily serves as a diagnostic tool for AST traversal and does not contain explicit assertions for correctness beyond `unwrap()`.
+///
+/// # Panics
+///
+/// This test will panic if:
+/// - The specified file cannot be read.
+/// - `parse_all_rust_items` fails to parse the file content.
+/// - `syn::parse_file` fails for any function body.
+/// - Any `unwrap()` call fails during AST traversal.
     #[test]
     fn test_parsing_matching() {
         let file = fs::read_to_string("../../crates/patchdog/src/binding.rs").unwrap();

@@ -5,6 +5,14 @@ pub mod cli;
 
 #[cfg(test)]
 pub mod tests;
+/// The main entry point for the application, marked with `#[tokio::main]` for asynchronous execution.
+/// It initializes dotenv for environment variables and tracing_subscriber for logging.
+/// The core logic is delegated to `cli_patch_to_agent()`.
+///
+/// # Returns
+///
+/// An `Ok(())` on successful completion of the `cli_patch_to_agent` function.
+/// An `ErrorBinding` if any error occurs during environment setup or the `cli_patch_to_agent` execution.
 #[tokio::main]
 //Accepts relative path from inside folder
 async fn main() -> Result<(), ErrorBinding> {
