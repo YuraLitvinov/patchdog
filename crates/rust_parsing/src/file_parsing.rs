@@ -48,20 +48,7 @@ pub trait Files {
 }
 
 impl Files for FileExtractor {
-    /// Writes a given vector of strings (representing file content) to a specified file path.
-    /// Before writing, it inserts a `changed_element` string at a specific `line_index` (adjusting for 0-based indexing).
-    /// Each string in the modified vector is written as a new line in the file.
-    ///
-    /// # Arguments
-    ///
-    /// * `path`: A `PathBuf` specifying the target file path.
-    /// * `source`: A `Vec<String>` containing the lines of the file content.
-    /// * `line_index`: The 1-based line number at which `changed_element` should be inserted.
-    /// * `changed_element`: The `String` to be inserted into the file content.
-    ///
-    /// # Returns
-    ///
-    /// A `Result` indicating success (`Ok(())`) or an `ErrorHandling` if file creation or writing fails.
+
     fn write_to_vecstring(
         path: PathBuf,
         mut source: Vec<String>,
@@ -76,19 +63,6 @@ impl Files for FileExtractor {
         Ok(())
     }
 
-    //Assuming str_source can be of different size at runtime, there is sense to only include pushing at begin, represented by true and end, represented by false
-    /// Inserts a new string (`push`) into a vector of strings (`str_source`) either at the beginning or at the end.
-    /// It intelligently preserves the leading whitespace of the first line of the original source to maintain consistent indentation for the inserted string.
-    ///
-    /// # Arguments
-    ///
-    /// * `str_source`: A slice of `String`s representing the original source code lines.
-    /// * `push`: The `String` to be inserted.
-    /// * `push_where`: A boolean flag; `true` inserts at the beginning, `false` inserts at the end.
-    ///
-    /// # Returns
-    ///
-    /// A `Result` containing the modified `Vec<String>`, or an `ErrorHandling` if the `str_source` is empty (preventing whitespace determination) or other unexpected errors occur during string manipulation.
     fn push_to_vector(
         str_source: &[String],
         push: String,
@@ -128,21 +102,6 @@ impl Files for FileExtractor {
         str_source.lines().map(|line| line.to_string()).collect()
     }
 
-    //Main entry for seeker and extract_by_line, roams through Vec<ObjectRange> seeking for the object that fits
-    //the requested line number. If it finds no match, then LineOutOfBounds error is thrown
-    /// Exports a specific Rust code object from a given source string based on its line number.
-    /// It iterates through a slice of `ObjectRange` structs (representing parsed items) to find the object that encompasses the `line_number`.
-    /// Once found, it extracts the relevant lines from the source string vector and returns them as a single string.
-    ///
-    /// # Arguments
-    ///
-    /// * `line_number`: The 1-based line number used to identify the target object.
-    /// * `visited`: A slice of `ObjectRange` structs representing the parsed items within the source.
-    /// * `src`: A slice of `String`s representing the lines of the full source code.
-    ///
-    /// # Returns
-    ///
-    /// A `Result` containing the extracted object's code as a `String`, or an `ErrorHandling` if no object is found at the specified line or an error occurs during extraction.
     fn export_object(
         line_number: usize,
         visited: &[ObjectRange],

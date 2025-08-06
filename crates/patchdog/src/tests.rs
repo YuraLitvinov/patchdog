@@ -15,13 +15,7 @@ mod tests {
     use syn::{ExprTry, Item};
     use tempfile::NamedTempFile;
     const PATH_BASE: &str = "../../tests/data.rs";
-    /// A unit test that reads a Rust source file, parses all its top-level items into `ObjectRange` structs.
-    /// It then iterates through the parsed objects, specifically printing those identified as `impl` blocks.
-    /// The test asserts a basic `true == true` for completion, rather than specific parsing outcomes.
-    ///
-    /// # Returns
-    ///
-    /// This test function does not return a value; it panics on assertion failure or unhandled errors.
+
     #[test]
     fn test_parse() {
         let source = fs::read_to_string(PATH_BASE).expect("File read failed");
@@ -35,12 +29,7 @@ mod tests {
 
         assert_eq!(true, true);
     }
-    /// A unit test that reads a Rust source file, parses all its top-level items into `ObjectRange` structs.
-    /// It then iterates through the parsed objects, specifically printing those identified as functions (`fn`).
-    ///
-    /// # Returns
-    ///
-    /// This test function does not return a value; it panics on unhandled errors.
+
     #[test]
     fn find_all_fn() {
         let source = fs::read_to_string(PATH_BASE)
@@ -55,12 +44,6 @@ mod tests {
         }
     }
 
-    /// A unit test that reads a Rust source file, parses its items, identifies module declarations (`mod`), and attempts to locate the corresponding module files on the filesystem using `find_module_file`.
-    /// It then collects the paths of the found module files and asserts that the joined string of these paths matches an `expected_behavior`.
-    ///
-    /// # Returns
-    ///
-    /// This test function does not return a value; it panics on assertion failure or unhandled errors.
     #[test]
     fn test_find_module_files() {
         let expected_behavior: &str = "../../tests/test_lib.rs\n../../tests/data.rs";
@@ -84,12 +67,6 @@ mod tests {
         assert_eq!(expected_behavior, obj_vector.join("\n"));
     }
 
-    /// A basic unit test that demonstrates how to construct a `PathBuf` for a hypothetical patch file by navigating relative to the current working directory.
-    /// The primary assertion is a placeholder `true == true`, while commented-out code suggests an original intent to assert the exact constructed path.
-    ///
-    /// # Returns
-    ///
-    /// This test function does not return a value; it panics on unhandled errors during path manipulation.
     #[test]
     fn test_read_argument() {
         let mut path = env::current_dir().expect("couldn't get path");
@@ -105,12 +82,6 @@ mod tests {
         assert_eq!(true, true);
     }
 
-    /// A unit test that dynamically generates a Git patch using `git format-patch`, writes it to a temporary file, and then uses the `binding::get_patch_data` function to parse the patch content.
-    /// It prints the extracted `ChangeFromPatch` structs to the console.
-    ///
-    /// # Returns
-    ///
-    /// This test function does not return a value; it panics on unhandled errors during Git command execution, file I/O, or patch parsing.
     #[test]
     fn test_read_patch() {
         let mut path = env::current_dir()
@@ -137,11 +108,6 @@ mod tests {
         }
     }
 
-    /// An empty placeholder unit test. The commented-out code indicates an intention to test scenarios involving empty or default object ranges, names, or other data structures, possibly to ensure proper handling of edge cases.
-    ///
-    /// # Returns
-    ///
-    /// This test function does not return a value and currently performs no operations.
     #[test]
     fn test_cover_empty_object() {
         /*
@@ -151,12 +117,6 @@ mod tests {
         */
     }
 
-    /// A unit test that reads a specific Rust source file, parses all its items (including comments as `ObjectRange` structs, implying `comment_lexer` is used internally by `parse_all_rust_items`), and prints each parsed object.
-    /// It's designed to inspect the output of the comment and code parsing logic.
-    ///
-    /// # Returns
-    ///
-    /// This test function does not return a value; it panics on unhandled errors during file reading or parsing.
     #[test]
     fn find_comments() {
         //block is of 94 symbols length
@@ -191,13 +151,6 @@ mod tests {
       }
 }]}"#;
 
-    /// A placeholder unit test outlining a plan to validate the JSON output from an AI agent.
-    /// The commented logic suggests a recursive retry mechanism for invalid JSON, filename errors, or failed search functions.
-    /// Currently, it only asserts `Ok(())` and does not implement the outlined validation.
-    ///
-    /// # Returns
-    ///
-    /// A `Result<(), ErrorBinding>` that always returns `Ok(())` in its current implementation.
     #[test]
     fn test_agent_out() -> Result<(), ErrorBinding> {
         /*
@@ -218,12 +171,6 @@ mod tests {
         Ok(())
     }
 
-    /// A unit test that reads a JSON file (expected to contain multiple `SingleFunctionData` objects), applies a regular expression (`REGEX`) to extract individual JSON strings, and then deserializes each into `SingleFunctionData` structs.
-    /// It prints the deserialized structs and asserts that the count of items found by the regex matches the count of successfully deserialized structs.
-    ///
-    /// # Returns
-    ///
-    /// This test function does not return a value; it panics on unhandled errors during file reading, regex compilation, or JSON deserialization.
     #[test]
     fn test_regex() {
         let test = fs::read_to_string(Path::new("../../tests/response_regex.json")).unwrap();
@@ -231,13 +178,6 @@ mod tests {
         assert_eq!(assess_size.len(), 3);
     }
 
-    /// A unit test designed to validate the parsing of API responses (expected to be JSON).
-    /// It uses a regular expression to extract `RawResponse` objects from a test JSON file and also attempts direct `serde_json` deserialization of the entire file.
-    /// It includes a fallback mechanism for malformed JSON, asserting that the number of parsed objects is consistent between the regex-based and direct (or fallback) deserialization methods.
-    ///
-    /// # Returns
-    ///
-    /// A `Result<(), ErrorHandling>` indicating success or failure of the test, panicking on unhandled errors.
     #[test]
     fn test_response() -> Result<(), ErrorHandling> {
         let re = Regex::new(REGEX).unwrap();

@@ -90,16 +90,6 @@ pub fn get_easy_hunk(
     Ok(vec_of_hunks)
 }
 
-/// Extracts and collects the new filenames from a Git diff object.
-/// It iterates through the deltas (changes) in the diff and retrieves the path of the new file for each delta.
-///
-/// # Arguments
-///
-/// * `diff`: A reference to a `Diff<'static>` object representing the Git difference.
-///
-/// # Returns
-///
-/// A `Result` containing a `Vec<String>` of filenames, or a `Git2ErrorHandling` if an error occurs during path processing.
 fn get_filenames(diff: &Diff<'static>) -> Result<Vec<String>, Git2ErrorHandling> {
     let mut vector_of_filenames: Vec<String> = Vec::new();
     for delta in diff.deltas() {
@@ -113,17 +103,6 @@ fn get_filenames(diff: &Diff<'static>) -> Result<Vec<String>, Git2ErrorHandling>
     Ok(vector_of_filenames)
 }
 
-/// Extracts hunk information from a Git diff, associating each hunk with its filename, line number, and type of change (addition or modification).
-/// It iterates through patches and their hunks, processing each line to determine if it's an addition or modification.
-///
-/// # Arguments
-///
-/// * `diff`: A `Diff<'static>` object representing the Git difference.
-/// * `vector_of_filenames`: A `Vec<String>` containing the filenames associated with the diff, used to link hunks to their respective files.
-///
-/// # Returns
-///
-/// A `Result` containing a `Vec<Hunk>` with detailed change information for each line, or a `Git2ErrorHandling` if an error occurs during patch or hunk extraction.
 fn git_get_hunks(
     diff: &Diff<'static>,
     vector_of_filenames: Vec<String>,

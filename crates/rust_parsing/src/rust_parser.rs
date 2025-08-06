@@ -79,16 +79,6 @@ impl RustParser for RustItemParser {
         visit_items(&ast.items)
     }
 
-    /// Parses a Rust source code string to extract all top-level Rust items and comments.
-    /// It converts the source into an AST, extracts items, then lexes comments separately, combines both sets of `ObjectRange` structs, and sorts them by their starting line number.
-    ///
-    /// # Arguments
-    ///
-    /// * `src`: A string slice (`&str`) containing the Rust source code.
-    ///
-    /// # Returns
-    ///
-    /// A `Result` containing a `Vec<ObjectRange>` of all identified code items and comments, sorted by line number, or an `ErrorHandling` if parsing or comment lexing fails.
     fn parse_all_rust_items(src: &str) -> Result<Vec<ObjectRange>, ErrorHandling> {
         let ast: File = parse_str(src)?;
         let mut comments = comment_lexer(src)?;
@@ -99,30 +89,11 @@ impl RustParser for RustItemParser {
         Ok(visited)
     }
 
-    /// Parses a Rust source code string and extracts the signature details of the first function found.
-    /// It converts the source into an AST and then delegates to `function_parse` to extract input arguments and return type information.
-    ///
-    /// # Arguments
-    ///
-    /// * `src`: A string slice (`&str`) containing the Rust source code to parse.
-    ///
-    /// # Returns
-    ///
     fn rust_function_parser(src: &str) -> Result<FunctionSignature, ErrorHandling> {
         let ast: File = parse_str(src)?;
         function_parse(&ast.items)
     }
 
-    /// Parses a Rust source code string to identify and extract information about its first top-level item.
-    /// It converts the source into an AST, extracts items, and then returns an `ObjectRange` containing the line ranges, type, and name of the very first item found.
-    ///
-    /// # Arguments
-    ///
-    /// * `src`: A string slice (`&str`) containing the Rust source code.
-    ///
-    /// # Returns
-    ///
-    /// A `Result` containing an `ObjectRange` struct for the first item, or an `ErrorHandling` if the source is empty or parsing fails.
     fn rust_item_parser(src: &str) -> Result<ObjectRange, ErrorHandling> {
         let ast: File = parse_str(src)?;
         let binding: Vec<ObjectRange> = visit_items(&ast.items)?;
@@ -141,32 +112,11 @@ impl RustParser for RustItemParser {
         })
     }
 
-    /// Parses a Rust source code string into a `syn::File` Abstract Syntax Tree (AST).
-    /// This function serves as a wrapper around `syn::parse_str` for converting code strings into a structured representation.
-    ///
-    /// # Arguments
-    ///
-    /// * `src`: A string slice (`&str`) containing the Rust source code.
-    ///
-    /// # Returns
-    ///
-    /// A `Result` containing the parsed `syn::File` AST on success, or an `ErrorHandling` if parsing fails (e.g., due to syntax errors).
     fn rust_ast(src: &str) -> Result<File, ErrorHandling> {
         let ast: File = parse_str(src)?;
         Ok(ast)
     }
 
-    /// Searches for a Rust module file (`.rs`) within the directory containing the given `base_path`.
-    /// It constructs potential file paths based on the `mod_name` (e.g., `mod_name.rs`) and checks if they exist.
-    ///
-    /// # Arguments
-    ///
-    /// * `base_path`: A `PathBuf` representing the path of the file where the module is declared (used to determine the search directory).
-    /// * `mod_name`: A `String` containing the name of the module to search for.
-    ///
-    /// # Returns
-    ///
-    /// A `Result` containing an `Option<PathBuf>`: `Some(path)` if the module file is found, `None` if it's not found, or an `ErrorHandling` if an error occurs during path manipulation.
     fn find_module_file(
         base_path: PathBuf,
         mod_name: String,
@@ -183,16 +133,6 @@ impl RustParser for RustItemParser {
     }
 }
 
-/// Lexes a Rust source code string to identify and categorize different types of comments and lifetime indicators.
-/// It tokenizes each line and creates `ObjectRange` structs for line comments, block comments (single or multi-line), and lifetime indicators, including logic to correctly identify the end line of multi-line block comments.
-///
-/// # Arguments
-///
-/// * `source_vector`: A string slice (`&str`) containing the Rust source code.
-///
-/// # Returns
-///
-/// A `Result` containing a `Vec<ObjectRange>` representing the identified comments and lifetimes, or an `ErrorHandling` if an error occurs during tokenization or line range processing.
 pub fn comment_lexer(source_vector: &str) -> Result<Vec<ObjectRange>, ErrorHandling> {
     let vectorized = FileExtractor::string_to_vector(source_vector);
     let mut comment_vector: Vec<ObjectRange> = Vec::new();
@@ -269,16 +209,6 @@ pub fn comment_lexer(source_vector: &str) -> Result<Vec<ObjectRange>, ErrorHandl
     Ok(comment_vector)
 }
 
-/// Parses a slice of `syn::Item` structs to extract function signature information.
-/// It specifically expects the first item in the slice to be a function (`Item::Fn`) and extracts its input arguments and return type details into a `FunctionSignature` struct.
-///
-/// # Arguments
-///
-/// * `items`: A slice of `syn::Item` structs, typically representing items from a parsed Rust file or module.
-///
-/// # Returns
-///
-/// A `Result` containing a `FunctionSignature` struct on success, or an `ErrorHandling` if the first item is not a function or if parsing its signature fails.
 fn function_parse(items: &[Item]) -> Result<FunctionSignature, ErrorHandling> {
     let mut vec_token_inputs: Vec<TokenStream> = Vec::new();
     let default_return = FnOutputToken {
@@ -322,16 +252,6 @@ fn function_parse(items: &[Item]) -> Result<FunctionSignature, ErrorHandling> {
     }
 }
 
-/// Parses a vector of `proc_macro2::TokenStream`s, typically representing function input arguments, to extract their names and types.
-/// It iterates through the tokens, identifies the ':' separator, and extracts the token before it as the input name and the tokens after it as the input type, removing all whitespace.
-///
-/// # Arguments
-///
-/// * `input_vector_stream`: A `Vec<TokenStream>` where each `TokenStream` represents a single function input argument.
-///
-/// # Returns
-///
-/// A `Result` containing a `Vec<FnInputToken>` with the extracted input names and types, or an `ErrorHandling` if token parsing or whitespace removal fails.
 fn fn_input(input_vector_stream: Vec<TokenStream>) -> Result<Vec<FnInputToken>, ErrorHandling> {
     let mut input_tokens: Vec<FnInputToken> = Vec::new();
     for input in input_vector_stream {
@@ -359,29 +279,10 @@ fn fn_input(input_vector_stream: Vec<TokenStream>) -> Result<Vec<FnInputToken>, 
     Ok(input_tokens)
 }
 
-/// Removes all whitespace characters from a given `String`.
-/// This includes spaces, tabs, newlines, and other Unicode whitespace.
-///
-/// # Arguments
-///
-/// * `s`: The `String` from which whitespace should be removed.
-///
-/// # Returns
-///
-/// A `Result` containing the new `String` with all whitespace removed, or an `ErrorHandling` if an unexpected error occurs during string processing (though unlikely for this operation).
 pub fn remove_whitespace(s: String) -> Result<String, ErrorHandling> {
     Ok(s.chars().filter(|c| !c.is_whitespace()).collect())
 }
-/// Analyzes a `syn::Type` to determine its structural kind (e.g., `Result`, `Option`, or `Other`), its primary output type, and an optional error type if it's a `Result` type.
-/// It extracts the type arguments for `Result` and `Option` to provide more granular information.
-///
-/// # Arguments
-///
-/// * `ty`: A reference to the `syn::Type` to be analyzed.
-///
-/// # Returns
-///
-/// A `Result` containing a `FnOutputToken` struct with the analyzed type information, or an `ErrorHandling` if an error occurs during token stream conversion or whitespace removal.
+
 fn analyze_return_type(ty: &Type) -> Result<FnOutputToken, ErrorHandling> {
     let mut kind = "Other".to_string();
     let mut output_type = ty.to_token_stream().to_string();
@@ -435,17 +336,6 @@ fn analyze_return_type(ty: &Type) -> Result<FnOutputToken, ErrorHandling> {
     })
 }
 
-/// Recursively visits items within a Rust syntax tree (`syn::Item`s) to extract their type, name, and line range information.
-/// It categorizes various Rust constructs like structs, enums, functions, modules, `impl` blocks (and their contained items), `use` statements, traits, types, unions, constants, macros, `extern crate` declarations, and statics.
-/// For modules and `impl` blocks, it recursively processes their inner items.
-///
-/// # Arguments
-///
-/// * `items`: A slice of `syn::Item` structs to be visited.
-///
-/// # Returns
-///
-/// A `Result` containing a `Vec<ObjectRange>` where each `ObjectRange` represents a discovered code item with its line bounds and identifying names, or an `ErrorHandling` if any parsing or line range extraction fails.
 fn visit_items(items: &[Item]) -> Result<Vec<ObjectRange>, ErrorHandling> {
     let mut object_line: Vec<ObjectRange> = Vec::new();
 
