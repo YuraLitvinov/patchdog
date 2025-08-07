@@ -44,6 +44,7 @@ pub async fn cli_patch_to_agent() -> Result<(), ErrorBinding> {
     let patch = binding::patch_data_argument(commands.file_patch)?;
     event!(Level::INFO, "type: {:#?}", commands.type_rust);
     let request = changes_from_patch(patch, commands.type_rust, commands.name_rust)?;
+    println!("{:#?}", request);
     if request.is_empty() {
         event!(Level::INFO, "No requests");
         Ok(())
@@ -325,6 +326,7 @@ fn write_to_file(response: Vec<ResponseForm>) -> Result<(), ErrorHandling> {
             .cmp(&a.data.metadata.line_range.start)
     });
     event!(Level::INFO, "Quantity of responses: {}", response.len());
+    println!("{:#?}", response);
     //Typical representation of file as vector of lines
     for each in response {
         let path = each.data.metadata.filepath;

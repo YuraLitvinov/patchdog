@@ -11,6 +11,8 @@ jobs:
   Run_patchdog:
 
     runs-on: ubuntu-latest
+    env:
+      PATCHDOG_BRANCH: patchdog-$(uuidgen)
     permissions: 
       contents: write
       pull-requests: write
@@ -28,8 +30,7 @@ jobs:
           else
             exit 0
           fi
-      - name: Generate UUID-based branch name
-        run: echo "PATCHDOG_BRANCH=patchdog-$(uuidgen)" >> $GITHUB_ENV
+
       - name: Fetch branch
         run: git fetch origin ${{ github.base_ref }}
       - name: Make patch
@@ -55,7 +56,8 @@ jobs:
         run: rm $PATCHDOG_BRANCH.patch
       - name: Checkout into new branch, create PR
         run: |
+          git commit -m "Patchdog-$PATCHDOG_BRANCH"
           git checkout -b $PATCHDOG_BRANCH
-          gh pr create --title "Patchdog patch" --body "Patchdog patch" --head $PATCHDOG_BRANCH --base ${{ github.head_ref }} --assignee ${{ github.event.pull_request.user.login }} --draft
+          gh pr create --title "Patchdog-$PATCHDOG_BRANCH" --body "Patchdog-$PATCHDOG_BRANCH" --head $PATCHDOG_BRANCH --base ${{ github.head_ref }} --assignee ${{ github.event.pull_request.user.login }} --draft
         env: 
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
