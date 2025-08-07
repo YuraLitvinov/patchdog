@@ -12,7 +12,7 @@ on:
 
 jobs:
   patchdog:
-    if: contains(github.event.comment.body || '', '@patchdog')
+    if: contains(github.event.comment.body, '@patchdog')
     runs-on: ubuntu-latest
     steps:
       - name: Print trigger message
