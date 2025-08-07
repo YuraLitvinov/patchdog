@@ -10,6 +10,19 @@ pub struct YamlRead {
     pub requests: usize,
 }
 
+/// Reads the `config.yaml` file, parses its content as YAML, and extracts configuration parameters.
+/// Specifically, it retrieves the `prompt`, `GEMINI_MODEL`, `TOKENS_PER_MIN`, and `REQUESTS_PER_MIN` values.
+/// Default values are used if any of the keys are missing in the configuration file.
+///
+/// # Arguments
+///
+/// None.
+///
+/// # Returns
+///
+/// `Result<YamlRead, ErrorHandling>`:
+/// - `Ok(YamlRead)`: A struct containing the parsed prompt, model name, tokens per minute, and requests per minute settings.
+/// - `Err(ErrorHandling)`: If an error occurs during file reading or YAML parsing.
 pub fn return_prompt() -> Result<YamlRead, ErrorHandling> {
     let config = fs::read_to_string("config.yaml")?;
     let docs = YamlLoader::load_from_str(&config)?;
