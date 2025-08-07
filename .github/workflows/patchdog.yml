@@ -36,9 +36,12 @@ jobs:
         run: git diff HEAD > patch.patch 
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Upload patch file
+      - name: Upload patch file - review changes before they are applied
         uses: actions/upload-artifact@v4
         with:
           name: patch-file
           path: patch.patch
-        
+    - name: make new branch with patch
+      run: git checkout -b patchdog-$(uuidgen)
+    - name: create pull request with patch
+      run: gh pr create --title "Patchdog patch" --body "Patchdog patch" --head patchdog --base ${{ github.base_ref }} --assignee ${{ github.event.pull_request.user.login }} --draft
