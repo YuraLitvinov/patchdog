@@ -44,16 +44,16 @@ jobs:
       - name: Show status
         run: git status
       - name: Generate patch
-        run: git diff HEAD > $PATCHDOG_BRANCH.patch 
+        run: git diff HEAD > ${PATCHDOG_BRANCH}.patch 
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Upload patch file - review changes before they are applied
         uses: actions/upload-artifact@v4
         with:
           name: patch-file
-          path: $PATCHDOG_BRANCH.patch
+          path: ${PATCHDOG_BRANCH}.patch
       - name: Cleanup patch containing pending changes
-        run: rm $PATCHDOG_BRANCH.patch
+        run: rm ${PATCHDOG_BRANCH}.patch
       - name: Checkout into new branch, create PR # All PRs initiated will be named as github-actions[bot]
         run: |
           git config --global user.email "noreply@patchdog.ua" 
