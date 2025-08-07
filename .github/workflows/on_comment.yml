@@ -16,16 +16,7 @@ jobs:
     if: >
       (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@patchdog')) ||
       (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@patchdog')) ||
-      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@patchdog')) ||
-      (github.event_name == 'issues' && (
-        contains(github.event.issue.body, '@patchdog') || 
-        contains(github.event.issue.title, '@patchdog')
-      ))    
     steps:
     - name: Print trigger content
       run: |
-        echo "Event: ${{ github.event_name }}"
         echo "Comment: ${{ github.event.comment.body }}"
-        echo "Review: ${{ github.event.review.body }}"
-        echo "Issue title: ${{ github.event.issue.title }}"
-        echo "Issue body: ${{ github.event.issue.body }}"
