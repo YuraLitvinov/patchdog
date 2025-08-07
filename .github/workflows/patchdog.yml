@@ -58,9 +58,9 @@ jobs:
         run: |
           git config --global user.email "noreply@patchdog.ua"
           git config --global user.name "Patchdog Patchdogovich"
+          git checkout -b $PATCHDOG_BRANCH
           git add .
           git commit -m "Patchdog-$PATCHDOG_BRANCH"
-          git checkout -b $PATCHDOG_BRANCH
           gh pr create --title "Patchdog-$PATCHDOG_BRANCH" --body "Patchdog-$PATCHDOG_BRANCH" --head $PATCHDOG_BRANCH --base ${{ github.head_ref }} --assignee ${{ github.event.pull_request.user.login }} --draft
         env: 
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
