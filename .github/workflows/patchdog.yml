@@ -11,8 +11,6 @@ jobs:
   Run_patchdog:
 
     runs-on: ubuntu-latest
-    env:
-      PATCHDOG_BRANCH: patchdog-$(uuidgen)
     permissions: 
       contents: write
       pull-requests: write
@@ -30,7 +28,9 @@ jobs:
           else
             exit 0
           fi
-
+      - name: Run a command and export it as env
+        run: |
+          echo "PATCHDOG_BRANCH=$(uuidgen)" >> $GITHUB_ENV
       - name: Fetch branch
         run: git fetch origin ${{ github.base_ref }}
       - name: Make patch
@@ -60,7 +60,8 @@ jobs:
           git config --global user.name "Patchdog Patchdogovich"
           git checkout -b $PATCHDOG_BRANCH
           git add .
-          git commit -m "Patchdog-$PATCHDOG_BRANCH"
-          gh pr create --title "Patchdog-$PATCHDOG_BRANCH" --body "Patchdog-$PATCHDOG_BRANCH" --head $PATCHDOG_BRANCH --base ${{ github.head_ref }} --assignee ${{ github.event.pull_request.user.login }} --draft
+          git commit -m "Patchdog-${PATCHDOG_BRANCH}"
+          git push origin $PATCHDOG_BRANCH
+          gh pr create --title "Patchdog-${PATCHDOG_BRANCH}" --body "Patchdog-${PATCHDOG_BRANCH}" --head ${PATCHDOG_BRANCH} --base ${{ github.head_ref }} --assignee ${{ github.event.pull_request.user.login }} --draft
         env: 
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
