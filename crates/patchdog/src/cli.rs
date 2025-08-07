@@ -41,6 +41,18 @@ struct ResponseForm {
 
 /// Orchestrates the process of applying a patch via a command-line interface to an agent.
 ///
+/// This asynchronous function parses command-line arguments, extracts patch data from a specified file,
+/// transforms it into agent requests, sends these requests to an external agent, and writes the collected
+/// responses to a file. It logs progress throughout the operation.
+///
+/// # Returns
+///
+/// * `Ok(())` - An empty `Result` indicating successful execution.
+/// * `Err(ErrorBinding)` - An error if any step fails, such as file reading, patch binding, request transformation,
+///   agent communication, or file writing.
+
+/// Orchestrates the process of applying a patch via a command-line interface to an agent.
+///
 /// This asynchronous function performs the following steps:
 /// 1. Parses command-line arguments using `Mode::parse()`.
 /// 2. Extracts patch data from the specified file using `binding::patch_data_argument`.
@@ -77,6 +89,24 @@ pub async fn cli_patch_to_agent() -> Result<(), ErrorBinding> {
         Ok(())
     }
 }
+
+/// Asynchronously processes a batch of `Request`s by sending them to the Google Gemini API,
+/// managing responses, and retrying failed requests.
+///
+/// This function initializes a `GoogleGemini` client, prepares and sends request batches,
+/// matches responses back to original requests, and collects successful outcomes.
+/// It includes logic for recursively retrying requests that fail or do not receive a matching response.
+///
+/// # Arguments
+///
+/// * `request` - A `Vec<Request>` containing the requests to be processed and sent to the API.
+///
+/// # Returns
+///
+/// * `Ok(Vec<ResponseForm>)` - A `Result` containing a vector of `ResponseForm` instances
+///   representing the successful responses, including original request data and new comments.
+/// * `Err(ErrorBinding)` - An error if there's an issue with API communication, response matching,
+///   or other internal processing failures.
 
 /// Asynchronously processes a batch of `Request`s by sending them to the Google Gemini API,
 /// managing responses, and retrying failed requests.

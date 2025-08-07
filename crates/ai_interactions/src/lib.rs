@@ -12,6 +12,16 @@ pub struct YamlRead {
 
 /// Reads configuration from `config.yaml` and parses specific fields into a `YamlRead` struct.
 ///
+/// This function attempts to open and read `config.yaml`. It extracts values for `prompt`,
+/// `GEMINI_MODEL`, `TOKENS_PER_MIN`, and `REQUESTS_PER_MIN`, providing default values if not found or invalid.
+///
+/// # Returns
+///
+/// * `Ok(YamlRead)` - A `Result` containing a `YamlRead` struct with the extracted configuration values.
+/// * `Err(ErrorHandling)` - An error if the file cannot be read, parsed, or if any other issue occurs.
+
+/// Reads configuration from `config.yaml` and parses specific fields into a `YamlRead` struct.
+///
 /// This function attempts to open and read `config.yaml`. It then parses the YAML content
 /// to extract the following fields:
 /// - `prompt`: A string, defaulting to an empty string if not found.
