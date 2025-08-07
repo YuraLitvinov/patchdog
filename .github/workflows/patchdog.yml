@@ -20,28 +20,32 @@ jobs:
         with:
           ref: ${{ github.head_ref }}
           fetch-depth: 0
-      - name: fetch branch
+      - name: Generate UUID-based branch name
+        run: echo "PATCHDOG_BRANCH=patchdog-$(uuidgen)" >> $GITHUB_ENV
+      - name: Fetch branch
         run: git fetch origin ${{ github.base_ref }}
-      - name: make patch
-        run: git diff origin/${{ github.base_ref }}...${{ github.head_ref }} > patch.patch
-      - name: run patchdog
-        run: cargo run -- --file-patch patch.patch
+      - name: Make patch
+        run: git diff origin/${{ github.base_ref }}...${{ github.head_ref }} > base_head.patch
+      - name: Run patchdog
+        run: cargo run -- --file-patch base_head.patch
         env:
           API_KEY_GEMINI: ${{ secrets.API_KEY_GEMINI }}
-      - name: show status
+      - name: Cleanup patch
+        run: rm base_head.patch
+      - name: Show status
         run: git status
-      - name: cleanup patch
-        run: rm patch.patch
-      - name: update pull request
-        run: git diff HEAD > patch.patch 
+      - name: Generate patch
+        run: git diff HEAD > $PATCHDOG_BRANCH.patch 
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Upload patch file - review changes before they are applied
         uses: actions/upload-artifact@v4
         with:
           name: patch-file
-          path: patch.patch
-    - name: make new branch with patch
-      run: git checkout -b patchdog-$(uuidgen)
-    - name: create pull request with patch
-      run: gh pr create --title "Patchdog patch" --body "Patchdog patch" --head patchdog --base ${{ github.base_ref }} --assignee ${{ github.event.pull_request.user.login }} --draft
+          path: $PATCHDOG_BRANCH.patch
+      - name: Cleanup patch
+        run: rm $PATCHDOG_BRANCH.patch
+      - name: Checkout into new branch, create PR
+        run: |
+          git checkout -b $PATCHDOG_BRANCH
+          gh pr create --title "Patchdog patch" --body "Patchdog patch" --head $PATCHDOG_BRANCH --base ${{ github.head_ref }} --assignee ${{ github.event.pull_request.user.login }} --draft
