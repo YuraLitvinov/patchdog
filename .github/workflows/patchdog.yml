@@ -4,6 +4,7 @@ on:
   pull_request_review:
     types: [submitted]
   pull_request:
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -16,17 +17,17 @@ jobs:
       pull-requests: write
 
     steps:
+      - name: Check for merge conflicts #Immediately exits if there are merge conflicts present in HEAD branch 
+        run: |
+          if  git diff --check |grep -i conflict  > /dev/null; then
+            exit 1
+          else
+            exit 0
+          fi
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.head_ref }}
           fetch-depth: 0
-      - name: Check for merge conflicts 
-        run: |
-          if  git diff --check |grep -i conflict  > /dev/null; then
-            exit 0
-          else
-            exit 1
-          fi
       - name: Run a command and export it as env
         run: |
           echo "PATCHDOG_BRANCH=$(uuidgen)" >> $GITHUB_ENV
@@ -34,11 +35,11 @@ jobs:
         run: git fetch origin ${{ github.base_ref }}
       - name: Make patch
         run: git diff origin/${{ github.base_ref }}...${{ github.head_ref }} > base_head.patch
-      - name: Run patchdog
-        run: cargo run -- --file-patch base_head.patch
+      - name: Build and run patchdog
+        run: cargo patchdog-debug
         env:
           API_KEY_GEMINI: ${{ secrets.API_KEY_GEMINI }}
-      - name: Cleanup patch
+      - name: Cleanup base>head patch
         run: rm base_head.patch
       - name: Show status
         run: git status
@@ -51,16 +52,16 @@ jobs:
         with:
           name: patch-file
           path: $PATCHDOG_BRANCH.patch
-      - name: Cleanup patch
+      - name: Cleanup patch containing pending changes
         run: rm $PATCHDOG_BRANCH.patch
-      - name: Checkout into new branch, create PR
+      - name: Checkout into new branch, create PR # All PRs initiated will be named as github-actions[bot]
         run: |
-          git config --global user.email "noreply@patchdog.ua"
+          git config --global user.email "noreply@patchdog.ua" 
           git config --global user.name "Patchdog Patchdogovich"
           git checkout -b $PATCHDOG_BRANCH
           git add .
           git commit -m "Patchdog-${PATCHDOG_BRANCH}"
           git push origin $PATCHDOG_BRANCH
-          gh pr create --title "Patchdog-${PATCHDOG_BRANCH}" --body "Patchdog-${PATCHDOG_BRANCH}" --head ${PATCHDOG_BRANCH} --base ${{ github.head_ref }} --assignee ${{ github.event.pull_request.user.login }} --draft
+          gh pr create --title "Patchdog-${PATCHDOG_BRANCH}" --body "PR initialized by patchdog" --head ${PATCHDOG_BRANCH} --base ${{ github.head_ref }} --assignee ${{ github.event.pull_request.user.login }} --draft
         env: 
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

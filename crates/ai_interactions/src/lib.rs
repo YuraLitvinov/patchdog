@@ -9,21 +9,7 @@ pub struct YamlRead {
     pub tokens: usize,
     pub requests: usize,
 }
-/// Reads configuration values (prompt, model, tokens per minute, requests per minute) from a `config.yaml` file.
-/// It attempts to parse the file and extract these specific fields.
-///
-/// # Returns
-///
-/// A `Result<YamlRead, ErrorHandling>`:
-/// - `Ok(YamlRead)`: Contains the parsed `prompt` (String), `model` (String), `tokens` (usize), and `requests` (usize).
-/// - `Err(ErrorHandling)`: If the file cannot be read, YAML parsing fails, or expected keys are not found, propagating a relevant error.
-/// Reads the 'prompt' value from a 'config.yaml' file and returns it as a `String`.
-/// If the file cannot be read, the YAML cannot be loaded, or the 'prompt' key is not found, an empty `String` is returned or an `ErrorHandling` is propagated.
-///
-/// # Returns
-///
-/// A `Result` containing the prompt `String` or an `ErrorHandling` if an error occurs during file operations or YAML parsing.
-/// Returns a static string containing a prompt for the Google Gemini API.
+
 pub fn return_prompt() -> Result<YamlRead, ErrorHandling> {
     let config = fs::read_to_string("config.yaml")?;
     let docs = YamlLoader::load_from_str(&config)?;

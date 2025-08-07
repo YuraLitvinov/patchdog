@@ -5,12 +5,17 @@ Requires .env file to function on local system or providing secrets to Github Ac
 Insert your key and from there everything should work.
 The script is bound to Rust files, as it uses parsing to avoid broken code. 
 The project aims at smooth Github Actions integration, as it can be used to document changes in a repository.
+You can see it in action here: https://github.com/YuraLitvinov/patchdog/pull/20
 Essentially, this tool manipulates a patch file, finds all changes and creates documentation for them.
-You also can build it on your system with cargo build and use locally. It's very straight-forward and doesn't do 
-anything you wouldn't expect from it.
+You also can build it on your system with cargo build and use locally. 
+It's very straight-forward and doesn't do anything you wouldn't expect from it.
     Plans: 
     1. Differentiate between trait functions and normal functions.
     2.provide conditionals in form of yml file to avoid directories that do not require changes.
     3.add context to request, so LLM can produce better documentation.
     4.cleanup existing comments, to replace them with new ones, this step is bound to yml config, so 
     any objects, files or functions that are in the yml config will be skipped.
+
+
+Please, do not hesitate to contact me if you run into certain issues while using the provided service, 
+although NOTHING IS GUARANTEED: litvinov.yura@gmail.com
