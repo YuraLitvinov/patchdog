@@ -12,27 +12,10 @@ on:
 
 jobs:
   patchdog:
-    if: >
-      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@patchdog')) ||
-      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@patchdog')) ||
-      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@patchdog')) ||
-      (github.event_name == 'issues' && (contains(github.event.issue.body, '@patchdog') || contains(github.event.issue.title, '@patchdog')))
+    if: contains(github.event.comment.body || '', '@patchdog')
     runs-on: ubuntu-latest
     steps:
       - name: Print trigger message
-        run: |
-          echo "Event Name: ${{ github.event_name }}"
-          if [ "${{ github.event_name }}" == "issue_comment" ]; then
-            echo "Comment body: ${{ github.event.comment.body }}"
-          elif [ "${{ github.event_name }}" == "pull_request_review_comment" ]; then
-            echo "PR Review Comment body: ${{ github.event.comment.body }}"
-          elif [ "${{ github.event_name }}" == "pull_request_review" ]; then
-            echo "PR Review body: ${{ github.event.review.body }}"
-          elif [ "${{ github.event_name }}" == "issues" ]; then
-            echo "Issue title: ${{ github.event.issue.title }}"
-            echo "Issue body: ${{ github.event.issue.body }}"
-          else
-            echo "Unsupported event type: ${{ github.event_name }}"
-          fi
+        run: echo "Comment: ${{ github.event.comment.body }}"
 
     
