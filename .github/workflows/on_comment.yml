@@ -16,6 +16,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Print trigger message
-        run: echo "Comment: ${{ github.event.comment.body }}"
+        run: echo "Comment ${{ github.event.comment.body }}"
 
     
