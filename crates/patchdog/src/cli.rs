@@ -39,6 +39,23 @@ struct ResponseForm {
     new_comment: String,
 }
 
+/// Orchestrates the process of applying a patch via a command-line interface to an agent.
+///
+/// This asynchronous function performs the following steps:
+/// 1. Parses command-line arguments using `Mode::parse()`.
+/// 2. Extracts patch data from the specified file using `binding::patch_data_argument`.
+/// 3. Transforms the patch data into a vector of requests using `changes_from_patch`, incorporating
+///    the specified Rust type and name.
+/// 4. If there are requests, it calls an external agent (via the `call` function) with these requests.
+/// 5. Collects the responses from the agent.
+/// 6. Writes the collected responses to a file using `write_to_file`.
+/// Logs progress and informational messages throughout the process.
+///
+/// # Returns
+///
+/// - `Ok(())`: An empty `Result` indicating successful execution.
+/// - `Err(ErrorBinding)`: An error if any step in the process fails, such as file reading,
+///   patch binding, request transformation, agent communication, or file writing.
 pub async fn cli_patch_to_agent() -> Result<(), ErrorBinding> {
     let commands = Mode::parse();
     let patch = binding::patch_data_argument(commands.file_patch)?;
@@ -61,6 +78,25 @@ pub async fn cli_patch_to_agent() -> Result<(), ErrorBinding> {
     }
 }
 
+/// Asynchronously processes a batch of `Request`s by sending them to the Google Gemini API,
+/// managing responses, and retrying failed requests.
+///
+/// This function initializes a `GoogleGemini` client, prepares the incoming `request` vector
+/// into batches suitable for the API, sends these batches, and then matches the received responses
+/// back to the original requests. It collects successful responses into a `Vec<ResponseForm>`.
+/// If some requests fail or do not receive a matching response, the function recursively
+/// retries processing the remaining requests.
+///
+/// # Arguments
+///
+/// * `request` - A `Vec<Request>` containing the requests to be sent to the API.
+///
+/// # Returns
+///
+/// - `Ok(Vec<ResponseForm>)`: A `Result` containing a vector of `ResponseForm` instances
+///   representing the successful responses, including original request data and new comments.
+/// - `Err(ErrorBinding)`: An error if there's an issue with API communication, response matching,
+///   or other internal processing failures.
 async fn call(request: Vec<Request>) -> Result<Vec<ResponseForm>, ErrorBinding> {
     let mut responses_collected = Vec::new();
     let mut pool_of_requests = HashMap::new();
