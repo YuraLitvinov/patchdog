@@ -1,0 +1,3 @@
+[alias]
+patchdog = "run --release -- --file-patch base_head.patch"
+patchdog-debug = "run -- --file-patch base_head.patch"
