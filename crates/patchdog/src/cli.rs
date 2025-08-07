@@ -39,37 +39,26 @@ struct ResponseForm {
     new_comment: String,
 }
 
-/// The main asynchronous entry point for the CLI application.
-/// This function orchestrates the entire workflow:
-/// 1. Parses command-line arguments to determine the patch file and filter criteria.
-/// 2. Processes the specified patch file to extract relevant Rust code changes.
-/// 3. Sends these identified changes as requests to an external AI agent.
-/// 4. Collects responses from the AI agent.
-/// 5. Writes the AI agent's generated comments or modifications back into the original source files.
-///
-/// # Returns
-///
-/// An `Ok(())` if the entire process completes successfully.
-/// An `ErrorBinding` if any step (CLI parsing, patch processing, AI communication, or file writing) encounters an error.
-/// The primary asynchronous function for the CLI application. It parses command-line arguments, processes a specified patch file to identify Rust code changes, sends these changes to an external AI agent for processing, and then writes the agent's responses back to the relevant files.
-///
-/// # Returns
-///
-/// An `Ok(())` on successful execution, or an `ErrorBinding` if any step in the process (CLI parsing, patch processing, agent communication, or file writing) fails.
 pub async fn cli_patch_to_agent() -> Result<(), ErrorBinding> {
     let commands = Mode::parse();
     let patch = binding::patch_data_argument(commands.file_patch)?;
     event!(Level::INFO, "type: {:#?}", commands.type_rust);
     let request = changes_from_patch(patch, commands.type_rust, commands.name_rust)?;
-    event!(Level::INFO, "Requests length: {}", &request.len());
-    let responses_collected = call(request).await?;
-    event!(
-        Level::INFO,
-        "Responses collected: {}",
-        responses_collected.len()
-    );
-    write_to_file(responses_collected)?;
-    Ok(())
+    if request.is_empty() {
+        event!(Level::INFO, "No requests");
+        Ok(())
+    }
+    else {
+        event!(Level::INFO, "Requests length: {}", &request.len());
+        let responses_collected = call(request).await?;
+        event!(
+            Level::INFO,
+            "Responses collected: {}",
+            responses_collected.len()
+        );
+        write_to_file(responses_collected)?;
+        Ok(())
+    }
 }
 
 /// Asynchronously handles sending requests to an external agent (Google Gemini) and processing their responses.
