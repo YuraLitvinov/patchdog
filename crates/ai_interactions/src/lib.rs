@@ -10,6 +10,16 @@ pub struct YamlRead {
     pub requests: usize,
 }
 
+/// Reads the `config.yaml` file to extract configuration parameters.
+///
+/// It parses the YAML content and retrieves values for `prompt`, `GEMINI_MODEL`,
+/// `TOKENS_PER_MIN`, and `REQUESTS_PER_MIN`. Default values are used if a key
+/// is missing or has an unexpected type.
+///
+/// # Returns
+/// - `Result<YamlRead, ErrorHandling>`: A `Result` containing a `YamlRead` struct
+///   with the parsed configuration, or an `ErrorHandling` if file reading or
+///   YAML parsing fails.
 pub fn return_prompt() -> Result<YamlRead, ErrorHandling> {
     let config = fs::read_to_string("config.yaml")?;
     let docs = YamlLoader::load_from_str(&config)?;
