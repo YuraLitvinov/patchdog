@@ -1,4 +1,4 @@
-name: Run patchdog - AI engine
+name: Patchdog debug
 
 on:
   pull_request_review:
@@ -37,7 +37,10 @@ jobs:
       - name: Make patch
         run: git diff origin/${{ github.base_ref }}...${{ github.head_ref }} > base_head.patch
       - name: Build and run patchdog
-        run: cargo patchdog-debug
+        run: |
+          chmod +x build.sh
+          ./build.sh
+          ./build/patchdog --file-patch base_head.patch
         env:
           API_KEY_GEMINI: ${{ secrets.API_KEY_GEMINI }}
       - name: Cleanup base>head patch
@@ -48,17 +51,13 @@ jobs:
         run: sed -i "s/^version = \".*\"/version = \"0.1.${PR_NUMBER}\"/" crates/patchdog/Cargo.toml
       - name: Show status
         run: git status
-      - name: Generate patch
-        run: git diff HEAD > ${PATCHDOG_BRANCH}.patch 
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Upload patch file - review changes before they are applied
+      - name: Upload patchdog binary
         uses: actions/upload-artifact@v4
         with:
-          name: patch-file
-          path: ${PATCHDOG_BRANCH}.patch
-      - name: Cleanup patch containing pending changes
-        run: rm ${PATCHDOG_BRANCH}.patch
+          name: Export binary
+          path: /build/patchdog
+      - name: Cleanup binary
+        run: rm -rf build
       - name: Checkout into new branch, create PR # All PRs initiated will be named as github-actions[bot]
         run: |
           git config --global user.email "noreply@patchdog.ua" 
