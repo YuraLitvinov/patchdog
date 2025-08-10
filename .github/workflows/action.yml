@@ -1,4 +1,4 @@
-name: Patchdog debug
+name: Patchdog - AI engine
 
 on:
   pull_request_review:
@@ -8,8 +8,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  API_KEY_GEMINI: ${{ secrets.API_KEY_GEMINI }}
+  PR_NUMBER: ${{ github.event.number }}
 
 jobs:
   run_patchdog:
@@ -18,7 +17,6 @@ jobs:
     permissions: 
       contents: write
       pull-requests: write
-
     steps:
       - name: Check for merge conflicts #Immediately exits if there are merge conflicts present in HEAD branch 
         run: |
@@ -47,19 +45,6 @@ jobs:
         run: rm base_head.patch
       - name: Show status
         run: git status
-      - name: Generate patch
-        run: git diff HEAD > ${PATCHDOG_BRANCH}.patch 
-       -name: Update version number
-        env:
-           PR_NUMBER: ${{ github.event.number }}
-        run: sed -i "s/^version = \".*\"/version = \"0.1.${PR_NUMBER}\"/" crates/patchdog/Cargo.toml
-      - name: Upload patch file
-        uses: actions/upload-artifact@v4
-        with:
-          name: patch-file
-          path: ${PATCHDOG_BRANCH}.patch
-      - name: Cleanup patch containing pending changes
-        run: rm ${PATCHDOG_BRANCH}.patch
       - name: Checkout into new branch, create PR # All PRs initiated will be named as github-actions[bot]
         run: |
           git config --global user.email "noreply@patchdog.ua" 
@@ -69,3 +54,5 @@ jobs:
           git commit -m "Patchdog-${PATCHDOG_BRANCH}"
           git push origin $PATCHDOG_BRANCH
           gh pr create --title "Patchdog-${PATCHDOG_BRANCH}" --body "PR initialized by patchdog" --head ${PATCHDOG_BRANCH} --base ${{ github.head_ref }} --assignee ${{ github.event.pull_request.user.login }} --draft
+        env: 
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

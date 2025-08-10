@@ -1,0 +1,28 @@
+name: Build release and publish
+
+on: 
+  push:
+    branches: [main]
+  workflow_dispatch:
+  release:
+    types: [created]
+  
+  jobs:
+    release-dog:
+     runs-on: ubuntu-latest
+    steps:
+      - name: Check for merge conflicts #Immediately exits if there are merge conflicts present in HEAD branch 
+        run:  
+      - name: Checkout code
+      - uses: actions/checkout@v4
+      - name: Debug status
+        run: ls
+      - name: Run shell script with build
+        run: |
+          chmod +x build.sh 
+          ./build.sh
+      - name: Publish release
+        uses: actions/upload-artifact@v4
+        with:
+          name: Patchdog release
+          path: ./build/patchdog
