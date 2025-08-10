@@ -1,4 +1,4 @@
-name: Patchdog debug
+name: Run patchdog - AI engine
 
 on:
   pull_request_review:
@@ -8,8 +8,6 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  API_KEY_GEMINI: ${{ secrets.API_KEY_GEMINI }}
 
 jobs:
   run_patchdog:
@@ -27,7 +25,6 @@ jobs:
           else
             exit 0
           fi
-      - name: Checkout code
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.head_ref }}
@@ -45,15 +42,17 @@ jobs:
           API_KEY_GEMINI: ${{ secrets.API_KEY_GEMINI }}
       - name: Cleanup base>head patch
         run: rm base_head.patch
+      - name: Update version number
+        env:
+          PR_NUMBER: ${{ github.event.number }}
+        run: sed -i "s/^version = \".*\"/version = \"0.1.${PR_NUMBER}\"/" crates/patchdog/Cargo.toml
       - name: Show status
         run: git status
       - name: Generate patch
         run: git diff HEAD > ${PATCHDOG_BRANCH}.patch 
-       -name: Update version number
         env:
-           PR_NUMBER: ${{ github.event.number }}
-        run: sed -i "s/^version = \".*\"/version = \"0.1.${PR_NUMBER}\"/" crates/patchdog/Cargo.toml
-      - name: Upload patch file
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload patch file - review changes before they are applied
         uses: actions/upload-artifact@v4
         with:
           name: patch-file
@@ -69,3 +68,5 @@ jobs:
           git commit -m "Patchdog-${PATCHDOG_BRANCH}"
           git push origin $PATCHDOG_BRANCH
           gh pr create --title "Patchdog-${PATCHDOG_BRANCH}" --body "PR initialized by patchdog" --head ${PATCHDOG_BRANCH} --base ${{ github.head_ref }} --assignee ${{ github.event.pull_request.user.login }} --draft
+        env: 
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

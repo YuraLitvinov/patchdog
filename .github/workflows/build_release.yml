@@ -3,13 +3,13 @@ name: Build release and publish
 on: 
   push:
     branches: [main]
-  workflow_dispatch:
-  release:
-    types: [created]
-  
+
   jobs:
     release-dog:
      runs-on: ubuntu-latest
+     permissions:
+      contents: write
+    
     steps:
       - name: Check for merge conflicts #Immediately exits if there are merge conflicts present in HEAD branch 
         run:  
