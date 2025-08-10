@@ -3,6 +3,7 @@ name: Build release and publish
 on: 
   push:
     branches: [main]
+  pull_request:
 
 jobs:
   release-dog:
@@ -13,6 +14,9 @@ jobs:
   steps:
     - name: Checkout code
     - uses: actions/checkout@v4
+      with:
+        ref: ${{ github.head_ref }}
+        fetch-depth: 1
     - name: Debug status
       run: ls
     - name: Run shell script with build
