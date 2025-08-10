@@ -1,14 +1,16 @@
-name: Run patchdog - AI engine
+name: Patchdog debug
 
 on:
   pull_request_review:
     types: [submitted]
   pull_request:
+    #types: [opened, reopened, edited]
+
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  Run_patchdog:
+  run_patchdog:
 
     runs-on: ubuntu-latest
     permissions: 
@@ -16,29 +18,54 @@ jobs:
       pull-requests: write
 
     steps:
+      - name: Check for merge conflicts #Immediately exits if there are merge conflicts present in HEAD branch 
+        run: |
+          if  git diff --check |grep -i conflict  > /dev/null; then
+            exit 1
+          else
+            exit 0
+          fi
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.head_ref }}
           fetch-depth: 0
-      - name: fetch branch
+      - name: Run a command and export it as env
+        run: |
+          echo "PATCHDOG_BRANCH=$(uuidgen)" >> $GITHUB_ENV
+      - name: Fetch branch
         run: git fetch origin ${{ github.base_ref }}
-      - name: make patch
-        run: git diff origin/${{ github.base_ref }}...${{ github.head_ref }} > patch.patch
-      - name: run patchdog
-        run: cargo run -- --file-patch patch.patch
+      - name: Make patch
+        run: git diff origin/${{ github.base_ref }}...${{ github.head_ref }} > base_head.patch
+      - name: Build and run patchdog
+        run: |
+          chmod +x build.sh
+          ./build.sh
+          ./build/patchdog --file-patch base_head.patch
         env:
           API_KEY_GEMINI: ${{ secrets.API_KEY_GEMINI }}
-      - name: show status
-        run: git status
-      - name: cleanup patch
-        run: rm patch.patch
-      - name: update pull request
-        run: git diff HEAD > patch.patch 
+      - name: Cleanup base>head patch
+        run: rm base_head.patch
+      - name: Update version number
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Upload patch file
+          PR_NUMBER: ${{ github.event.number }}
+        run: sed -i "s/^version = \".*\"/version = \"0.1.${PR_NUMBER}\"/" crates/patchdog/Cargo.toml
+      - name: Show status
+        run: git status
+      - name: Upload patchdog binary
         uses: actions/upload-artifact@v4
         with:
-          name: patch-file
-          path: patch.patch
-        
+          name: Export binary
+          path: build/patchdog
+      - name: Cleanup binary
+        run: rm -rf build
+      - name: Checkout into new branch, create PR # All PRs initiated will be named as github-actions[bot]
+        run: |
+          git config --global user.email "noreply@patchdog.ua" 
+          git config --global user.name "Patchdog Patchdogovich"
+          git checkout -b $PATCHDOG_BRANCH
+          git add .
+          git commit -m "Patchdog-${PATCHDOG_BRANCH}"
+          git push origin $PATCHDOG_BRANCH
+          gh pr create --title "Patchdog-${PATCHDOG_BRANCH}" --body "PR initialized by patchdog" --head ${PATCHDOG_BRANCH} --base ${{ github.head_ref }} --assignee ${{ github.event.pull_request.user.login }} --draft
+        env: 
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,29 @@
+name: Build release and publish
+
+on: 
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  release-dog:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 1
+      - name: Debug status
+        run: ls
+      - name: Run shell script with build
+        run: |
+          chmod +x build.sh 
+          ./build.sh
+      - name: Publish release
+        uses: actions/upload-artifact@v4
+        with:
+          name: Patchdog release
+          path: build/patchdog
