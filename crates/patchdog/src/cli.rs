@@ -39,6 +39,18 @@ struct ResponseForm {
     new_comment: String,
 }
 
+/// Processes a CLI-provided patch file, transforms it into API requests,
+/// sends them to an agent (likely via `call` function), and writes the responses to a file.
+///
+/// This asynchronous function first parses command-line arguments to determine
+/// the patch file, request type, and name. It then converts the patch content
+/// into a series of requests. If requests are generated, it dispatches them
+/// and then saves the collected responses.
+///
+/// # Returns
+/// - `Result<(), ErrorBinding>`: `Ok(())` if the operation completes successfully,
+///   or `Err(ErrorBinding)` if an error occurs at any stage, such as file
+///   reading, patch parsing, API communication, or file writing.
 pub async fn cli_patch_to_agent() -> Result<(), ErrorBinding> {
     let commands = Mode::parse();
     let patch = binding::patch_data_argument(commands.file_patch)?;
@@ -61,6 +73,23 @@ pub async fn cli_patch_to_agent() -> Result<(), ErrorBinding> {
     }
 }
 
+/// Asynchronously processes a vector of `Request` objects by sending them
+/// as batches to the Google Gemini API, managing responses, and retrying
+/// any failed or unmatched requests.
+///
+/// This function initializes a `GoogleGemini` client, prepares the given
+/// requests for batch processing, sends them, and then matches the received
+/// responses to the original requests. It handles potential retries for
+/// any requests that did not receive a successful response in the initial
+/// round.
+///
+/// # Arguments
+/// - `request`: `Vec<Request>` - A vector of requests to be sent to the API.
+///
+/// # Returns
+/// - `Result<Vec<ResponseForm>, ErrorBinding>`: `Ok(Vec<ResponseForm>)`
+///   containing the successfully processed responses, or `Err(ErrorBinding)`
+///   if an error occurs during API communication, request preparation, or response handling.
 async fn call(request: Vec<Request>) -> Result<Vec<ResponseForm>, ErrorBinding> {
     let mut responses_collected = Vec::new();
     let mut pool_of_requests = HashMap::new();
