@@ -55,7 +55,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Export binary
-          path: /build/patchdog
+          path: build/patchdog
       - name: Cleanup binary
         run: rm -rf build
       - name: Checkout into new branch, create PR # All PRs initiated will be named as github-actions[bot]
