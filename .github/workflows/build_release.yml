@@ -3,7 +3,6 @@ name: Build release and publish
 on: 
   push:
     branches: [main]
-  pull_request:
 
 jobs:
   release-dog:
@@ -27,3 +26,7 @@ jobs:
         with:
           name: Patchdog release
           path: build/patchdog
+      - name: Create GitHub release
+        run: gh release create v1.0.0 ./target/release/mybinary --title "My Release" --notes "First stable version"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

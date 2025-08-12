@@ -30,26 +30,11 @@ struct LocalChange {
     file: String,
 }
 
-/// Transforms a collection of file changes (`ChangeFromPatch`) into a vector of `Request` objects.
-/// It reads the content of each affected file, extracts specific code snippets based on line ranges,
-/// parses these snippets to identify Rust functions or items, and then filters them based on `rust_type` or `rust_name`.
-/// Each matching item is then wrapped into a `Request` struct with a unique UUID, function data, and metadata.
-///
-/// # Arguments
-///
-/// * `exported_from_file` - A `Vec<ChangeFromPatch>` containing file paths and ranges of changes.
-/// * `rust_type` - A `Vec<String>` of desired Rust item types to filter for.
-/// * `rust_name` - A `Vec<String>` of desired Rust item names to filter for.
-///
-/// # Returns
-///
-/// A `Result<Vec<Request>, ErrorBinding>`:
-/// - `Ok(Vec<Request>)`: A vector of `Request` objects representing the filtered and transformed code changes.
-/// - `Err(ErrorBinding)`: If file reading, string manipulation, or Rust item parsing fails.
 pub fn changes_from_patch(
     exported_from_file: Vec<ChangeFromPatch>,
     rust_type: Vec<String>,
     rust_name: Vec<String>,
+    file_exclude: Vec<PathBuf>
 ) -> Result<Vec<Request>, ErrorBinding> {
     let tasks: Vec<LocalChange> = exported_from_file
         .par_iter()
@@ -64,33 +49,39 @@ pub fn changes_from_patch(
     let singlerequestdata: Vec<Request> = tasks
         .par_iter()
         .filter_map(|each| {
-            let vectorized = FileExtractor::string_to_vector(&each.file);
-            let item = &vectorized[each.range.start - 1..each.range.end];
-            let parsed_file = RustItemParser::rust_item_parser(&item.join("\n")).ok()?;
-            let obj_type_to_compare = parsed_file.names.type_name;
-            let obj_name_to_compare = parsed_file.names.name;
-            if rust_type.iter().any(|t| &obj_type_to_compare == t)
-                || rust_name.iter().any(|n| &obj_name_to_compare == n)
-            {
-                let as_string = item.join("\n");
-                Some(Request {
-                    uuid: uuid::Uuid::new_v4().to_string(),
-                    data: SingleFunctionData {
-                        function_text: as_string,
-                        fn_name: obj_name_to_compare,
-                        context: Context {
-                            class_name: "".to_string(),
-                            external_dependecies: vec!["".to_string()],
-                            old_comment: vec!["".to_string()],
+            //Here we exclude all matching 
+            if file_exclude.contains(&each.filename) {
+                return None;
+            }
+            else { 
+                let vectorized = FileExtractor::string_to_vector(&each.file);
+                let item = &vectorized[each.range.start - 1..each.range.end];
+                let parsed_file = RustItemParser::rust_item_parser(&item.join("\n")).ok()?;
+                let obj_type_to_compare = parsed_file.names.type_name;
+                let obj_name_to_compare = parsed_file.names.name;
+                if rust_type.iter().any(|t| &obj_type_to_compare == t)
+                    || rust_name.iter().any(|n| &obj_name_to_compare == n)
+                {
+                    let as_string = item.join("\n");
+                    Some(Request {
+                        uuid: uuid::Uuid::new_v4().to_string(),
+                        data: SingleFunctionData {
+                            function_text: as_string,
+                            fn_name: obj_name_to_compare,
+                            context: Context {
+                                class_name: "".to_string(),
+                                external_dependecies: vec!["".to_string()],
+                                old_comment: vec!["".to_string()],
+                            },
+                            metadata: Metadata {
+                                filepath: each.filename.clone(),
+                                line_range: each.range.clone(),
+                            },
                         },
-                        metadata: Metadata {
-                            filepath: each.filename.clone(),
-                            line_range: each.range.clone(),
-                        },
-                    },
-                })
-            } else {
-                None
+                    })
+                } else {
+                    None
+                }
             }
         })
         .collect();

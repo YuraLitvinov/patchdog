@@ -26,6 +26,8 @@ struct Mode {
     type_rust: Vec<String>,
     #[arg(long, num_args=1..,  requires = "file_patch")]
     name_rust: Vec<String>,
+    #[arg(long, requires = "file_patch", num_args=1..,)]
+    exclusions: Vec<PathBuf>
 }
 #[derive(Debug, PartialEq, Eq, Deserialize, Serialize)]
 struct LinkedResponse {
@@ -39,22 +41,17 @@ struct ResponseForm {
     new_comment: String,
 }
 
-/// Processes command-line interface (CLI) arguments to apply a patch to an agent.
-///
-/// This function parses CLI commands, reads patch data from a specified file,
-/// converts the patch into a series of requests, sends these requests for processing
-/// by an agent (via the `call` function), and finally writes the collected responses
-/// to a file. It logs the progress and outcomes of these operations.
-///
-/// # Returns
-/// - `Result<(), ErrorBinding>`: An empty `Result` indicating success, or an
-///   `ErrorBinding` if any step in the process (e.g., file reading, request
-///   conversion, API call, file writing) fails.
 pub async fn cli_patch_to_agent() -> Result<(), ErrorBinding> {
     let commands = Mode::parse();
     let patch = binding::patch_data_argument(commands.file_patch)?;
     event!(Level::INFO, "type: {:#?}", commands.type_rust);
-    let request = changes_from_patch(patch, commands.type_rust, commands.name_rust)?;
+    let request = changes_from_patch(
+        patch, 
+        commands.type_rust, 
+        commands.name_rust, 
+        commands.exclusions
+    )?;
+    //Here occurs check for pending changes
     if request.is_empty() {
         event!(Level::INFO, "No requests");
         Ok(())

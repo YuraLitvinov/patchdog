@@ -14,7 +14,7 @@ prompt: |
             }
         } 
     ]
-    Instruction: Clone the request form, remove 'data' and append new field 'new_comment', generate rustdoc /// style comment
+    Instruction: Clone the request form, remove 'data' and append new field 'new_comment', generate, making strong assumptions about code functionality, rustdoc /// style comment
     containing return, input and basic functionality of the function. 
     Each new object should be located inside [] block. Return type should be a JSON object of this type:
     [
