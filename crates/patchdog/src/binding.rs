@@ -8,6 +8,10 @@ use rust_parsing::ObjectRange;
 use rust_parsing::error::ErrorBinding;
 use rust_parsing::file_parsing::{FileExtractor, Files};
 use rust_parsing::rust_parser::{RustItemParser, RustParser};
+use syn::Expr;
+use syn::Pat;
+use syn::Item;
+use std::collections::HashMap;
 use std::{
     env, fs,
     ops::Range,
@@ -24,10 +28,15 @@ pub struct Difference {
     pub line: Vec<usize>,
 }
 
-struct LocalChange {
+pub struct LocalChange {
     filename: PathBuf,
     range: Range<usize>,
     file: String,
+}
+#[derive(Debug)]
+pub struct LocalContext {
+    pub context_type: String,
+    pub context_name: String
 }
 
 pub fn changes_from_patch(
@@ -36,6 +45,11 @@ pub fn changes_from_patch(
     rust_name: Vec<String>,
     file_exclude: Vec<PathBuf>
 ) -> Result<Vec<Request>, ErrorBinding> {
+    //Collect whole project once, instead of every time for each in function let objects = HashMap<(key, value)>
+    //key - (Filename, Option<trait_name> and fn name)
+    //value - name and type, body of function
+    //Context - FunctionSignature: input args and return types with comment
+    //Context - structs as String (as is)
     let tasks: Vec<LocalChange> = exported_from_file
         .par_iter()
         .flat_map(|each| {
@@ -48,34 +62,39 @@ pub fn changes_from_patch(
         .collect();
     let singlerequestdata: Vec<Request> = tasks
         .par_iter()
-        .filter_map(|each| {
+        .filter_map(|change| {
             //Here we exclude all matching 
-            if file_exclude.contains(&each.filename) {
+            if file_exclude.contains(&change.filename) {
                 return None;
             }
             else { 
-                let vectorized = FileExtractor::string_to_vector(&each.file);
-                let item = &vectorized[each.range.start - 1..each.range.end];
+                let vectorized = FileExtractor::string_to_vector(&change.file);
+                let item = &vectorized[change.range.start - 1..change.range.end];
                 let parsed_file = RustItemParser::rust_item_parser(&item.join("\n")).ok()?;
                 let obj_type_to_compare = parsed_file.names.type_name;
                 let obj_name_to_compare = parsed_file.names.name;
                 if rust_type.iter().any(|t| &obj_type_to_compare == t)
                     || rust_name.iter().any(|n| &obj_name_to_compare == n)
-                {
-                    let as_string = item.join("\n");
+                {   
+                    //At this point in parsed_file we are already aware of all the referenced data    
+                    let fn_as_string = item.join("\n");
+                    /*
+                    Calling find_context(all methods: bla-bla, function: String) -> context(Vec<String>) {
+                        1. 
+                        2. Find matches in code
+                        3. Return matching structures
+                    }
+                    */       
+                    let context = find_context(change, &obj_name_to_compare, &fn_as_string).ok()?;
                     Some(Request {
                         uuid: uuid::Uuid::new_v4().to_string(),
                         data: SingleFunctionData {
-                            function_text: as_string,
+                            function_text: fn_as_string,
                             fn_name: obj_name_to_compare,
-                            context: Context {
-                                class_name: "".to_string(),
-                                external_dependecies: vec!["".to_string()],
-                                old_comment: vec!["".to_string()],
-                            },
+                            context: context,
                             metadata: Metadata {
-                                filepath: each.filename.clone(),
-                                line_range: each.range.clone(),
+                                filepath: change.filename.clone(),
+                                line_range: change.range.clone(),
                             },
                         },
                     })
@@ -86,6 +105,108 @@ pub fn changes_from_patch(
         })
         .collect();
     Ok(singlerequestdata)
+}
+
+//Seeking context inside same file, to match probable structures
+//Checking uses, to limit amount of crates to be parsed
+//Allocating  
+//Here importing LocalChange to know path to function, function_text as information to grab
+pub fn find_context (change: &LocalChange, fn_name: &str, function_text: &String) -> Result<Context, ErrorBinding> {
+    let dir = env::current_dir()?;
+    let file = fs::read_to_string(&change.filename)?;
+    let parsed = RustItemParser::parse_all_rust_items(&file)?;
+    let all_uses: Vec<ObjectRange> = parsed.par_iter().filter_map(|object_range|
+        if object_range.names.type_name == "use" {
+            Some(object_range.to_owned())
+        }
+        else {
+            None
+        }
+    ).collect();
+    let map_rust_files: HashMap<String, PathBuf> = all_uses.into_iter().map(|each| {
+        let name = each.names.name;
+        if name == "crate" {
+            let mut path = change.filename.clone();
+            path.pop();
+            return (name.clone(), path)
+        }
+
+        let path = dir.join(&name);
+
+        if path.exists() {
+            return (name, path);
+        }
+        return ("".to_string(), Path::new("").to_path_buf());
+    }).collect();
+    let context_files = map_rust_files.into_values().map(|val|val).collect::<Vec<PathBuf>>();
+    let mut rust_files=  vec![];
+    let tokens = syn::parse_file(&function_text).unwrap().items;
+    //Objects variable here contains function, struct calls from inside the documented function
+    //Data variable contains all fn and struct objects from inside those crates, that have to be matched with objects variable
+    let objects = grep_objects(tokens);
+
+    let mut data = vec![];
+    for each in context_files {
+        find_rust_files(each, &mut rust_files);
+    }
+    for object in rust_files {
+        if let Ok(ok) = fs::read_to_string(object) {
+            let objs = RustItemParser::parse_all_rust_items(&ok)?;
+            for each in objs {
+                if each.names.type_name == "struct" || each.names.type_name == "fn" {
+                    data.push(each);
+                }
+            }
+        }
+    }
+    let map_objects_in_fn = objects.par_iter().map(|obj|
+        (
+        (   obj.context_type.clone(),
+            obj.context_name.clone()
+        ), 
+        "".to_string()
+    )
+    )
+        .collect::<HashMap<(String, String), String>>();
+    let map_data = data.par_iter().map(|obj|
+        ((obj.names.type_name.clone(), obj.names.name.clone()),
+        obj.clone())
+    )
+        .collect::<HashMap<(String, String), ObjectRange>>();
+    //Here matching found objects inside functions and within used crates in the file with function
+    let matches: Vec<ObjectRange> = map_data.clone().into_iter()
+        .filter_map(|(key, val)| if map_objects_in_fn.contains_key(&key) { 
+            return Some(val);
+        } else {
+            None
+        } )
+        .collect();
+    println!("{}\n{:#?}", fn_name, matches);
+    //println!("{:#?}", map_data);
+    println!("{:#?}", map_objects_in_fn);
+
+ //Now we want to find all use statements, to make scope of search smaller. 
+    //Instead of parsing whole project - we parse few of the crates
+    Ok(Context {
+        class_name: "".to_string(),
+        external_dependecies: vec!["".to_string()],
+        old_comment: vec!["".to_string()],
+    })
+}
+
+fn find_rust_files(dir: PathBuf, rust_files: &mut Vec<PathBuf>) {
+    if let Ok(entries) = fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                find_rust_files(path, rust_files); // Recurse into subdirectory
+            } else if let Some(ext) = path.extension() {
+                if ext == "rs" {
+                    rust_files.push(path);
+                }
+            }
+        }
+    }
 }
 
 /// Retrieves parsed patch data from a specified patch file.
@@ -237,3 +358,117 @@ fn patch_export_change(
     }
     Ok(line_and_file)
 }
+
+pub fn grep_objects(tokens: Vec<Item>) -> Vec<LocalContext> {
+    let mut objects: Vec<LocalContext> = Vec::new();
+        for token in tokens {        
+        match token {
+            Item::Fn(f) => read_block(*f.block, &mut objects),
+            _ => &mut objects
+        };
+    }
+    objects
+}
+
+fn read_block(block: syn::Block, objects: &mut Vec<LocalContext>) -> &mut Vec<LocalContext> {
+    for stmt in block.stmts {
+        match stmt {
+            syn::Stmt::Expr(e,_) => {
+                match_expr(e, objects);
+            },
+            syn::Stmt::Local(local) => {
+                handle_pat(local.pat, objects);
+                match_expr(*local.init.unwrap().expr, objects);
+            }
+            _ => {}
+        }
+    }
+    objects
+}
+
+fn match_expr(expr: Expr, objects: &mut Vec<LocalContext>) -> &mut Vec<LocalContext> {
+    match expr {
+        Expr::Assign(assign) => {
+            match_expr(*assign.left, objects);
+            match_expr(*assign.right, objects)
+        },
+        Expr::Block(block) => read_block(block.block, objects),
+        Expr::Call(call) => {
+            match_expr(*call.func, objects);
+            for arg in call.args {
+                match_expr(arg, objects);
+            }
+            objects
+        }
+        Expr::Closure(closure) => match_expr(*closure.body, objects),
+        Expr::ForLoop(for_loop) => {
+            handle_pat(*for_loop.pat, objects);
+            match_expr(*for_loop.expr, objects);
+            read_block(for_loop.body, objects)
+        }
+        Expr::If(if_expr) => {
+            match_expr(*if_expr.cond, objects);
+            read_block(if_expr.then_branch, objects);
+
+            if let Some((_, else_expr)) = if_expr.else_branch {
+                match_expr(*else_expr, objects);
+            } else {
+                objects.push(LocalContext { context_type: "".to_string(), context_name: "".to_string() });
+            }
+            objects
+        }
+        Expr::Let(let_expr) => {
+            match_expr(*let_expr.expr, objects);
+            handle_pat(*let_expr.pat, objects)
+        }
+        Expr::Loop(loop_expr) => read_block(loop_expr.body, objects),
+        Expr::MethodCall(method_call) => handle_method_call(method_call, objects),
+        Expr::Struct(strukt) => handle_struct(strukt, objects),
+        Expr::Path(path_expr) => handle_path(path_expr, objects),
+        Expr::Try(try_expr) => match_expr(*try_expr.expr, objects),
+        Expr::TryBlock(try_block) => read_block(try_block.block, objects),
+        Expr::Unsafe(unsafe_expr) => read_block(unsafe_expr.block, objects),
+        Expr::While(while_expr) => {
+            match_expr(*while_expr.cond, objects);
+            read_block(while_expr.body, objects)
+        }
+        _ => objects
+    }
+}
+
+
+fn handle_pat(pat: Pat, objects: &mut Vec<LocalContext>) -> &mut Vec<LocalContext> {
+    match pat {
+        Pat::Struct(ps) => {
+            for field in ps.fields {
+                handle_pat(*field.pat, objects);
+            }
+        }
+        _ => {}
+    }
+    objects
+}
+
+fn handle_method_call(method_call: syn::ExprMethodCall, objects: &mut Vec<LocalContext>) -> &mut Vec<LocalContext> {
+    match_expr(*method_call.receiver, objects);
+    for arg in method_call.args {
+        match_expr(arg, objects);
+    }
+    objects.push(LocalContext { context_type: "fn".to_string(), context_name: method_call.method.to_string() });
+    objects
+}
+
+fn handle_struct(strukt: syn::ExprStruct, objects: &mut Vec<LocalContext>) -> &mut Vec<LocalContext> {
+    let some = strukt.path.get_ident().map(|ident| ident.to_string());
+    objects.push(LocalContext { context_type: "struct".to_string(), context_name: some.unwrap_or("".to_string()) });
+    objects
+}
+
+fn handle_path(path_expr: syn::ExprPath, objects: &mut Vec<LocalContext>) -> &mut Vec<LocalContext> {
+    let segment = path_expr.path.segments.into_iter().map(|segment|
+        segment.ident.to_string()
+    ).collect::<Vec<String>>();
+    let _ = segment.into_iter().map(|each| objects.push(LocalContext { context_type: "path".to_string(), context_name: each }));
+    objects
+}
+

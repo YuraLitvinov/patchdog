@@ -13,12 +13,8 @@ mod tests {
     use std::process::{Command};
     use std::{fs, path::Path};
     use tempfile::NamedTempFile;
-    use syn::{Block, Expr};
-    use syn::LocalInit;
+    use syn::Expr;
     use syn::Pat;
-    use syn::Stmt;
-    use syn::Ident;
-    use syn::ItemFn;
     use syn::Item;
     const PATH_BASE: &str = "../../tests/data.rs";
 
@@ -316,7 +312,7 @@ mod tests {
     #[test]
     fn test_parsing_matching() {
         let file = fs::read_to_string("../../crates/patchdog/src/binding.rs").unwrap();
-        let function = &FileExtractor::string_to_vector(&file)[32..=89];
+        let function = &FileExtractor::string_to_vector(&file)[35..=102];
         let tokens = syn::parse_file(&function.join("\n")).unwrap().items;
         for each in tokens {
             entry_point(each);
@@ -324,25 +320,57 @@ mod tests {
         
     assert_eq!(true,false);
     }
-
+    fn entry_point(token: Item) {
+        match token {
+            Item::Fn(f) => read_block(*f.block),
+            _ => ()
+            
+        }
+    }
 fn match_expr(expr: Expr) {
     match expr {
         Expr::Assign(assign) => {
-            let a = *assign.right;
-            match_expr(a);
-        }
+            match_expr(*assign.left);
+            match_expr(*assign.right);
+        },
         Expr::Block(block) => read_block(block.block),
-        Expr::Call(call) => match_expr(*call.func),
+        Expr::Call(call) => {
+            match_expr(*call.func);
+            for arg in call.args {
+                match_expr(arg);
+            }
+        }
         Expr::Closure(closure) => match_expr(*closure.body),
-        Expr::ForLoop(for_loop) => read_block(for_loop.body),
-        Expr::If(if_expr) => read_block(if_expr.then_branch),
-        Expr::Let(let_expr) => handle_let(let_expr),
+        Expr::ForLoop(for_loop) => {
+            handle_pat(*for_loop.pat);
+            match_expr(*for_loop.expr);
+            read_block(for_loop.body);
+        }
+        Expr::If(if_expr) => {
+            match_expr(*if_expr.cond);
+            read_block(if_expr.then_branch);
+            if let Some((_, else_expr)) = if_expr.else_branch {
+                match_expr(*else_expr);
+            }
+        }
+        Expr::Let(let_expr) => {
+            match_expr(*let_expr.expr);
+            handle_pat(*let_expr.pat);
+        }
         Expr::Loop(loop_expr) => read_block(loop_expr.body),
-        Expr::Match(m_expr) => match_expr(*m_expr.expr),
+        Expr::Match(m_expr) => {
+            match_expr(*m_expr.expr);
+            for arm in m_expr.arms {
+                handle_pat(arm.pat);
+                if let Some((_, guard)) = arm.guard {
+                    match_expr(*guard);
+                }
+                match_expr(*arm.body);
+            }
+        }
         Expr::MethodCall(method_call) => handle_method_call(method_call),
         Expr::Struct(strukt) => handle_struct(strukt),
         Expr::Path(path_expr) => handle_path(path_expr),
-        Expr::Field(field_expr) => handle_field(field_expr),
         Expr::Try(try_expr) => match_expr(*try_expr.expr),
         Expr::TryBlock(try_block) => read_block(try_block.block),
         Expr::Unsafe(unsafe_expr) => read_block(unsafe_expr.block),
@@ -350,75 +378,58 @@ fn match_expr(expr: Expr) {
             match_expr(*while_expr.cond);
             read_block(while_expr.body);
         }
-        _ => ()
+        _ => {}
     }
-    }
-    fn handle_let(let_expr: syn::ExprLet) {
-        match_expr(*let_expr.expr);
-        match *let_expr.pat {
-            Pat::Ident(i) => println!("{}", i.ident),
-            _ => ()
-        }
-    }
+}
 
-    fn handle_method_call(method_call: syn::ExprMethodCall) {
-        println!("{}", method_call.method);
-        match_expr(*method_call.receiver);
-    }
+// --- helpers ---
 
-    fn handle_struct(strukt: syn::ExprStruct) {
-        if let Some(ident) = strukt.path.get_ident() {
-            println!("{}", ident);
-        }
-    }
-
-    fn handle_path(path_expr: syn::ExprPath) {
-        for segment in &path_expr.path.segments {
-            println!("{}", segment.ident);
-        }
-    }
-
-    fn handle_field(field_expr: syn::ExprField) {
-        if let syn::Member::Named(ident) = &field_expr.member {
-            println!("{}", ident);
-        }
-        match_expr(*field_expr.base);
-    }
-    fn entry_point(token: Item) {
-            match token {
-                Item::Fn(f) => {
-                    let statements = f.block;
-                    read_block(*statements);
-                },
-                _ => () 
-            }
-        
-    }
-
-    fn read_block(body: Block) {
-        for each in body.stmts {
-            match each {
-                Stmt::Local(l) => {
-                    let local = *l.init.unwrap().expr;
-                    match_expr(local);      
-                    let p = l.pat; 
-                    match p {
-                        Pat::Ident(i) => println!("{}", i.ident.to_string()),
-                        _ => ()
-                        
-                    } 
-                }
-                Stmt::Expr(expr, _) => {
-                    match_expr( expr);
-                },
-                Stmt::Item(i) => {
-                    entry_point(i);
-                }
-                _ => ()
+fn handle_pat(pat: Pat) {
+    match pat {
+        //Pat::Ident(i) => println!("{}", i.ident),
+        Pat::Struct(ps) => {
+            for field in ps.fields {
+                handle_pat(*field.pat);
             }
         }
-
-
+        _ => {}
     }
+}
+
+fn handle_method_call(method_call: syn::ExprMethodCall) {
+    println!("{}", method_call.method);
+    match_expr(*method_call.receiver);
+    for arg in method_call.args {
+        match_expr(arg);
+    }
+}
+
+fn handle_struct(strukt: syn::ExprStruct) {
+    if let Some(ident) = strukt.path.get_ident() {
+        println!("Struct: {}", ident);
+    }
+}
+
+fn handle_path(path_expr: syn::ExprPath) {
+    for segment in &path_expr.path.segments {
+        println!("{}", segment.ident);
+    }
+}
+
+
+fn read_block(block: syn::Block) {
+    for stmt in block.stmts {
+        match stmt {
+            syn::Stmt::Expr(e,_) => {
+                match_expr(e);
+            },
+            syn::Stmt::Local(local) => {
+                handle_pat(local.pat);
+                match_expr(*local.init.unwrap().expr);
+            }
+            _ => {}
+        }
+    }
+}
 }
 

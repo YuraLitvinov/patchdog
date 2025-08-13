@@ -2,12 +2,12 @@ use std::ops::Range;
 
 use serde::Serialize;
 
-#[derive(Debug, Clone, serde::Deserialize, Serialize)]
+#[derive(Debug, Clone, serde::Deserialize, Serialize, PartialEq)]
 pub struct Name {
     pub type_name: String,
     pub name: String,
 }
-#[derive(Debug, Clone, serde::Deserialize, Serialize)]
+#[derive(Debug, Clone, serde::Deserialize, Serialize, PartialEq)]
 pub struct ObjectRange {
     //There is an ample interface for interaction with this structure, hence, I believe there is no reason to change it
     pub line_ranges: Range<usize>, // Has to stay, as a lot of functionality is bound to this field

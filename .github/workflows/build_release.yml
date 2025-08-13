@@ -27,6 +27,6 @@ jobs:
           name: Patchdog release
           path: build/patchdog
       - name: Create GitHub release
-        run: gh release create v1.0.0 ./target/release/mybinary --title "My Release" --notes "First stable version"
+        run: gh release create v1.0.0 ./build/patchdog --title "Initial Release" --notes "Stable version, without context"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

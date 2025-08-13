@@ -57,6 +57,7 @@ pub async fn cli_patch_to_agent() -> Result<(), ErrorBinding> {
         Ok(())
     }
     else {
+        /* 
         event!(Level::INFO, "Requests length: {}", &request.len());
         let responses_collected = call(request).await?;
         event!(
@@ -65,6 +66,7 @@ pub async fn cli_patch_to_agent() -> Result<(), ErrorBinding> {
             responses_collected.len()
         );
         write_to_file(responses_collected)?;
+        */
         Ok(())
     }
 }
