@@ -1,5 +1,5 @@
 mod tests {
-    use crate::binding;
+    use crate::binding::{self, find_context, LocalChange};
     use crate::cli::cherrypick_response;
     use gemini::gemini::{RawResponse};
     use regex::Regex;
@@ -13,9 +13,6 @@ mod tests {
     use std::process::{Command};
     use std::{fs, path::Path};
     use tempfile::NamedTempFile;
-    use syn::Expr;
-    use syn::Pat;
-    use syn::Item;
     const PATH_BASE: &str = "../../tests/data.rs";
 
 /// Tests the `parse_all_rust_items` function by reading a Rust file from `PATH_BASE` and parsing its contents.
@@ -311,125 +308,18 @@ mod tests {
 /// - Any `unwrap()` call fails during AST traversal.
     #[test]
     fn test_parsing_matching() {
-        let file = fs::read_to_string("../../crates/patchdog/src/binding.rs").unwrap();
-        let function = &FileExtractor::string_to_vector(&file)[35..=102];
-        let tokens = syn::parse_file(&function.join("\n")).unwrap().items;
-        for each in tokens {
-            entry_point(each);
-        }
+        let path = env::current_dir().unwrap().join("src/cli.rs");
+        let changes = LocalChange {
+            filename: path.clone(),
+            range: 0..1,
+            file: "Test".to_string()
+        };
+        let file = fs::read_to_string(path).unwrap();
+        let as_vec = &FileExtractor::string_to_vector(&file)[90..131].join("\n");
+        let _ = find_context(&changes, "test", as_vec).unwrap();
         
     assert_eq!(true,false);
     }
-    fn entry_point(token: Item) {
-        match token {
-            Item::Fn(f) => read_block(*f.block),
-            _ => ()
-            
-        }
-    }
-fn match_expr(expr: Expr) {
-    match expr {
-        Expr::Assign(assign) => {
-            match_expr(*assign.left);
-            match_expr(*assign.right);
-        },
-        Expr::Block(block) => read_block(block.block),
-        Expr::Call(call) => {
-            match_expr(*call.func);
-            for arg in call.args {
-                match_expr(arg);
-            }
-        }
-        Expr::Closure(closure) => match_expr(*closure.body),
-        Expr::ForLoop(for_loop) => {
-            handle_pat(*for_loop.pat);
-            match_expr(*for_loop.expr);
-            read_block(for_loop.body);
-        }
-        Expr::If(if_expr) => {
-            match_expr(*if_expr.cond);
-            read_block(if_expr.then_branch);
-            if let Some((_, else_expr)) = if_expr.else_branch {
-                match_expr(*else_expr);
-            }
-        }
-        Expr::Let(let_expr) => {
-            match_expr(*let_expr.expr);
-            handle_pat(*let_expr.pat);
-        }
-        Expr::Loop(loop_expr) => read_block(loop_expr.body),
-        Expr::Match(m_expr) => {
-            match_expr(*m_expr.expr);
-            for arm in m_expr.arms {
-                handle_pat(arm.pat);
-                if let Some((_, guard)) = arm.guard {
-                    match_expr(*guard);
-                }
-                match_expr(*arm.body);
-            }
-        }
-        Expr::MethodCall(method_call) => handle_method_call(method_call),
-        Expr::Struct(strukt) => handle_struct(strukt),
-        Expr::Path(path_expr) => handle_path(path_expr),
-        Expr::Try(try_expr) => match_expr(*try_expr.expr),
-        Expr::TryBlock(try_block) => read_block(try_block.block),
-        Expr::Unsafe(unsafe_expr) => read_block(unsafe_expr.block),
-        Expr::While(while_expr) => {
-            match_expr(*while_expr.cond);
-            read_block(while_expr.body);
-        }
-        _ => {}
-    }
-}
 
-// --- helpers ---
-
-fn handle_pat(pat: Pat) {
-    match pat {
-        //Pat::Ident(i) => println!("{}", i.ident),
-        Pat::Struct(ps) => {
-            for field in ps.fields {
-                handle_pat(*field.pat);
-            }
-        }
-        _ => {}
-    }
-}
-
-fn handle_method_call(method_call: syn::ExprMethodCall) {
-    println!("{}", method_call.method);
-    match_expr(*method_call.receiver);
-    for arg in method_call.args {
-        match_expr(arg);
-    }
-}
-
-fn handle_struct(strukt: syn::ExprStruct) {
-    if let Some(ident) = strukt.path.get_ident() {
-        println!("Struct: {}", ident);
-    }
-}
-
-fn handle_path(path_expr: syn::ExprPath) {
-    for segment in &path_expr.path.segments {
-        println!("{}", segment.ident);
-    }
-}
-
-
-fn read_block(block: syn::Block) {
-    for stmt in block.stmts {
-        match stmt {
-            syn::Stmt::Expr(e,_) => {
-                match_expr(e);
-            },
-            syn::Stmt::Local(local) => {
-                handle_pat(local.pat);
-                match_expr(*local.init.unwrap().expr);
-            }
-            _ => {}
-        }
-    }
-}
 }
 

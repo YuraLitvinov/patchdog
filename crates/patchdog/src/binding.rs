@@ -8,8 +8,7 @@ use rust_parsing::ObjectRange;
 use rust_parsing::error::ErrorBinding;
 use rust_parsing::file_parsing::{FileExtractor, Files};
 use rust_parsing::rust_parser::{RustItemParser, RustParser};
-use syn::Expr;
-use syn::Pat;
+use syn::{UseTree};
 use syn::Item;
 use std::collections::HashMap;
 use std::{
@@ -17,6 +16,19 @@ use std::{
     ops::Range,
     path::{Path, PathBuf},
 };
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct UseItem {
+    pub ident: String,
+    pub module: String,
+    pub object: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct PathObject {
+    pub filename: PathBuf,
+    pub object: ObjectRange
+}
 
 pub struct FullDiffInfo {
     pub name: String,
@@ -29,14 +41,15 @@ pub struct Difference {
 }
 
 pub struct LocalChange {
-    filename: PathBuf,
-    range: Range<usize>,
-    file: String,
+    pub filename: PathBuf,
+    pub range: Range<usize>,
+    pub file: String,
 }
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct LocalContext {
-    pub context_type: String,
-    pub context_name: String
+    pub context_type: String, 
+    pub context_name: String,  
+    pub context_path: String,  
 }
 
 pub fn changes_from_patch(
@@ -111,87 +124,96 @@ pub fn changes_from_patch(
 //Checking uses, to limit amount of crates to be parsed
 //Allocating  
 //Here importing LocalChange to know path to function, function_text as information to grab
+//Current idea is we parse the function_text (object with pending changes), get the data called from it
+//Then, we identify all uses inside the function, to limit the scope of search even further
 pub fn find_context (change: &LocalChange, fn_name: &str, function_text: &String) -> Result<Context, ErrorBinding> {
-    let dir = env::current_dir()?;
+    let mut context = vec![];
+
+    //Crate level-context seeking
     let file = fs::read_to_string(&change.filename)?;
-    let parsed = RustItemParser::parse_all_rust_items(&file)?;
-    let all_uses: Vec<ObjectRange> = parsed.par_iter().filter_map(|object_range|
-        if object_range.names.type_name == "use" {
-            Some(object_range.to_owned())
-        }
-        else {
-            None
-        }
-    ).collect();
-    let map_rust_files: HashMap<String, PathBuf> = all_uses.into_iter().map(|each| {
-        let name = each.names.name;
-        if name == "crate" {
-            let mut path = change.filename.clone();
-            path.pop();
-            return (name.clone(), path)
-        }
-
-        let path = dir.join(&name);
-
-        if path.exists() {
-            return (name, path);
-        }
-        return ("".to_string(), Path::new("").to_path_buf());
-    }).collect();
-    let context_files = map_rust_files.into_values().map(|val|val).collect::<Vec<PathBuf>>();
-    let mut rust_files=  vec![];
-    let tokens = syn::parse_file(&function_text).unwrap().items;
-    //Objects variable here contains function, struct calls from inside the documented function
-    //Data variable contains all fn and struct objects from inside those crates, that have to be matched with objects variable
-    let objects = grep_objects(tokens);
-
-    let mut data = vec![];
-    for each in context_files {
-        find_rust_files(each, &mut rust_files);
+    let parsed = syn::parse_file(&file).unwrap();
+    //Here we try to find the paths used in the certain file, if they are within the project, then,
+    //We can reach them and get the context from there
+    //Hashmaps doesn't allow matching certain crate more than once
+    let all_uses = parse_use(parsed.items);
+    //Here is map_rust_files we locate all the crates used within the file where function is located
+    let map_rust_files = collect_paths(all_uses.clone(), change.filename.clone())?;
+    let use_map = all_uses.par_iter().map(|single_use| 
+        (single_use.object.to_owned(), single_use.to_owned()) 
+    ).collect::<HashMap<String, UseItem>>();
+    let mut paths = vec![];
+    for each in &map_rust_files {
+        let _ = find_rust_files(each.0.to_path_buf(), &mut paths);
     }
-    for object in rust_files {
-        if let Ok(ok) = fs::read_to_string(object) {
-            let objs = RustItemParser::parse_all_rust_items(&ok)?;
-            for each in objs {
-                if each.names.type_name == "struct" || each.names.type_name == "fn" {
-                    data.push(each);
-                }
+    let assorted_paths = paths.into_iter().map(|path| 
+        return (path.file_stem().unwrap().to_str().unwrap().to_string(), path)
+    ).collect::<HashMap<String, PathBuf>>();
+    //println!("{:#?}", use_map);
+    
+    for path in assorted_paths {
+        let file = fs::read_to_string(&path.1)?;
+        let parsed = RustItemParser::parse_all_rust_items(&file)?;
+        for each in parsed {
+            if use_map.contains_key(&each.names.name) || use_map.contains_key("self") || use_map.contains_key("*") {
+                context.push((path.1.to_owned(), each));
             }
-        }
+        }        
     }
-    let map_objects_in_fn = objects.par_iter().map(|obj|
-        (
-        (   obj.context_type.clone(),
-            obj.context_name.clone()
-        ), 
-        "".to_string()
-    )
-    )
-        .collect::<HashMap<(String, String), String>>();
-    let map_data = data.par_iter().map(|obj|
-        ((obj.names.type_name.clone(), obj.names.name.clone()),
-        obj.clone())
-    )
-        .collect::<HashMap<(String, String), ObjectRange>>();
-    //Here matching found objects inside functions and within used crates in the file with function
-    let matches: Vec<ObjectRange> = map_data.clone().into_iter()
-        .filter_map(|(key, val)| if map_objects_in_fn.contains_key(&key) { 
-            return Some(val);
-        } else {
-            None
-        } )
-        .collect();
-    println!("{}\n{:#?}", fn_name, matches);
-    //println!("{:#?}", map_data);
-    println!("{:#?}", map_objects_in_fn);
 
- //Now we want to find all use statements, to make scope of search smaller. 
+    //Here we want to match the function with all the imports
+    let parsed_function = syn::parse_file(&function_text).unwrap();
+    let tokens = grep_objects(parsed_function.items);
+    let map_function = tokens.par_iter().filter_map(|con| 
+            return Some((con.context_path.to_owned(), con.to_owned())) 
+    ).collect::<HashMap<String, LocalContext>>();
+    let map_context = context.par_iter().map(|context| 
+        (context.1.names.name.clone(), PathObject { filename: context.0.to_owned(), object: context.1.to_owned()})
+    ) .collect::<HashMap<String, PathObject>>();
+    let matches = map_context.clone()
+        .into_iter()
+        .filter_map(|(key, value_function)| {
+            if let Some(_) = map_function.get(&key) {
+                Some((key.clone(), value_function.to_owned()))
+            } else {
+                None
+            }
+        })
+        .collect::<HashMap<String, PathObject>>();
+    println!("{} matches: \n{:#?}", fn_name, matches);
+    println!("{:#?}", map_context);
+    //Now we want to find all use statements, to make scope of search smaller. 
     //Instead of parsing whole project - we parse few of the crates
     Ok(Context {
         class_name: "".to_string(),
         external_dependecies: vec!["".to_string()],
         old_comment: vec!["".to_string()],
     })
+}
+
+fn collect_paths (all_uses: Vec<UseItem>, filename: PathBuf) -> Result<HashMap<PathBuf, String>, ErrorBinding> { 
+        let dir = env::current_dir()?;
+        let map_rust_files: HashMap<PathBuf, String> = all_uses.clone().into_iter().filter_map(|each| {
+        let name = each.ident;
+        if name == "crate" {
+            let mut path = filename.clone();
+            path.pop();
+            return Some((path, name.clone()))
+        }
+        let read_dir = dir.read_dir().unwrap();
+        let entries = read_dir.into_iter().filter_map(|entry| 
+            if entry.as_ref().unwrap().path().join(&name).exists() {
+                Some((entry.unwrap().path().join(&name), name.clone()))
+            }
+            else {
+                None
+            }
+        ).collect::<HashMap<PathBuf, String>>();
+        for each in entries {
+            return Some(each);
+        }
+        None
+    }).collect();
+    Ok(map_rust_files)
 }
 
 fn find_rust_files(dir: PathBuf, rust_files: &mut Vec<PathBuf>) {
@@ -208,7 +230,53 @@ fn find_rust_files(dir: PathBuf, rust_files: &mut Vec<PathBuf>) {
         }
     }
 }
+pub fn parse_use(tokens: Vec<Item>) -> Vec<UseItem> {
+    let mut items = Vec::new();
 
+    for token in tokens {
+        if let Item::Use(u) = token {
+            flatten_tree(&u.tree, "".to_string(), "".to_string(), &mut items);
+        }
+    }
+
+    items
+}
+
+fn flatten_tree(tree: &UseTree, ident: String, module: String, acc: &mut Vec<UseItem>) {
+    match tree {
+        UseTree::Path(path) => {
+            let new_ident = if ident.is_empty() { path.ident.to_string() } else { ident.clone() };
+            let new_module = if module.is_empty() { path.ident.to_string() } else { format!("{}", path.ident) };
+            flatten_tree(&path.tree, new_ident, new_module, acc);
+        }
+        UseTree::Name(name) => {
+            acc.push(UseItem {
+                ident: ident.clone(),
+                module: module.clone(),
+                object: name.ident.to_string(),
+            });
+        }
+        UseTree::Rename(rename) => {
+            acc.push(UseItem {
+                ident: ident.clone(),
+                module: module.clone(),
+                object: rename.ident.to_string(),
+            });
+        }
+        UseTree::Group(group) => {
+            for item in &group.items {
+                flatten_tree(item, ident.clone(), module.clone(), acc);
+            }
+        }
+        UseTree::Glob(_) => {
+            acc.push(UseItem {
+                ident: ident.clone(),
+                module: module.clone(),
+                object: "*".to_string(),
+            });
+        }
+    }
+}
 /// Retrieves parsed patch data from a specified patch file.
 /// It constructs the absolute path to the patch file and the relative working directory,
 /// then calls `get_patch_data` to process the patch.
@@ -359,116 +427,149 @@ fn patch_export_change(
     Ok(line_and_file)
 }
 
-pub fn grep_objects(tokens: Vec<Item>) -> Vec<LocalContext> {
+pub fn grep_objects(tokens: Vec<syn::Item>) -> Vec<LocalContext> {
     let mut objects: Vec<LocalContext> = Vec::new();
-        for token in tokens {        
+    for token in tokens {        
         match token {
-            Item::Fn(f) => read_block(*f.block, &mut objects),
-            _ => &mut objects
-        };
-    }
-    objects
-}
-
-fn read_block(block: syn::Block, objects: &mut Vec<LocalContext>) -> &mut Vec<LocalContext> {
-    for stmt in block.stmts {
-        match stmt {
-            syn::Stmt::Expr(e,_) => {
-                match_expr(e, objects);
-            },
-            syn::Stmt::Local(local) => {
-                handle_pat(local.pat, objects);
-                match_expr(*local.init.unwrap().expr, objects);
-            }
+            syn::Item::Fn(f) => { read_block(*f.block, &mut objects, "".to_string()); },
             _ => {}
         }
     }
     objects
 }
 
-fn match_expr(expr: Expr, objects: &mut Vec<LocalContext>) -> &mut Vec<LocalContext> {
-    match expr {
-        Expr::Assign(assign) => {
-            match_expr(*assign.left, objects);
-            match_expr(*assign.right, objects)
-        },
-        Expr::Block(block) => read_block(block.block, objects),
-        Expr::Call(call) => {
-            match_expr(*call.func, objects);
-            for arg in call.args {
-                match_expr(arg, objects);
+fn read_block(block: syn::Block, objects: &mut Vec<LocalContext>, parent_path: String) {
+    for stmt in block.stmts {
+        match stmt {
+            syn::Stmt::Expr(e,_) => {
+                match_expr(e, objects, parent_path.clone());
+            },
+            syn::Stmt::Local(local) => {
+                handle_pat(local.pat, objects, parent_path.clone());
+                if let Some(init_expr) = local.init {
+                    match_expr(*init_expr.expr, objects, parent_path.clone());
+                }
             }
-            objects
+            _ => {}
         }
-        Expr::Closure(closure) => match_expr(*closure.body, objects),
-        Expr::ForLoop(for_loop) => {
-            handle_pat(*for_loop.pat, objects);
-            match_expr(*for_loop.expr, objects);
-            read_block(for_loop.body, objects)
-        }
-        Expr::If(if_expr) => {
-            match_expr(*if_expr.cond, objects);
-            read_block(if_expr.then_branch, objects);
-
-            if let Some((_, else_expr)) = if_expr.else_branch {
-                match_expr(*else_expr, objects);
-            } else {
-                objects.push(LocalContext { context_type: "".to_string(), context_name: "".to_string() });
-            }
-            objects
-        }
-        Expr::Let(let_expr) => {
-            match_expr(*let_expr.expr, objects);
-            handle_pat(*let_expr.pat, objects)
-        }
-        Expr::Loop(loop_expr) => read_block(loop_expr.body, objects),
-        Expr::MethodCall(method_call) => handle_method_call(method_call, objects),
-        Expr::Struct(strukt) => handle_struct(strukt, objects),
-        Expr::Path(path_expr) => handle_path(path_expr, objects),
-        Expr::Try(try_expr) => match_expr(*try_expr.expr, objects),
-        Expr::TryBlock(try_block) => read_block(try_block.block, objects),
-        Expr::Unsafe(unsafe_expr) => read_block(unsafe_expr.block, objects),
-        Expr::While(while_expr) => {
-            match_expr(*while_expr.cond, objects);
-            read_block(while_expr.body, objects)
-        }
-        _ => objects
     }
 }
 
+fn match_expr(expr: syn::Expr, objects: &mut Vec<LocalContext>, parent_path: String) {
+    match expr {
+        syn::Expr::Assign(assign) => {
+            match_expr(*assign.left, objects, parent_path.clone());
+            match_expr(*assign.right, objects, parent_path);
+        },
+        syn::Expr::Block(block) => read_block(block.block, objects, parent_path),
+        syn::Expr::Call(call) => {
+            match_expr(*call.func, objects, parent_path.clone());
+            for arg in call.args {
+                match_expr(arg, objects, parent_path.clone());
+            }
+        }
+        syn::Expr::Closure(closure) => match_expr(*closure.body, objects, parent_path),
+        syn::Expr::ForLoop(for_loop) => {
+            handle_pat(*for_loop.pat, objects, parent_path.clone());
+            match_expr(*for_loop.expr, objects, parent_path.clone());
+            read_block(for_loop.body, objects, parent_path);
+        }
+        syn::Expr::If(if_expr) => {
+            match_expr(*if_expr.cond, objects, parent_path.clone());
+            read_block(if_expr.then_branch, objects, parent_path.clone());
 
-fn handle_pat(pat: Pat, objects: &mut Vec<LocalContext>) -> &mut Vec<LocalContext> {
+            if let Some((_, else_expr)) = if_expr.else_branch {
+                match_expr(*else_expr, objects, parent_path);
+            }
+        }
+        syn::Expr::Let(let_expr) => {
+            match_expr(*let_expr.expr, objects, parent_path.clone());
+            handle_pat(*let_expr.pat, objects, parent_path);
+        }
+        syn::Expr::Loop(loop_expr) => read_block(loop_expr.body, objects, parent_path),
+        syn::Expr::MethodCall(method_call) => handle_method_call(method_call, objects, parent_path),
+        syn::Expr::Struct(strukt) => handle_struct(strukt, objects, parent_path),
+        syn::Expr::Path(path_expr) => handle_path(path_expr, objects, parent_path),
+        syn::Expr::Try(try_expr) => match_expr(*try_expr.expr, objects, parent_path),
+        syn::Expr::TryBlock(try_block) => read_block(try_block.block, objects, parent_path),
+        syn::Expr::Unsafe(unsafe_expr) => read_block(unsafe_expr.block, objects, parent_path),
+        syn::Expr::While(while_expr) => {
+            match_expr(*while_expr.cond, objects, parent_path.clone());
+            read_block(while_expr.body, objects, parent_path);
+        }
+        _ => {}
+    }
+}
+
+fn handle_pat(pat: syn::Pat, objects: &mut Vec<LocalContext>, _parent_path: String) {
     match pat {
-        Pat::Struct(ps) => {
+        syn::Pat::Struct(ps) => {
             for field in ps.fields {
-                handle_pat(*field.pat, objects);
+                handle_pat(*field.pat, objects, _parent_path.clone());
             }
         }
         _ => {}
     }
-    objects
 }
 
-fn handle_method_call(method_call: syn::ExprMethodCall, objects: &mut Vec<LocalContext>) -> &mut Vec<LocalContext> {
-    match_expr(*method_call.receiver, objects);
+fn handle_method_call(method_call: syn::ExprMethodCall, objects: &mut Vec<LocalContext>, parent_path: String) {
+    let full_path = if parent_path.is_empty() {
+        method_call.method.to_string()
+    } else {
+        format!("{}::{}", parent_path, method_call.method)
+    };
+
+    match_expr(*method_call.receiver, objects, parent_path.clone());
+
     for arg in method_call.args {
-        match_expr(arg, objects);
+        match_expr(arg, objects, parent_path.clone());
     }
-    objects.push(LocalContext { context_type: "fn".to_string(), context_name: method_call.method.to_string() });
-    objects
+
+    objects.push(LocalContext {
+        context_type: "fn".to_string(),
+        context_name: method_call.method.to_string(),
+        context_path: full_path,
+    });
 }
 
-fn handle_struct(strukt: syn::ExprStruct, objects: &mut Vec<LocalContext>) -> &mut Vec<LocalContext> {
-    let some = strukt.path.get_ident().map(|ident| ident.to_string());
-    objects.push(LocalContext { context_type: "struct".to_string(), context_name: some.unwrap_or("".to_string()) });
-    objects
+fn handle_struct(strukt: syn::ExprStruct, objects: &mut Vec<LocalContext>, parent_path: String) {
+    let ident = strukt.path.get_ident().map(|i| i.to_string()).unwrap_or_default();
+    let full_path = if parent_path.is_empty() { ident.clone() } else { format!("{}::{}", parent_path, ident) };
+    objects.push(LocalContext {
+        context_type: "struct".to_string(),
+        context_name: ident,
+        context_path: full_path,
+    });
 }
 
-fn handle_path(path_expr: syn::ExprPath, objects: &mut Vec<LocalContext>) -> &mut Vec<LocalContext> {
-    let segment = path_expr.path.segments.into_iter().map(|segment|
-        segment.ident.to_string()
-    ).collect::<Vec<String>>();
-    let _ = segment.into_iter().map(|each| objects.push(LocalContext { context_type: "path".to_string(), context_name: each }));
-    objects
-}
+fn handle_path(
+    path_expr: syn::ExprPath,
+    objects: &mut Vec<LocalContext>,
+    _parent_path: String,
+) {
+    let segments: Vec<String> = path_expr
+        .path
+        .segments
+        .iter()
+        .map(|s| s.ident.to_string())
+        .collect();
 
+    if segments.is_empty() {
+        return;
+    }
+
+    let (_, last_name) = if segments.len() > 1 {
+        (
+            segments[..segments.len() - 1].join("::"),
+            segments.last().unwrap().to_string(),     
+        )
+    } else {
+        (String::new(), segments.first().unwrap().clone())
+    };
+
+    objects.push(LocalContext {
+        context_type: "path".to_string(),
+        context_name: segments.first().unwrap().to_owned(),      
+        context_path: last_name,     
+    });
+}

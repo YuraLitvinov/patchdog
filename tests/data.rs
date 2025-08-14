@@ -98,3 +98,8 @@ trait MyTrait {
 impl MyTrait for MyStruct {
     fn required_function(&self) {}
 }
+
+fn result_function() -> Result<(), String> {
+    MyStruct::static_method()
+    Ok(())
+}
