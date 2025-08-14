@@ -1,18 +1,16 @@
 mod tests {
-    use crate::binding::{self, find_context, LocalChange};
+    use crate::binding::find_context;
     use crate::cli::cherrypick_response;
-    use gemini::gemini::{RawResponse};
+    use gemini::request_preparation::RawResponse;
     use regex::Regex;
-    use rust_parsing::ErrorHandling;
+    use rust_parsing::object_range::Name;
+    use rust_parsing::{ErrorHandling, ObjectRange};
     use rust_parsing::error::{ErrorBinding, InvalidIoOperationsSnafu};
     use rust_parsing::file_parsing::{FileExtractor, Files, REGEX};
     use rust_parsing::rust_parser::{RustItemParser, RustParser};
     use snafu::ResultExt;
     use std::env;
-    use std::io::Write;
-    use std::process::{Command};
     use std::{fs, path::Path};
-    use tempfile::NamedTempFile;
     const PATH_BASE: &str = "../../tests/data.rs";
 
 /// Tests the `parse_all_rust_items` function by reading a Rust file from `PATH_BASE` and parsing its contents.
@@ -117,44 +115,6 @@ mod tests {
         );
         */
         assert_eq!(true, true);
-    }
-
-/// Tests the `get_patch_data` function by generating a Git patch and processing it.
-/// It retrieves the current working directory, generates a Git patch for the last commit using `git format-patch --stdout -1 HEAD`,
-/// writes this patch to a temporary file, and then calls `binding::get_patch_data` to process it.
-/// The extracted patch data is then printed to the console.
-///
-/// # Panics
-///
-/// This test will panic if:
-/// - `env::current_dir()` fails to retrieve the current directory.
-/// - The `git` command fails to execute or returns an error.
-/// - A temporary file cannot be created or written to.
-/// - `binding::get_patch_data` fails to process the patch.
-    #[test]
-    fn test_read_patch() {
-        let mut path = env::current_dir()
-            .context(InvalidIoOperationsSnafu)
-            .expect("couldn't get current dir");
-        path.pop();
-        path.pop();
-        let output = Command::new("git")
-            .args(["format-patch", "--stdout", "-1", "HEAD"])
-            .output()
-            .expect("failed to execute process");
-
-        let mut patch_file = NamedTempFile::new()
-            .context(InvalidIoOperationsSnafu)
-            .expect("couldn't make temp file");
-        patch_file
-            .write_all(&output.stdout)
-            .expect("couldn't write output to tempfile");
-        println!("{:?}", patch_file.path());
-        let patch = binding::get_patch_data(patch_file.path().to_path_buf(), path)
-            .expect("couldn't get patch");
-        for each in patch {
-            println!("{:?}", each);
-        }
     }
 
 /// A placeholder test function intended for covering scenarios with empty objects.
@@ -306,19 +266,32 @@ mod tests {
 /// - `parse_all_rust_items` fails to parse the file content.
 /// - `syn::parse_file` fails for any function body.
 /// - Any `unwrap()` call fails during AST traversal.
+
+
     #[test]
     fn test_parsing_matching() {
         let path = env::current_dir().unwrap().join("src/cli.rs");
-        let changes = LocalChange {
-            filename: path.clone(),
-            range: 0..1,
-            file: "Test".to_string()
-        };
-        let file = fs::read_to_string(path).unwrap();
+        let file = fs::read_to_string(&path).unwrap();
         let as_vec = &FileExtractor::string_to_vector(&file)[90..131].join("\n");
-        let _ = find_context(&changes, "test", as_vec).unwrap();
+        let _ = find_context(path, "test", as_vec).unwrap();
         
     assert_eq!(true,false);
+    }
+    #[test]
+    fn test_match() {
+
+        let names = Name {
+            type_name: "fn".to_string(),
+            name: "request_manager".to_string()
+        };
+        let _input =  ObjectRange {
+            line_ranges: 395..429,
+            names
+        };
+
+        //match_context(context: Vec<(PathBuf, ObjectRange)>) -> HashMap<String, PathObject> 
+        //let deserial_in = serde_json::from_str::<ObjectRange>(input).expect("err failed to parse from json ObjectRange");
+        //let deserial_out = serde_json::from_str::<PathObject>(output).expect("err failed to parse from json PathObject");
     }
 
 }

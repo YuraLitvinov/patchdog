@@ -13,11 +13,10 @@ pub mod tests;
 ///
 /// An `Ok(())` on successful completion of the `cli_patch_to_agent` function.
 /// An `ErrorBinding` if any error occurs during environment setup or the `cli_patch_to_agent` execution.
-#[tokio::main]
 //Accepts relative path from inside folder
-async fn main() -> Result<(), ErrorBinding> {
+fn main() -> Result<(), ErrorBinding> {
     dotenv::dotenv().ok();
     tracing_subscriber::fmt::init();
-    cli_patch_to_agent().await?;
+    cli_patch_to_agent()?;
     Ok(())
 }

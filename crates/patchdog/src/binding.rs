@@ -1,5 +1,5 @@
 use ai_interactions::parse_json::ChangeFromPatch;
-use gemini::gemini::{Context, Metadata, Request, SingleFunctionData};
+use gemini::request_preparation::{Context, Metadata, Request, SingleFunctionData};
 use git_parsing::{Hunk, get_easy_hunk, match_patch_with_parse};
 use git2::Diff;
 use rayon::prelude::*;
@@ -8,6 +8,7 @@ use rust_parsing::ObjectRange;
 use rust_parsing::error::ErrorBinding;
 use rust_parsing::file_parsing::{FileExtractor, Files};
 use rust_parsing::rust_parser::{RustItemParser, RustParser};
+use serde::{Deserialize, Serialize};
 use syn::{UseTree};
 use syn::Item;
 use std::collections::HashMap;
@@ -24,7 +25,7 @@ pub struct UseItem {
     pub object: String,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PathObject {
     pub filename: PathBuf,
     pub object: ObjectRange
@@ -98,7 +99,7 @@ pub fn changes_from_patch(
                         3. Return matching structures
                     }
                     */       
-                    let context = find_context(change, &obj_name_to_compare, &fn_as_string).ok()?;
+                    let context = find_context(change.filename.to_owned(), &obj_name_to_compare, &fn_as_string).ok()?;
                     Some(Request {
                         uuid: uuid::Uuid::new_v4().to_string(),
                         data: SingleFunctionData {
@@ -124,38 +125,37 @@ pub fn changes_from_patch(
 //Checking uses, to limit amount of crates to be parsed
 //Allocating  
 //Here importing LocalChange to know path to function, function_text as information to grab
-//Current idea is we parse the function_text (object with pending changes), get the data called from it
 //Then, we identify all uses inside the function, to limit the scope of search even further
-pub fn find_context (change: &LocalChange, fn_name: &str, function_text: &String) -> Result<Context, ErrorBinding> {
+pub fn find_context (change: PathBuf, fn_name: &str, function_text: &String) -> Result<Context, ErrorBinding> {
     let mut context = vec![];
-
     //Crate level-context seeking
-    let file = fs::read_to_string(&change.filename)?;
+    let file = fs::read_to_string(&change)?;
     let parsed = syn::parse_file(&file).unwrap();
     //Here we try to find the paths used in the certain file, if they are within the project, then,
     //We can reach them and get the context from there
     //Hashmaps doesn't allow matching certain crate more than once
+    //Now we want to find all use statements, to make scope of search smaller. 
+    //Instead of parsing whole project - we parse few of the crates
     let all_uses = parse_use(parsed.items);
     //Here is map_rust_files we locate all the crates used within the file where function is located
-    let map_rust_files = collect_paths(all_uses.clone(), change.filename.clone())?;
+    let map_rust_files = collect_paths(all_uses.clone(), change.clone())?;
     let use_map = all_uses.par_iter().map(|single_use| 
         (single_use.object.to_owned(), single_use.to_owned()) 
     ).collect::<HashMap<String, UseItem>>();
     let mut paths = vec![];
+    paths.push(change.to_owned());
     for each in &map_rust_files {
         let _ = find_rust_files(each.0.to_path_buf(), &mut paths);
     }
     let assorted_paths = paths.into_iter().map(|path| 
         return (path.file_stem().unwrap().to_str().unwrap().to_string(), path)
     ).collect::<HashMap<String, PathBuf>>();
-    //println!("{:#?}", use_map);
-    
-    for path in assorted_paths {
+    for path in assorted_paths.clone() {
         let file = fs::read_to_string(&path.1)?;
         let parsed = RustItemParser::parse_all_rust_items(&file)?;
-        for each in parsed {
-            if use_map.contains_key(&each.names.name) || use_map.contains_key("self") || use_map.contains_key("*") {
-                context.push((path.1.to_owned(), each));
+        for parse in parsed {
+            if use_map.contains_key(&parse.names.name) || use_map.contains_key("self") || use_map.contains_key("*") {
+                context.push(PathObject { filename: path.1.to_owned(), object: parse });
             }
         }        
     }
@@ -164,33 +164,52 @@ pub fn find_context (change: &LocalChange, fn_name: &str, function_text: &String
     let parsed_function = syn::parse_file(&function_text).unwrap();
     let tokens = grep_objects(parsed_function.items);
     let map_function = tokens.par_iter().filter_map(|con| 
-            return Some((con.context_path.to_owned(), con.to_owned())) 
+        if use_map.contains_key(&con.context_name) || (con.context_name == con.context_path) {
+            return Some((con.context_path.to_owned(), con.to_owned()));
+        }else {
+            None
+        }
     ).collect::<HashMap<String, LocalContext>>();
-    let map_context = context.par_iter().map(|context| 
-        (context.1.names.name.clone(), PathObject { filename: context.0.to_owned(), object: context.1.to_owned()})
-    ) .collect::<HashMap<String, PathObject>>();
-    let matches = map_context.clone()
+    let map_filedata = match_context(context.clone());
+    let context = map_filedata.clone()
         .into_iter()
         .filter_map(|(key, value_function)| {
             if let Some(_) = map_function.get(&key) {
-                Some((key.clone(), value_function.to_owned()))
+                if !(fn_name == key) {
+                    Some(value_function.to_owned())
+                }
+                else {
+                    None
+                }
             } else {
                 None
             }
         })
-        .collect::<HashMap<String, PathObject>>();
-    println!("{} matches: \n{:#?}", fn_name, matches);
-    println!("{:#?}", map_context);
-    //Now we want to find all use statements, to make scope of search smaller. 
-    //Instead of parsing whole project - we parse few of the crates
+        .collect::<Vec<PathObject>>();
+    let dependencies = context
+    .into_par_iter()
+    .filter_map(|dep| {
+        let a = fs::read_to_string(&dep.filename).ok()?;
+        let to_vec = FileExtractor::string_to_vector(&a)
+            [dep.object.line_start()-1..dep.object.line_end()]
+            .join("\n");
+        return Some(to_vec);
+    }).collect::<Vec<String>>();
     Ok(Context {
         class_name: "".to_string(),
-        external_dependecies: vec!["".to_string()],
+        external_dependencies: dependencies,
         old_comment: vec!["".to_string()],
     })
 }
 
-fn collect_paths (all_uses: Vec<UseItem>, filename: PathBuf) -> Result<HashMap<PathBuf, String>, ErrorBinding> { 
+// Returns hashmap over uses within the files
+fn match_context(context: Vec<PathObject>) -> HashMap<String, PathObject> {
+    context.par_iter().map(|context| 
+        (context.object.names.name.clone(), PathObject { filename: context.filename.to_owned(), object: context.object.to_owned()})
+    ) .collect::<HashMap<String, PathObject>>()
+}
+
+fn collect_paths(all_uses: Vec<UseItem>, filename: PathBuf) -> Result<HashMap<PathBuf, String>, ErrorBinding> { 
         let dir = env::current_dir()?;
         let map_rust_files: HashMap<PathBuf, String> = all_uses.clone().into_iter().filter_map(|each| {
         let name = each.ident;
@@ -230,6 +249,7 @@ fn find_rust_files(dir: PathBuf, rust_files: &mut Vec<PathBuf>) {
         }
     }
 }
+
 pub fn parse_use(tokens: Vec<Item>) -> Vec<UseItem> {
     let mut items = Vec::new();
 

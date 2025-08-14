@@ -100,6 +100,6 @@ impl MyTrait for MyStruct {
 }
 
 fn result_function() -> Result<(), String> {
-    MyStruct::static_method()
+    MyStruct::static_method();
     Ok(())
 }
