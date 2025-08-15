@@ -559,14 +559,14 @@ fn visit_items(items: &[Item]) -> Result<Vec<ObjectRange>, ErrorHandling> {
                 }
             }
             Item::Impl(i) => {
-                let trait_name = match &i.trait_ {
-                    Some((_, path, _)) => path
-                        .segments
-                        .last()
-                        .expect("failed to get impl name")
-                        .ident
-                        .to_string(),
-                    None => "matches struct".to_string(),
+                let trait_name = if let Some((_, path, _)) = &i.trait_ {
+                    if let Some(seg) = path.segments.last() {
+                        seg.ident.to_string()
+                    } else {
+                        "matches struct".to_string()
+                    }
+                } else {
+                    "matches struct".to_string()
                 };
                 object_line.push(ObjectRange {
                     line_ranges: Range { start: i.span().start().line, end: i.span().end().line },

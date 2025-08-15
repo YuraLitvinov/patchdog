@@ -4,7 +4,7 @@ on:
   pull_request_review:
     types: [submitted]
   pull_request:
-    #types: [opened, reopened, edited]
+    types: [opened, reopened, edited]
 
 env:
   CARGO_TERM_COLOR: always
@@ -18,6 +18,10 @@ jobs:
       pull-requests: write
 
     steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
       - name: Check for merge conflicts #Immediately exits if there are merge conflicts present in HEAD branch 
         run: |
           if  git diff --check |grep -i conflict  > /dev/null; then
@@ -25,10 +29,6 @@ jobs:
           else
             exit 0
           fi
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.head_ref }}
-          fetch-depth: 0
       - name: Run a command and export it as env
         run: |
           echo "PATCHDOG_BRANCH=$(uuidgen)" >> $GITHUB_ENV
@@ -48,7 +48,7 @@ jobs:
       - name: Update version number
         env:
           PR_NUMBER: ${{ github.event.number }}
-        run: sed -i "s/^version = \".*\"/version = \"0.1.${PR_NUMBER}\"/" crates/patchdog/Cargo.toml
+        run: sed -i "s/^version = \".*\"/version = \"1.1.${PR_NUMBER}\"/" crates/patchdog/Cargo.toml
       - name: Show status
         run: git status
       - name: Upload patchdog binary

@@ -1,29 +1,35 @@
-prompt: | 
-    response_format = {"type": "json_object"} The provided data is a collection of valid Rust code.
-    [
-        {
-            "uuid": "", 
-            "data": {
-                "fn_name": "",
-                "function_text": "" 
-                "context": {
-                    "class_name": "",
-                    "external_dependecies": [],
-                    "old_comment": []
+Patchdog:
+    prompt: | 
+        response_format = {"type": "json_object"} The provided data is a collection of valid Rust code.
+        [
+            {
+                "uuid": "", 
+                "data": {
+                    "fn_name": "",
+                    "function_text": "" 
+                    "context": {
+                        "class_name": "",
+                        "external_dependencies": [],
+                        "old_comment": []
+                    }
                 }
-            }
-        } 
-    ]
-    Instruction: Clone the request form, remove 'data' and append new field 'new_comment', generate rustdoc /// style comment
-    containing return, input and basic functionality of the function. 
-    Each new object should be located inside [] block. Return type should be a JSON object of this type:
-    [
-        {
-            "uuid": "", 
-            "new_comment": ""
-        } 
-    ]
-GEMINI_MODEL: models/gemini-2.5-flash
-TOKENS_PER_MIN: 250000
-REQUESTS_PER_MIN: 10
-OPENAI_MODEL: gpt-3.5-turbo
+            } 
+        ]
+        Instruction: Clone the request form, remove 'data' and append new field 'new_comment', generate, making strong assumptions about code functionality, 
+        generate rustdoc /// style comment specify return, input and functionality of the function, with emphasis on functionality - 2-3 sentences per 'data'. 
+        If present, use 'external_dependencies' as help, if you run into some sort of misunderstaing. After each triple slash make exactly three spaces, before starting writing into newline.
+        Each new object should be located inside [] block. Return type should be a JSON object of this type:
+        [
+            {
+                "uuid": "", 
+                "new_comment": ""
+            } 
+        ]
+    LLM_settings:     
+        GEMINI_MODEL: models/gemini-2.5-flash
+        TOKENS_PER_MIN: 250000
+        REQUESTS_PER_MIN: 10
+        OPENAI_MODEL: gpt-3.5-turbo
+    Patchdog_settings:
+        excluded_files: []
+        excluded_functions: [new, default]

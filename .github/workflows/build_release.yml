@@ -3,7 +3,6 @@ name: Build release and publish
 on: 
   push:
     branches: [main]
-  pull_request:
 
 jobs:
   release-dog:
@@ -18,6 +17,8 @@ jobs:
           fetch-depth: 1
       - name: Debug status
         run: ls
+      - name: Extract version from Cargo.toml
+        run: echo VERSION=$(grep '^version' crates/patchdog/Cargo.toml | head -n 1 | cut -d '"' -f2) >> $GITHUB_ENV
       - name: Run shell script with build
         run: |
           chmod +x build.sh 
@@ -27,3 +28,7 @@ jobs:
         with:
           name: Patchdog release
           path: build/patchdog
+      - name: Create GitHub release
+        run: gh release create v${VERSION} ./build/patchdog --title "First Release" --notes "Autorelease"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
