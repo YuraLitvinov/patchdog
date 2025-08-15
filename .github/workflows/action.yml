@@ -1,5 +1,4 @@
 name: Patchdog
-
 on:
 #Reconciling triggers for patchdog is suggested, as different workstyles may require different setups
   pull_request:
