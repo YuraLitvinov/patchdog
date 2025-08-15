@@ -123,9 +123,7 @@ pub fn changes_from_patch(
 
 //Seeking context inside same file, to match probable structures
 //Checking uses, to limit amount of crates to be parsed
-//Allocating  
-//Here importing LocalChange to know path to function, function_text as information to grab
-//Then, we identify all uses inside the function, to limit the scope of search even further
+//Instead of parsing whole project - we parse few of the crates
 pub fn find_context (change: PathBuf, fn_name: &str, function_text: &String) -> Result<Context, ErrorBinding> {
     let mut context = vec![];
     //Crate level-context seeking
@@ -135,9 +133,8 @@ pub fn find_context (change: PathBuf, fn_name: &str, function_text: &String) -> 
     //We can reach them and get the context from there
     //Hashmaps doesn't allow matching certain crate more than once
     //Now we want to find all use statements, to make scope of search smaller. 
-    //Instead of parsing whole project - we parse few of the crates
     let all_uses = parse_use(parsed.items);
-    //Here is map_rust_files we locate all the crates used within the file where function is located
+    //Here in map_rust_files we locate all the crates used within the file where function is located
     let map_rust_files = collect_paths(all_uses.clone(), change.clone())?;
     let use_map = all_uses.par_iter().map(|single_use| 
         (single_use.object.to_owned(), single_use.to_owned()) 
