@@ -124,6 +124,9 @@ pub fn changes_from_patch(
 //Seeking context inside same file, to match probable structures
 //Checking uses, to limit amount of crates to be parsed
 //Instead of parsing whole project - we parse few of the crates
+///   Identifies and extracts the source code of external Rust dependencies for a specified function within a project.
+///   It first parses `use` statements from the file at `change`, then collects all related Rust files, and subsequently extracts code segments from these files that are referenced within the provided `function_text`.
+///   The function returns a `Context` object, containing a list of strings where each string represents the source code of a detected external dependency, excluding the function itself.
 pub fn find_context (change: PathBuf, fn_name: &str, function_text: &String) -> Result<Context, ErrorBinding> {
     let mut context = vec![];
     //Crate level-context seeking
