@@ -24,7 +24,7 @@ jobs:
       - name: Fetch branch
         run: git fetch origin ${{ github.base_ref }}
       - name: Check for merge conflicts #Immediately exits if there are merge conflicts present in HEAD branch 
-        run: git diff ${{ github.base_ref }}...${{ github.head_ref }} --check --exit-code
+        run: git diff origin/${{ github.base_ref }}...${{ github.head_ref }} --check --exit-code
       - name: Run a command and export it as env
         run: |
           echo "PATCHDOG_BRANCH=$(uuidgen)" >> $GITHUB_ENV
