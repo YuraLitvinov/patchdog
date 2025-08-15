@@ -1,4 +1,4 @@
-name: Patchdog debug
+name: Patchdog
 
 on:
 #Reconciling triggers for patchdog is suggested, as different workstyles may require different setups
@@ -24,18 +24,26 @@ jobs:
       - name: Fetch branch
         run: git fetch origin ${{ github.base_ref }}
       - name: Check for merge conflicts #Immediately exits if there are merge conflicts present in HEAD branch 
-        run: git diff origin/${{ github.base_ref }}...${{ github.head_ref }} --check --exit-code
-      - name: Run a command and export it as env
+        run: |
+          if  git diff  origin/${{ github.base_ref }}...${{ github.head_ref }} --check |grep -i conflict  > /dev/null; then
+            exit 1
+          else
+            exit 0
+          fi
+      - name: Save new branch name as uuid
         run: |
           echo "PATCHDOG_BRANCH=$(uuidgen)" >> $GITHUB_ENV
       - name: Make patch
         run: git diff origin/${{ github.base_ref }}...${{ github.head_ref }} > base_head.patch
-      - name: Build and run patchdog
-        run: cargo patchdog-debug
+      - name: Run patchdog
+        run: |
+          gh release download v1.1.30 --pattern "patchdog"
+          chmod +x patchdog
+          ./patchdog --file-patch base_head.patch
         env: 
           API_KEY_GEMINI: ${{ secrets.API_KEY_GEMINI }}
-      - name: Cleanup base>head patch
-        run: rm base_head.patch
+      - name: Cleanup base>head patch, binary
+        run: rm base_head.patch && rm patchdog
       - name: Checkout into new branch, create PR # All PRs initiated will be named as github-actions[bot] and co-authored by Patchdog
         run: |
           git config --global user.email "some@mail.com" 

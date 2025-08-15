@@ -24,40 +24,33 @@ jobs:
           fetch-depth: 0
       - name: Check for merge conflicts #Immediately exits if there are merge conflicts present in HEAD branch 
         run: |
-          if  git diff --check |grep -i conflict  > /dev/null; then
+          if  git diff  origin/${{ github.base_ref }}...${{ github.head_ref }} --check |grep -i conflict  > /dev/null; then
             exit 1
           else
             exit 0
           fi
-      - name: Run a command and export it as env
+      - name: Save new branch name as uuid
         run: |
           echo "PATCHDOG_BRANCH=$(uuidgen)" >> $GITHUB_ENV
       - name: Fetch branch
         run: git fetch origin ${{ github.base_ref }}
       - name: Make patch
         run: git diff origin/${{ github.base_ref }}...${{ github.head_ref }} > base_head.patch
-      - name: Build and run patchdog
+      - name: Run patchdog
         run: |
-          chmod +x build.sh
-          ./build.sh
-          ./build/patchdog --file-patch base_head.patch
-        env:
+          gh release download v1.1.30 --pattern "patchdog"
+          chmod +x patchdog
+          ./patchdog --file-patch base_head.patch
+        env: 
           API_KEY_GEMINI: ${{ secrets.API_KEY_GEMINI }}
-      - name: Cleanup base>head patch
-        run: rm base_head.patch
+      - name: Cleanup patch and runner
+        run: rm base_head.patch && rm patchdog
       - name: Update version number
         env:
           PR_NUMBER: ${{ github.event.number }}
         run: sed -i "s/^version = \".*\"/version = \"1.1.${PR_NUMBER}\"/" crates/patchdog/Cargo.toml
       - name: Show status
         run: git status
-      - name: Upload patchdog binary
-        uses: actions/upload-artifact@v4
-        with:
-          name: Export binary
-          path: build/patchdog
-      - name: Cleanup binary
-        run: rm -rf build
       - name: Checkout into new branch, create PR # All PRs initiated will be named as github-actions[bot]
         run: |
           git config --global user.email "noreply@patchdog.ua" 
