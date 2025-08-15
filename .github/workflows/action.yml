@@ -3,7 +3,7 @@ name: Patchdog debug
 on:
 #Reconciling triggers for patchdog is suggested, as different workstyles may require different setups
   pull_request:
-    types: [opened, reopened, edited]
+    types: [opened]
 
 env:
   CARGO_TERM_COLOR: always
