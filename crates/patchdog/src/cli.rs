@@ -14,7 +14,6 @@ use serde::Serialize;
 use std::collections::HashMap;
 use std::{fs, path::PathBuf};
 use tracing::{Level, event};
-use futures::executor::block_on;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None, group(
@@ -45,7 +44,7 @@ pub struct ResponseForm {
     new_comment: String,
 }
 
-pub fn cli_patch_to_agent() -> Result<(), ErrorBinding> {
+pub async  fn cli_patch_to_agent() -> Result<(), ErrorBinding> {
     let commands = Mode::parse();
     let patch = binding::patch_data_argument(commands.file_patch)?;
     event!(Level::INFO, "type: {:#?}", commands.type_rust);
@@ -60,10 +59,9 @@ pub fn cli_patch_to_agent() -> Result<(), ErrorBinding> {
         event!(Level::INFO, "No requests");
         Ok(())
     }
-    else {
-        
+    else { 
         event!(Level::INFO, "Requests length: {}", &request.len());
-        let responses_collected = block_on(call(request))?;
+        let responses_collected = call(request).await?;
         event!(
             Level::INFO,
             "Responses collected: {}",
@@ -97,7 +95,6 @@ pub async fn call(request: Vec<Request>) -> Result<Vec<ResponseForm>, ErrorBindi
         pool_of_requests.insert(each.uuid, each.data);
     });
     let mut new_buffer = RequestToAgent::new()?;
-    println!("TEST");
     let batch = new_buffer.prepare_map(request)?;
     let prepared = RequestToAgent::request_manager(batch)?;
     let response = RequestToAgent::send_batches(&prepared).await?;

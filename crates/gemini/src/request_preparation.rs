@@ -1,6 +1,6 @@
 use ai_interactions::return_prompt;
 use rust_parsing::ErrorHandling;
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use serde::{Deserialize, Serialize};
 use std::ops::Range;
 use std::path::PathBuf;
 use std::{fmt::Display, time};
@@ -29,25 +29,6 @@ use crate::gemini::{AiRequest, RequestResponseConstruction};
 ]
 
 */
-
-/// Deserializes a `serde_json::Value` into a specified type `T` that implements `DeserializeOwned`.
-/// This function is a convenience wrapper for `serde_json::from_value` and unwraps the result,
-/// meaning it will panic if deserialization fails.
-///
-/// # Type Parameters
-///
-/// * `T`: The target type to deserialize into, which must implement `serde::de::DeserializeOwned`.
-///
-/// # Arguments
-///
-/// * `val` - The `serde_json::Value` to be deserialized.
-///
-/// # Returns
-///
-/// An instance of type `T`.
-pub fn json_to<T: DeserializeOwned>(val: serde_json::Value) -> T {
-    serde_json::from_value(val).unwrap()
-}
 
 #[allow(dead_code)]
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
@@ -159,7 +140,7 @@ impl MappedRequest {
 /// - `Err(ErrorHandling)`: If reading configuration (via `return_prompt()`) fails.
     pub fn new() -> Result<MappedRequest, ErrorHandling> {
         Ok(MappedRequest {
-            remaining_capacity: return_prompt()?.tokens / return_prompt()?.requests,
+            remaining_capacity: return_prompt()?.llm_settings.tokens / return_prompt()?.llm_settings.requests,
             data: Vec::<Request>::new(),
         })
     }
@@ -239,8 +220,8 @@ impl PreparingRequests {
 /// - `Err(ErrorHandling)`: If reading configuration (via `return_prompt()`) fails.
     pub fn new() -> Result<PreparingRequests, ErrorHandling> {
         Ok(PreparingRequests {
-            remaining_capacity: return_prompt()?.tokens / return_prompt()?.requests
-                - return_prompt()?.model.len()
+            remaining_capacity: return_prompt()?.llm_settings.tokens / return_prompt()?.llm_settings.requests
+                - return_prompt()?.llm_settings.gemini_model.len()
                 - return_prompt()?.prompt.len(),
             data: vec![],
         })
@@ -330,7 +311,7 @@ impl RequestToAgent {
     pub fn new() -> Result<RequestToAgent, ErrorHandling> {
         Ok(RequestToAgent {
             preparing_requests: PreparingRequests {
-                remaining_capacity: return_prompt()?.tokens / return_prompt()?.requests,
+                remaining_capacity: return_prompt()?.llm_settings.tokens / return_prompt()?.llm_settings.requests,
                 data: vec![],
             },
         })
@@ -410,7 +391,7 @@ impl RequestToAgent {
         //Architecture: batch[BIG_NUMBER..len()-1]
         //Next: batch[0..4]
         let mut await_response: Vec<WaitForTimeout> = vec![];
-        let request_per_min = return_prompt()?.requests;
+        let request_per_min = return_prompt()?.llm_settings.requests;
         if batch.len() > request_per_min {
             let mut size: usize = batch.len();
             for _ in 1..=batch.len().div_ceil(request_per_min) {

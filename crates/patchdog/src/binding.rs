@@ -202,6 +202,87 @@ pub fn find_context (change: PathBuf, fn_name: &str, function_text: &String) -> 
     })
 }
 
+
+/// Retrieves parsed patch data from a specified patch file.
+/// It constructs the absolute path to the patch file and the relative working directory,
+/// then calls `get_patch_data` to process the patch.
+///
+/// # Arguments
+///
+/// * `path_to_patch` - A `PathBuf` indicating the path to the patch file.
+///
+/// # Returns
+///
+/// A `Result<Vec<ChangeFromPatch>, ErrorBinding>`:
+/// - `Ok(Vec<ChangeFromPatch>)`: A vector containing details of changes extracted from the patch.
+/// - `Err(ErrorBinding)`: If the current directory cannot be determined or patch data extraction fails.
+pub fn patch_data_argument(path_to_patch: PathBuf) -> Result<Vec<ChangeFromPatch>, ErrorBinding> {
+    let path = env::current_dir()?;
+    let patch = get_patch_data(path.join(path_to_patch), path)?;
+    Ok(patch)
+}
+
+/*
+Pushes information from a patch into vector that contains lines
+at where there are unique changed objects reprensented with range<usize>
+and an according path each those ranges that has to be iterated only once
+*/
+/// Processes a Git patch to identify specific code changes within Rust files.
+/// It first exports the raw changes from the patch, then iterates through these differences.
+/// For each difference, it parses the corresponding Rust file and identifies actual Rust items (functions, structs, etc.)
+/// whose line ranges overlap with the reported changes in the patch.
+/// The result is a refined list of `ChangeFromPatch` objects containing only relevant Rust item ranges.
+///
+/// # Arguments
+///
+/// * `path_to_patch` - A `PathBuf` indicating the path to the patch file.
+/// * `relative_path` - A `PathBuf` representing the relative base path from which files are referenced.
+///
+/// # Returns
+///
+/// A `Result<Vec<ChangeFromPatch>, ErrorBinding>`:
+/// - `Ok(Vec<ChangeFromPatch>)`: A vector of `ChangeFromPatch` objects, each containing a filename and a vector of `Range<usize>` indicating the line ranges of identified Rust items that were changed by the patch.
+/// - `Err(ErrorBinding)`: If patch export fails or Rust file parsing encounters an error.
+pub fn get_patch_data(
+    path_to_patch: PathBuf,
+    relative_path: PathBuf,
+) -> Result<Vec<ChangeFromPatch>, ErrorBinding> {
+    let export = patch_export_change(path_to_patch, relative_path)?;
+    let export_difference = export
+        .par_iter()
+        .flat_map(|difference| {
+            let parsed = RustItemParser::parse_rust_file(&difference.filename).ok()?;
+            let vector_of_changed = parsed
+                .par_iter()
+                .flat_map(|each_parsed| {
+                    let range = each_parsed.line_start()..each_parsed.line_end();
+                    if difference.line.par_iter().any(|line| range.contains(line)) {
+                        Some(range)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            Some(ChangeFromPatch {
+                range: vector_of_changed,
+                filename: difference.filename.to_owned(),
+            })
+        })
+        .collect();
+    Ok(export_difference)
+}
+
+fn grep_objects(tokens: Vec<syn::Item>) -> Vec<LocalContext> {
+    let mut objects: Vec<LocalContext> = Vec::new();
+    for token in tokens {        
+        match token {
+            syn::Item::Fn(f) => { read_block(*f.block, &mut objects, "".to_string()); },
+            _ => {}
+        }
+    }
+    objects
+}
+
 // Returns hashmap over uses within the files
 fn match_context(context: Vec<PathObject>) -> HashMap<String, PathObject> {
     context.par_iter().map(|context| 
@@ -297,74 +378,6 @@ fn flatten_tree(tree: &UseTree, ident: String, module: String, acc: &mut Vec<Use
         }
     }
 }
-/// Retrieves parsed patch data from a specified patch file.
-/// It constructs the absolute path to the patch file and the relative working directory,
-/// then calls `get_patch_data` to process the patch.
-///
-/// # Arguments
-///
-/// * `path_to_patch` - A `PathBuf` indicating the path to the patch file.
-///
-/// # Returns
-///
-/// A `Result<Vec<ChangeFromPatch>, ErrorBinding>`:
-/// - `Ok(Vec<ChangeFromPatch>)`: A vector containing details of changes extracted from the patch.
-/// - `Err(ErrorBinding)`: If the current directory cannot be determined or patch data extraction fails.
-pub fn patch_data_argument(path_to_patch: PathBuf) -> Result<Vec<ChangeFromPatch>, ErrorBinding> {
-    let path = env::current_dir()?;
-    let patch = get_patch_data(path.join(path_to_patch), path)?;
-    Ok(patch)
-}
-
-/*
-Pushes information from a patch into vector that contains lines
-at where there are unique changed objects reprensented with range<usize>
-and an according path each those ranges that has to be iterated only once
-*/
-/// Processes a Git patch to identify specific code changes within Rust files.
-/// It first exports the raw changes from the patch, then iterates through these differences.
-/// For each difference, it parses the corresponding Rust file and identifies actual Rust items (functions, structs, etc.)
-/// whose line ranges overlap with the reported changes in the patch.
-/// The result is a refined list of `ChangeFromPatch` objects containing only relevant Rust item ranges.
-///
-/// # Arguments
-///
-/// * `path_to_patch` - A `PathBuf` indicating the path to the patch file.
-/// * `relative_path` - A `PathBuf` representing the relative base path from which files are referenced.
-///
-/// # Returns
-///
-/// A `Result<Vec<ChangeFromPatch>, ErrorBinding>`:
-/// - `Ok(Vec<ChangeFromPatch>)`: A vector of `ChangeFromPatch` objects, each containing a filename and a vector of `Range<usize>` indicating the line ranges of identified Rust items that were changed by the patch.
-/// - `Err(ErrorBinding)`: If patch export fails or Rust file parsing encounters an error.
-pub fn get_patch_data(
-    path_to_patch: PathBuf,
-    relative_path: PathBuf,
-) -> Result<Vec<ChangeFromPatch>, ErrorBinding> {
-    let export = patch_export_change(path_to_patch, relative_path)?;
-    let export_difference = export
-        .par_iter()
-        .flat_map(|difference| {
-            let parsed = RustItemParser::parse_rust_file(&difference.filename).ok()?;
-            let vector_of_changed = parsed
-                .par_iter()
-                .flat_map(|each_parsed| {
-                    let range = each_parsed.line_start()..each_parsed.line_end();
-                    if difference.line.par_iter().any(|line| range.contains(line)) {
-                        Some(range)
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-            Some(ChangeFromPatch {
-                range: vector_of_changed,
-                filename: difference.filename.to_owned(),
-            })
-        })
-        .collect();
-    Ok(export_difference)
-}
 
 /// Stores detailed information about changed objects in a Git patch.
 /// It parses the raw patch content, matches patch hunks with parsed Rust items, and for each changed file,
@@ -445,17 +458,6 @@ fn patch_export_change(
         change_in_line.clear();
     }
     Ok(line_and_file)
-}
-
-pub fn grep_objects(tokens: Vec<syn::Item>) -> Vec<LocalContext> {
-    let mut objects: Vec<LocalContext> = Vec::new();
-    for token in tokens {        
-        match token {
-            syn::Item::Fn(f) => { read_block(*f.block, &mut objects, "".to_string()); },
-            _ => {}
-        }
-    }
-    objects
 }
 
 fn read_block(block: syn::Block, objects: &mut Vec<LocalContext>, parent_path: String) {

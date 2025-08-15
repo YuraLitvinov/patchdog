@@ -273,9 +273,7 @@ mod tests {
         let path = env::current_dir().unwrap().join("src/cli.rs");
         let file = fs::read_to_string(&path).unwrap();
         let as_vec = &FileExtractor::string_to_vector(&file)[90..131].join("\n");
-        let _ = find_context(path, "test", as_vec).unwrap();
-        
-    assert_eq!(true,false);
+        let _ = find_context(path, "test", as_vec).unwrap();        
     }
     #[test]
     fn test_match() {

@@ -1,20 +1,104 @@
 # Patchdog
 
-Creates a draft PR that after approved infers into your main PR with filled in comments, if you choose to approve it will appear as part of your base branch, hence, your main PR stays open.
+**Patchdog** is a development tool that creates a **draft pull request** containing generated documentation for your code changes.  
+When the draft PR is approved, it merges into your **main PR** with all included commits.  
 
-You can see it in action here: https://github.com/YuraLitvinov/patchdog/pull/19 commit: b6c8a972d768d6da1a280b7b060629597c0cc160
+**Example:**  
+[Pull Request #19](https://github.com/YuraLitvinov/patchdog/pull/19) — commit `b6c8a972d768d6da1a280b7b060629597c0cc160`
 
-Requires .env file to function on local system or providing secrets to Github Actions. Insert your key and from there everything should work. The script is bound to Rust files, as it uses parsing to avoid broken code.  The project aims to be ran as an Actions. Essentially, this tool manipulates a patch file, finds all changes and creates documentation for them.
-Plans:
-1. Differentiate between trait functions and normal functions.
-2. Add context to request, so LLM can produce better documentation.
-3. Cleanup existing comments, replacing them with new ones - if this will prove reasonable
+---
 
-Build prerequisites: If you choose glibc version for running on your host, you can use cargo build to setup things for you but you must provide all necessary dependecies: 
-openssl, pkg-config 
-Else, set-up docker for statically-linked musl version, run build.sh
+## Features
 
-Interface description: your entry point into the program is patch parsing which occurs in patchdog/src/binding.rs, git_parsing/src/patch_parse.rs and Rust object parsing under rust_parsing crate - it provides an inteface via RustItemParser and RustParser trait, you may call any function available there, also, rust_parsing provides additional filesystem manipulation, you may observe it as Files and FileExtractor traits. Those are a list of public functions that are used within the project.
-The information that was processed in previous steps then gets exported as SingleFunctionData object - it's grouped as it's necessary for receiving proper input. Metadata field that is excluded from serialization, hence, LLM doesn't this redundant info, and not wasting tokens and increasing possibility for hallucinations. 
-All this grouped SingleFunction data information is collected into batches of MappedRequest - it has a limit of tokens set by tokens_per_min. It's 250_000 for the chosen model, as set in config.yaml and then grouped again, into greater collection of WaitForTimeout which is also a defined limit of request_per_min. It's 10, as those are the rate limit for gemini API. You can get this information from google's ai studio website, specify the chosen model and configure your personal limits.
-After we have acquired the answer,, we come to an important step, where all this returned data has to be tried for proper return of UUIDs. Usually, one or two answers are broken and call() function automatically manages this if pool_of_request doesn't end up empty - it gets called recursively, hence, repeating all the process again.
+- Generates documentation comments for changed code automatically.
+- Works specifically with **Rust** source files: 
+	- tries to establish context links
+	- avoids files, that wouldn't compile
+- Identifies changed functions and gathers relevant context.
+- Respects API rate limits and token budgets for the configured LLM.
+- Runs locally or in GitHub Actions.
+
+---
+
+## Requirements
+
+
+### GitHub Actions
+- Provide the API key for Gemini via repository secrets.
+
+
+### Local Development
+- Rust toolchain installed.
+- .env  file containing your secret API key.
+- System dependencies:
+	- openssl
+  - pkg-config
+
+
+---
+
+## Build Instructions
+
+### Build on your host system (glibc) 
+```bash
+cargo build --release
+```
+**OR** 
+### (musl)
+```bash
+./build.sh
+```
+## How It Works
+
+### 1. Patch Parsing
+
+-   Entry points:
+    
+    -   `patchdog/src/binding.rs`
+        
+    -   `git_parsing/src/patch_parse.rs`
+        
+    -   `rust_parsing` crate
+        
+-   Only processes Rust files to avoid broken code.
+    
+-   Finds all changed functions and prepares them for documentation generation.
+    
+
+### 2. Interface
+
+-   `rust_parsing` crate exposes:
+    
+    -   `RustItemParser` and `RustParser` traits for parsing rust files.
+        
+    -   `Files` and `FileExtractor` traits for file operations.
+    - Error propagation in `error.rs`
+   - `patchdog`, as entry point: 
+		- methods to interact with other code in the project
+		- such as sending request with `call()`
+		- processing the responses with match_request_response
+		- fallback_repair to autocorrect the broken JSON, 
+		 that the LLM could've returned after serde failed
+		- in `binding.rs`: grouping methods, all public methods are moved to the top of the file
+	- `git_parsing` contains a few methods, to sort relevant changes from all hunks
+- `gemini` provides all the necessary interface to prepare a response, collect it into a structure and process the result 
+    
+
+	### 3. Data Flow
+
+-   Functions are stored as `SingleFunctionData` objects.
+    
+    -   `metadata` is excluded from serialization to save LLM tokens and reduce hallucinations.
+        
+-   Functions are grouped into `MappedRequest` batches, limited by `tokens_per_min`  
+    (default: `250_000` from `config.yaml`).
+    
+-   Batches are further grouped into `WaitForTimeout` collections, limited by `request_per_min`  
+    (default: `10` for Gemini API).
+    
+
+### 4. LLM Interaction
+
+-   Model responses are validated by UUID.
+    
+-   Broken answers trigger recursive retries until all requests succeed.
