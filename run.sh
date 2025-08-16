@@ -19,6 +19,7 @@ rm base_head.patch && rm patchdog-linux-x86_64
 #Configure user
 git config --global user.email "${COMMIT_EMAIL}" 
 git config --global user.name "${COMMIT_NAME}"
+echo "${COMMIT_NAME}"
 
 #Create a unique pull request
 PATCHDOG_BRANCH="patchdog-$(uuidgen)"
