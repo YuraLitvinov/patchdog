@@ -29,7 +29,7 @@ pub enum ErrorHandling {
     },
     #[snafu(display("{source}"))]
     InvalidIoOperations {
-        source: std::io::Error,
+        source: std::io::Error
     },
     #[snafu(display("{source}"))]
     StdVarError {

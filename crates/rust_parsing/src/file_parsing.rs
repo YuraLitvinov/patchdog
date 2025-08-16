@@ -1,8 +1,8 @@
 use crate::error::{
-    ErrorHandling, InvalidIoOperationsSnafu, LineOutOfBoundsSnafu,
+    ErrorHandling, LineOutOfBoundsSnafu,
 };
 use crate::object_range::ObjectRange;
-use snafu::{ResultExt, ensure};
+use snafu::{ensure};
 use std::{fs::File, io::Write, path::PathBuf};
 pub const REGEX: &str = r#"\{\s*"uuid"\s*:\s*"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",\s*"new_comment"\s*:\s*".*"\s*\}"#;
 pub struct FileExtractor;
@@ -56,9 +56,9 @@ impl Files for FileExtractor {
         changed_element: String,
     ) -> Result<(), ErrorHandling> {
         source.insert(line_index.saturating_sub(1), changed_element);
-        let mut file = File::create(path).context(InvalidIoOperationsSnafu)?;
+        let mut file = File::create(path.clone())?;
         for each in &source {
-            writeln!(file, "{each}").context(InvalidIoOperationsSnafu)?;
+            writeln!(file, "{each}")?;
         }
         Ok(())
     }
