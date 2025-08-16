@@ -1,0 +1,7 @@
+[package]
+name = "chatgpt"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+openai-rust = "1.5.2"

@@ -15,4 +15,3 @@ regex = { workspace = true }
 uuid = { workspace = true }
 dotenv = { workspace = true }
 tracing = { workspace = true }
-openai-rust = "1.5.2"

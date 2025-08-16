@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 rust_parsing = { path = "../rust_parsing" }
+chatgpt = { path = "../chatgpt" }
 gemini = { path = "../gemini" }
 git_parsing = { path = "../git_parsing" }
 ai_interactions = { path = "../ai_interactions"}

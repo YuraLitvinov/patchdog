@@ -4,6 +4,7 @@ default-members = ["crates/patchdog"]
 
 members = [
     "crates/gemini",
+    "crates/chatgpt",
     "crates/rust_parsing",
     "crates/patchdog",
     "crates/git_parsing",
@@ -13,9 +14,13 @@ members = [
 [workspace.dependencies]
 syn = { version = "2.0.104", features = ["full", "extra-traits"] }
 dotenv = "0.15.0"
+gemini-rust = "0.4.2"
+openai-rust = "1.5.2"
 quote = "1.0.40"
 serde = "1.0.219"
 serde_json = "1.0.140"
+gemini = { path = "crates/gemini" }
+chatgpt = { path = "crates/chatgpt" }
 snafu = "0.8.6"
 clap = { version = "4.5.41", features = ["derive", "cargo"] }
 regex = "1.11.1"
