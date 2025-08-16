@@ -25,11 +25,15 @@ jobs:
         env:
           PR_NUMBER: ${{ github.event.number }}
         run: sed -i "s/^version = \".*\"/version = \"1.1.${PR_NUMBER}\"/" crates/patchdog/Cargo.toml
+      - name: test branches
+        run: | 
+          echo "base_branch ${{ github.event.pull_request.base.ref }}"
+          echo "head_branch: ${{ github.event.pull_request.head.ref }}"
       - name: Run Patchdog action
         uses: ./
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           api_key_gemini: ${{ secrets.API_KEY_GEMINI }}
-          base_branch: ${{ github.event.pull_request.base.ref  || github.base_ref }}
-          head_branch: ${{ github.event.pull_request.head.ref ||  github.head_ref }}
+          base_branch: ${{ github.event.pull_request.base.ref }}
+          head_branch: ${{ github.event.pull_request.head.ref }}
           assignee: ${{ github.event.pull_request.user.login }} 
