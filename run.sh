@@ -4,7 +4,7 @@ set -e
 git fetch origin ${BASE_BRANCH}
 
 #Test if PR contains conflict and abort any further actions
-if ! git merge --no-commit --no-ff origin/${BASE_BRANCH}; then
+if ! git merge --no-commit --no-ff ${BASE_BRANCH}; then
     exit 1
 fi
 git merge --abort
