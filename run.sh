@@ -1,6 +1,9 @@
 #!/bin/bash
 set -e
 
+echo "Base branch = start ${BASE_BRANCH} end"
+echo "Head branch = start ${HEAD_BRANCH} end"
+
 git fetch origin ${BASE_BRANCH}
 
 #Test if PR contains conflict and abort any further actions
@@ -12,7 +15,8 @@ fi
 curl -L -o patchdog-linux-x86_64 https://github.com/YuraLitvinov/patchdog/releases/latest/download/patchdog
 chmod +x patchdog-linux-x86_64
 git diff ${BASE_BRANCH}...${HEAD_BRANCH} > base_head.patch
-cat base_head.patch
+cat base_head.patch 
+ls
 ./patchdog-linux-x86_64 --file-patch base_head.patch
 #Cleanup artifacts
 rm base_head.patch && rm patchdog-linux-x86_64
