@@ -32,12 +32,12 @@ inputs:
   patchdog_name:
     description: Commit signature name
     required: false
-    default: 'Patchdog'
+    default: Patchdog
 
   patchdog_email:
     description: Commit signature email
     required: false
-    default: 'some@email.com'
+    default: some@email.com
 
 
 outputs: 
