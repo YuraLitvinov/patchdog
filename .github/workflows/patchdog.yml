@@ -1,21 +1,20 @@
 name: Patchdog debug
 
 on:
-  pull_request_review:
-    types: [submitted]
   pull_request:
     types: [opened, reopened, edited]
-  push:
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
   run_patchdog:
+
     runs-on: ubuntu-latest
     permissions: 
       contents: write
       pull-requests: write
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
