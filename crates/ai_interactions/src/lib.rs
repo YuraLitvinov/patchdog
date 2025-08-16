@@ -25,7 +25,7 @@ pub struct YamlRead {
 }
 
 pub fn return_prompt() -> Result<YamlRead, ErrorHandling> {
-    let config = fs::read_to_string("config.yaml")?;
+    let config = fs::read_to_string("patchdog_config.yaml")?;
     let docs = YamlLoader::load_from_str(&config)?;
     let doc = &docs[0];
     if let Yaml::Hash(patchdog) = doc {
@@ -36,8 +36,7 @@ pub fn return_prompt() -> Result<YamlRead, ErrorHandling> {
             .and_then(|v| v.as_str().map(String::from))
             .unwrap_or_default();
         let llm_settings = h
-            .get(&Yaml::String("LLM_settings".into()))
-            .and_then(|v| Some(v.as_hash().unwrap())).unwrap();
+            .get(&Yaml::String("LLM_settings".into())).map(|v| v.as_hash().unwrap()).unwrap();
         let openai_model = llm_settings
             .get(&Yaml::String("OPENAI_MODEL".into()))
             .and_then(|v| v.as_str().map(String::from))
@@ -48,15 +47,13 @@ pub fn return_prompt() -> Result<YamlRead, ErrorHandling> {
             .unwrap_or_default();
         let tokens = llm_settings
             .get(&Yaml::String("TOKENS_PER_MIN".into()))
-            .and_then(|v| v.as_i64().map(|i| i as usize))
-            .unwrap_or(0);
+            .and_then(|v| v.as_i64().map(|i| i as usize)).unwrap();
         let requests = llm_settings
             .get(&Yaml::String("REQUESTS_PER_MIN".into()))
             .and_then(|v| v.as_i64().map(|i| i as usize))
-            .unwrap_or(0);
+            .unwrap();
         let patchdog_settings = h
-            .get(&Yaml::String("Patchdog_settings".into()))
-            .and_then(|v| Some(v.as_hash().unwrap())).unwrap();
+            .get(&Yaml::String("Patchdog_settings".into())).map(|v| v.as_hash().unwrap()).unwrap();
         let excluded_files = patchdog_settings
             .get(&Yaml::String("excluded_files".into()))
             .and_then(|v| v.as_vec())
