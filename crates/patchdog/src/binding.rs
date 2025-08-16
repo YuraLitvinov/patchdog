@@ -1,9 +1,11 @@
 use ai_interactions::parse_json::ChangeFromPatch;
+use ai_interactions::return_prompt;
+use clap::error::Result;
 use gemini::request_preparation::{Context, Metadata, Request, SingleFunctionData};
-use git_parsing::{Hunk, get_easy_hunk, match_patch_with_parse};
+use git_parsing::{get_easy_hunk, match_patch_with_parse, Git2ErrorHandling, Hunk};
 use git2::Diff;
 use rayon::prelude::*;
-use rust_parsing;
+use rust_parsing::{self, ErrorHandling};
 use rust_parsing::ObjectRange;
 use rust_parsing::error::ErrorBinding;
 use rust_parsing::file_parsing::{FileExtractor, Files};
@@ -53,43 +55,57 @@ pub struct LocalContext {
     pub context_path: String,  
 }
 
+fn file_belongs_to_dir(file: &Path, dir: &Path) -> std::io::Result<bool> {
+    let file_path = fs::canonicalize(file)?;
+    let dir_path = fs::canonicalize(dir)?;
+    Ok(file_path.starts_with(&dir_path))
+}
+
+fn is_file_allowed(file: &Path, exclusions: &[PathBuf]) -> std::io::Result<bool> {
+    for dir in exclusions {
+        if file_belongs_to_dir(file, dir)? {
+            return Ok(false);
+        }
+    }
+    Ok(true) // not in any excluded dir
+}
+
+
 pub fn changes_from_patch(
     exported_from_file: Vec<ChangeFromPatch>,
     rust_type: Vec<String>,
     rust_name: Vec<String>,
-    file_exclude: Vec<PathBuf>
+    file_exclude: &[PathBuf]
 ) -> Result<Vec<Request>, ErrorBinding> {
     //Collect whole project once, instead of every time for each in function let objects = HashMap<(key, value)>
     //key - (Filename, Option<trait_name> and fn name)
     //value - name and type, body of function
     //Context - FunctionSignature: input args and return types with comment
     //Context - structs as String (as is)
+    //Collecting tasks separately to avoid filesystem overhead
     let tasks: Vec<LocalChange> = exported_from_file
         .par_iter()
         .flat_map(|each| {
-            each.range.par_iter().map(move |obj| LocalChange {
+            each.range.par_iter().filter_map(move |obj| Some(LocalChange {
                 filename: each.filename.clone(),
                 range: obj.clone(),
-                file: fs::read_to_string(&each.filename).unwrap(),
-            })
+                file: fs::read_to_string(&each.filename).ok()?,
+            }))
         })
         .collect();
     let singlerequestdata: Vec<Request> = tasks
         .par_iter()
         .filter_map(|change| {
-            //Here we exclude all matching 
-            if file_exclude.contains(&change.filename) {
-                return None;
-            }
-            else { 
+            //Here we only allow files, that are not in the config.yaml-Patchdog_settings-excluded_files
+            if is_file_allowed(&change.filename, file_exclude).ok()? {
                 let vectorized = FileExtractor::string_to_vector(&change.file);
                 let item = &vectorized[change.range.start - 1..change.range.end];
                 let parsed_file = RustItemParser::rust_item_parser(&item.join("\n")).ok()?;
                 let obj_type_to_compare = parsed_file.names.type_name;
                 let obj_name_to_compare = parsed_file.names.name;
-                if rust_type.iter().any(|t| &obj_type_to_compare == t)
-                    || rust_name.iter().any(|n| &obj_name_to_compare == n)
-                {   
+                if rust_type.par_iter().any(|t| &obj_type_to_compare == t)
+                    || rust_name.par_iter().any(|n| &obj_name_to_compare == n)
+                && return_prompt().ok()?.patchdog_settings.excluded_functions.contains(&obj_name_to_compare) {   
                     //At this point in parsed_file we are already aware of all the referenced data    
                     let fn_as_string = item.join("\n");
                     /*
@@ -105,7 +121,7 @@ pub fn changes_from_patch(
                         data: SingleFunctionData {
                             function_text: fn_as_string,
                             fn_name: obj_name_to_compare,
-                            context: context,
+                            context,
                             metadata: Metadata {
                                 filepath: change.filename.clone(),
                                 line_range: change.range.clone(),
@@ -114,7 +130,10 @@ pub fn changes_from_patch(
                     })
                 } else {
                     None
-                }
+                }            
+            }
+            else { 
+                None
             }
         })
         .collect();
@@ -127,11 +146,11 @@ pub fn changes_from_patch(
 ///   Identifies and extracts the source code of external Rust dependencies for a specified function within a project.
 ///   It first parses `use` statements from the file at `change`, then collects all related Rust files, and subsequently extracts code segments from these files that are referenced within the provided `function_text`.
 ///   The function returns a `Context` object, containing a list of strings where each string represents the source code of a detected external dependency, excluding the function itself.
-pub fn find_context (change: PathBuf, fn_name: &str, function_text: &String) -> Result<Context, ErrorBinding> {
+pub fn find_context (change: PathBuf, fn_name: &str, function_text: &str) -> Result<Context, ErrorHandling> {
     let mut context = vec![];
     //Crate level-context seeking
     let file = fs::read_to_string(&change)?;
-    let parsed = syn::parse_file(&file).unwrap();
+    let parsed = syn::parse_file(&file)?;
     //Here we try to find the paths used in the certain file, if they are within the project, then,
     //We can reach them and get the context from there
     //Hashmaps doesn't allow matching certain crate more than once
@@ -145,10 +164,10 @@ pub fn find_context (change: PathBuf, fn_name: &str, function_text: &String) -> 
     let mut paths = vec![];
     paths.push(change.to_owned());
     for each in &map_rust_files {
-        let _ = find_rust_files(each.0.to_path_buf(), &mut paths);
+        find_rust_files(each.0.to_path_buf(), &mut paths);
     }
-    let assorted_paths = paths.into_iter().map(|path| 
-        return (path.file_stem().unwrap().to_str().unwrap().to_string(), path)
+    let assorted_paths = paths.into_iter().filter_map(|path| 
+        Some((path.file_stem()?.to_str()?.to_string(), path))
     ).collect::<HashMap<String, PathBuf>>();
     for path in assorted_paths.clone() {
         let file = fs::read_to_string(&path.1)?;
@@ -161,11 +180,11 @@ pub fn find_context (change: PathBuf, fn_name: &str, function_text: &String) -> 
     }
 
     //Here we want to match the function with all the imports
-    let parsed_function = syn::parse_file(&function_text).unwrap();
+    let parsed_function = syn::parse_file(function_text)?;
     let tokens = grep_objects(parsed_function.items);
     let map_function = tokens.par_iter().filter_map(|con| 
         if use_map.contains_key(&con.context_name) || (con.context_name == con.context_path) {
-            return Some((con.context_path.to_owned(), con.to_owned()));
+            Some((con.context_path.to_owned(), con.to_owned()))
         }else {
             None
         }
@@ -174,8 +193,8 @@ pub fn find_context (change: PathBuf, fn_name: &str, function_text: &String) -> 
     let context = map_filedata.clone()
         .into_iter()
         .filter_map(|(key, value_function)| {
-            if let Some(_) = map_function.get(&key) {
-                if !(fn_name == key) {
+            if map_function.contains_key(&key) {
+                if fn_name != key {
                     Some(value_function.to_owned())
                 }
                 else {
@@ -193,7 +212,7 @@ pub fn find_context (change: PathBuf, fn_name: &str, function_text: &String) -> 
         let to_vec = FileExtractor::string_to_vector(&a)
             [dep.object.line_start()-1..dep.object.line_end()]
             .join("\n");
-        return Some(to_vec);
+        Some(to_vec)
     }).collect::<Vec<String>>();
     Ok(Context {
         class_name: "".to_string(),
@@ -275,9 +294,8 @@ pub fn get_patch_data(
 fn grep_objects(tokens: Vec<syn::Item>) -> Vec<LocalContext> {
     let mut objects: Vec<LocalContext> = Vec::new();
     for token in tokens {        
-        match token {
-            syn::Item::Fn(f) => { read_block(*f.block, &mut objects, "".to_string()); },
-            _ => {}
+        if let syn::Item::Fn(f) = token { 
+            read_block(*f.block, &mut objects, "".to_string()); 
         }
     }
     objects
@@ -290,7 +308,7 @@ fn match_context(context: Vec<PathObject>) -> HashMap<String, PathObject> {
     ) .collect::<HashMap<String, PathObject>>()
 }
 
-fn collect_paths(all_uses: Vec<UseItem>, filename: PathBuf) -> Result<HashMap<PathBuf, String>, ErrorBinding> { 
+fn collect_paths(all_uses: Vec<UseItem>, filename: PathBuf) -> Result<HashMap<PathBuf, String>, ErrorHandling> { 
         let dir = env::current_dir()?;
         let map_rust_files: HashMap<PathBuf, String> = all_uses.clone().into_iter().filter_map(|each| {
         let name = each.ident;
@@ -299,16 +317,16 @@ fn collect_paths(all_uses: Vec<UseItem>, filename: PathBuf) -> Result<HashMap<Pa
             path.pop();
             return Some((path, name.clone()))
         }
-        let read_dir = dir.read_dir().unwrap();
+        let read_dir = dir.read_dir().ok()?;
         let entries = read_dir.into_iter().filter_map(|entry| 
-            if entry.as_ref().unwrap().path().join(&name).exists() {
-                Some((entry.unwrap().path().join(&name), name.clone()))
+            if entry.as_ref().ok()?.path().join(&name).exists() {
+                Some((entry.ok()?.path().join(&name), name.clone()))
             }
             else {
                 None
             }
         ).collect::<HashMap<PathBuf, String>>();
-        for each in entries {
+        if let Some(each) = entries.into_iter().next() {
             return Some(each);
         }
         None
@@ -322,10 +340,8 @@ fn find_rust_files(dir: PathBuf, rust_files: &mut Vec<PathBuf>) {
             let path = entry.path();
             if path.is_dir() {
                 find_rust_files(path, rust_files); // Recurse into subdirectory
-            } else if let Some(ext) = path.extension() {
-                if ext == "rs" {
-                    rust_files.push(path);
-                }
+            } else if let Some(ext) = path.extension() && ext == "rs" {
+                rust_files.push(path);
             }
         }
     }
@@ -379,38 +395,24 @@ fn flatten_tree(tree: &UseTree, ident: String, module: String, acc: &mut Vec<Use
     }
 }
 
-/// Stores detailed information about changed objects in a Git patch.
-/// It parses the raw patch content, matches patch hunks with parsed Rust items, and for each changed file,
-/// it extracts relevant hunks and parses the file's Rust items to provide a comprehensive `FullDiffInfo`.
-///
-/// # Arguments
-///
-/// * `relative_path` - A reference to a `Path` indicating the base directory for relative file paths.
-/// * `patch_src` - A byte slice (`&[u8]`) containing the raw content of the patch file.
-///
-/// # Returns
-///
-/// A `Result<Vec<FullDiffInfo>, ErrorBinding>`:
-/// - `Ok(Vec<FullDiffInfo>)`: A vector of `FullDiffInfo` structs, each containing the filename, parsed object ranges within that file, and associated hunks.
-/// - `Err(ErrorBinding)`: If diff parsing, hunk matching, file reading, or Rust item parsing fails.
 fn store_objects(
     relative_path: &Path,
     patch_src: &[u8],
-) -> Result<Vec<FullDiffInfo>, ErrorBinding> {
-    let diff = Diff::from_buffer(patch_src).unwrap();
+) -> Result<Vec<FullDiffInfo>, Git2ErrorHandling> {
+    let diff = Diff::from_buffer(patch_src)?;
     let changes = &match_patch_with_parse(relative_path, &diff)?;
     let vec_of_surplus = changes
         .iter()
-        .map(|change| {
-            let list_of_unique_files = get_easy_hunk(&diff, &change.filename()).unwrap();
+        .filter_map(|change| {
+            let list_of_unique_files = get_easy_hunk(&diff, &change.filename()).ok()?;
             let path = relative_path.join(change.filename());
-            let file = fs::read_to_string(&path).unwrap();
-            let parsed = RustItemParser::parse_all_rust_items(&file).unwrap();
-            FullDiffInfo {
+            let file = fs::read_to_string(&path).ok()?;
+            let parsed = RustItemParser::parse_all_rust_items(&file).ok()?;
+            Some(FullDiffInfo {
                 name: change.filename(),
                 object_range: parsed,
                 hunk: list_of_unique_files,
-            }
+            })
         })
         .collect();
     Ok(vec_of_surplus)
@@ -523,14 +525,11 @@ fn match_expr(expr: syn::Expr, objects: &mut Vec<LocalContext>, parent_path: Str
     }
 }
 
-fn handle_pat(pat: syn::Pat, objects: &mut Vec<LocalContext>, _parent_path: String) {
-    match pat {
-        syn::Pat::Struct(ps) => {
-            for field in ps.fields {
-                handle_pat(*field.pat, objects, _parent_path.clone());
-            }
+fn handle_pat(pat: syn::Pat, _objects: &mut Vec<LocalContext>, _parent_path: String) {
+    if let syn::Pat::Struct(ps) = pat {
+        for field in ps.fields {
+            handle_pat(*field.pat, _objects, _parent_path.clone());
         }
-        _ => {}
     }
 }
 
@@ -555,8 +554,17 @@ fn handle_method_call(method_call: syn::ExprMethodCall, objects: &mut Vec<LocalC
 }
 
 fn handle_struct(strukt: syn::ExprStruct, objects: &mut Vec<LocalContext>, parent_path: String) {
-    let ident = strukt.path.get_ident().map(|i| i.to_string()).unwrap_or_default();
-    let full_path = if parent_path.is_empty() { ident.clone() } else { format!("{}::{}", parent_path, ident) };
+    let ident = strukt
+        .path
+        .get_ident()
+        .into_iter()
+        .filter_map(|i| Some(i.to_string()))
+        .collect::<String>();
+    let full_path = if parent_path.is_empty() { 
+        ident.clone() 
+    } else { 
+        format!("{}::{}", parent_path, ident) 
+    };
     objects.push(LocalContext {
         context_type: "struct".to_string(),
         context_name: ident,

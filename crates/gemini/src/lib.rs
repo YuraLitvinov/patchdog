@@ -1,2 +1,2 @@
-pub mod gemini;
+pub mod bot;
 pub mod request_preparation;

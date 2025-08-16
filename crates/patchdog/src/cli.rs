@@ -4,6 +4,8 @@ use clap::Parser;
 use gemini::request_preparation::Request;
 use gemini::request_preparation::RequestToAgent;
 use gemini::request_preparation::{RawResponse, SingleFunctionData, WaitForTimeout};
+use rayon::iter::IntoParallelRefIterator;
+use rayon::iter::ParallelIterator;
 use regex::Regex;
 use rust_parsing::error::ErrorBinding;
 use rust_parsing::error::ErrorHandling;
@@ -12,7 +14,8 @@ use rust_parsing::file_parsing::{FileExtractor, Files};
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::HashMap;
-use std::{fs, path::PathBuf};
+use std::path::Path;
+use std::{fs, path::PathBuf, env};
 use tracing::{Level, event};
 
 #[derive(Parser, Debug)]
@@ -28,8 +31,6 @@ struct Mode {
     type_rust: Vec<String>,
     #[arg(long, num_args=1..,  requires = "file_patch")]
     name_rust: Vec<String>,
-    #[arg(long, requires = "file_patch", num_args=1..,)]
-    exclusions: Vec<PathBuf>
 }
 #[derive(Debug, PartialEq, Eq, Deserialize, Serialize)]
 struct LinkedResponse {
@@ -44,15 +45,24 @@ pub struct ResponseForm {
     new_comment: String,
 }
 
-pub async  fn cli_patch_to_agent() -> Result<(), ErrorBinding> {
+pub async fn cli_patch_to_agent() -> Result<(), ErrorBinding> {
+    //Mode accepts type and name of the object for the sake of debugging. It autodefaults to any fn
     let commands = Mode::parse();
     let patch = binding::patch_data_argument(commands.file_patch)?;
     event!(Level::INFO, "type: {:#?}", commands.type_rust);
+    let exclusions = ai_interactions::return_prompt()?.patchdog_settings.excluded_files;
+    let dir = env::current_dir()?;
+    let excluded_paths = exclusions
+        .par_iter()
+        .map(
+        |path|dir.join(Path::new(path))
+        )
+        .collect::<Vec<PathBuf>>();
     let request = changes_from_patch(
         patch, 
         commands.type_rust, 
         commands.name_rust, 
-        commands.exclusions
+        &excluded_paths
     )?;
     //Here occurs check for pending changes
     if request.is_empty() {
@@ -130,35 +140,17 @@ pub async fn call(request: Vec<Request>) -> Result<Vec<ResponseForm>, ErrorBindi
     }
 }
 
-/// Extracts `RawResponse` objects from a given string using a regular expression.
-/// It iterates through all matches of `REGEX` in the input string and attempts to deserialize each match into a `RawResponse` struct.
-/// Warnings are logged for any deserialization failures, and those items are skipped.
-///
-/// # Arguments
-///
-/// * `response` - A string slice (`&str`) containing the raw response, potentially with multiple JSON objects.
-///
-/// # Returns
-///
-/// A `Result<Vec<RawResponse>, ErrorHandling>`:
-/// - `Ok(Vec<RawResponse>)`: A vector of successfully parsed `RawResponse` objects.
-/// - `Err(ErrorHandling)`: If the regular expression is invalid (unlikely with a hardcoded REGEX) or other internal errors.
 pub fn cherrypick_response(response: &str) -> Result<Vec<RawResponse>, ErrorHandling> {
-    let re = Regex::new(REGEX).unwrap();
-    let mut response_cherrypicked = vec![];
-    for cap in re.captures_iter(response) {
-        let a = cap.get(0).unwrap().as_str();
-        let to_struct = serde_json::from_str::<RawResponse>(a);
-        match to_struct {
-            Ok(ok) => {
-                response_cherrypicked.push(ok);
-            }
-            Err(e) => {
-                event!(Level::WARN, "{e}");
-                continue;
-            }
-        }
-    }
+    let re = Regex::new(REGEX)?;
+    let response_cherrypicked = 
+    re.captures_iter(response).filter_map(|cap| {
+        serde_json::from_str::<RawResponse>(
+            cap
+            .get(0)?
+            .as_str()
+        )
+        .ok()
+    }).collect::<Vec<RawResponse>>();
     Ok(response_cherrypicked)
 }
 
@@ -280,21 +272,6 @@ fn matching(prepared: &Vec<WaitForTimeout>, response: &[RawResponse]) -> Vec<Lin
     matched
 }
 
-/// Attempts to repair and deserialize a potentially malformed JSON output from an external agent.
-/// This function iterates by progressively removing lines from the end of the input vector,
-/// then attempts to append a closing JSON delimiter (`}]`) and deserialize the modified string into a `Vec<RawResponse>`.
-/// It returns the first successful deserialization result.
-/// This is a fallback mechanism for cases where the agent's JSON response is truncated or incomplete.
-///
-/// # Arguments
-///
-/// * `output` - A `Vec<String>` representing the lines of the raw, potentially broken, JSON output.
-///
-/// # Returns
-///
-/// A `Result<Vec<RawResponse>, ErrorHandling>`:
-/// - `Ok(Vec<RawResponse>)`: If a valid `Vec<RawResponse>` can be parsed after a repair attempt.
-/// - `Err(ErrorHandling::CouldNotGetLine)`: If no valid JSON can be parsed even after all repair attempts.
 fn fallback_repair(output: Vec<String>) -> Result<Vec<RawResponse>, ErrorHandling> {
     let mut clone_out = output;
     for _ in 0..clone_out.len() {
@@ -311,8 +288,8 @@ fn fallback_repair(output: Vec<String>) -> Result<Vec<RawResponse>, ErrorHandlin
             }
         };
     }
-    event!(Level::WARN, "Here");
-    Err(ErrorHandling::CouldNotGetLine)
+    //This case will only run when there is no valid structures. Returning empty vector will achieve a complete retry
+    Ok(vec![])
 }
 
 /// Writes the `new_comment` from each `ResponseForm` back into its corresponding file.
