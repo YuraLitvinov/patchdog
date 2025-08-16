@@ -29,6 +29,7 @@ jobs:
         run: | 
           echo "base_branch ${{ github.base_ref }}"
           echo "head_branch: ${{ github.head_ref }}"
+          echo "ref_name: ${{ github.ref_name }}"
       - name: Run Patchdog action
         uses: ./
         with:
