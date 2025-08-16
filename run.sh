@@ -7,7 +7,6 @@ git fetch origin ${BASE_BRANCH}
 if ! git merge --no-commit --no-ff ${BASE_BRANCH}; then
     exit 1
 fi
-git merge --abort
 
 #Download and run latest release
 curl -L -o patchdog-linux-x86_64 https://github.com/YuraLitvinov/patchdog/releases/latest/download/patchdog-linux-x86_64
