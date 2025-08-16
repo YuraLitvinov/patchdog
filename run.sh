@@ -17,9 +17,9 @@ git diff origin/${BASE_BRANCH}...${HEAD_BRANCH} > base_head.patch
 rm base_head.patch && rm patchdog-linux-x86_64
 
 #Configure user
-git config --global user.email "${COMMIT_EMAIL}" 
-git config --global user.name "${COMMIT_NAME}"
-echo "NAME: ${COMMIT_NAME}"
+git config --global user.email "$COMMIT_EMAIL" 
+git config --global user.name "$COMMIT_NAME"
+echo "NAME: $COMMIT_NAME $COMMIT_EMAIL "
 
 #Create a unique pull request
 PATCHDOG_BRANCH="patchdog-$(uuidgen)"
