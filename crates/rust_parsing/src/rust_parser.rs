@@ -1,14 +1,13 @@
 use crate::error::ErrorHandling;
-use crate::file_parsing::{FileExtractor, Files};
 use crate::object_range::{Name, ObjectRange};
 use proc_macro2::TokenStream;
 use proc_macro2::{Spacing, TokenTree};
 use quote::ToTokens;
-use rustc_lexer::TokenKind;
-use rustc_lexer::tokenize;
 use serde::Serialize;
 use std::ops::Range;
+use rustc_lexer::{tokenize, TokenKind};
 use std::path::{Path, PathBuf};
+use crate::file_parsing::{FileExtractor, Files};
 use std::fs;
 use syn::spanned::Spanned;
 use syn::{AngleBracketedGenericArguments, PathArguments, Type, TypePath};
@@ -357,26 +356,13 @@ fn function_parse(items: &[Item]) -> Result<FunctionSignature, ErrorHandling> {
     }
 }
 
-/// Parses a vector of `TokenStream`s representing function input parameters.
-/// It iterates through each token stream to identify parameter names and types based on the colon (`:`) separator.
-/// Whitespace is removed from extracted names and types.
-///
-/// # Arguments
-///
-/// * `input_vector_stream` - A `Vec<TokenStream>` where each `TokenStream` represents a function input parameter (e.g., `arg: Type`).
-///
-/// # Returns
-///
-/// A `Result<Vec<FnInputToken>, ErrorHandling>`:
-/// - `Ok(Vec<FnInputToken>)`: A vector of `FnInputToken` structs, each containing the input parameter's name and type.
-/// - `Err(ErrorHandling)`: If whitespace removal fails for input names or types.
 fn fn_input(input_vector_stream: Vec<TokenStream>) -> Result<Vec<FnInputToken>, ErrorHandling> {
     let mut input_tokens: Vec<FnInputToken> = Vec::new();
     for input in input_vector_stream {
         let tokens: Vec<TokenTree> = input.into_iter().collect();
         for (i, token) in tokens.iter().enumerate() {
-            if let TokenTree::Punct(punct) = token {
-                if punct.as_char() == ':' && punct.spacing() != Spacing::Joint {
+            if let TokenTree::Punct(punct) = token
+                && punct.as_char() == ':' && punct.spacing() != Spacing::Joint {
                     let before = tokens.get(i.wrapping_sub(1));
                     let after_tokens: Vec<TokenTree> = tokens.iter().skip(i + 1).cloned().collect();
                     let after_stream: TokenStream = after_tokens.into_iter().collect();
@@ -390,10 +376,10 @@ fn fn_input(input_vector_stream: Vec<TokenStream>) -> Result<Vec<FnInputToken>, 
                             }
                         });
                     }
-                }
             }
         }
     }
+
     Ok(input_tokens)
 }
 
@@ -413,25 +399,12 @@ pub fn remove_whitespace(s: String) -> Result<String, ErrorHandling> {
     Ok(s.chars().filter(|c| !c.is_whitespace()).collect())
 }
 
-/// Analyzes a `syn::Type` to determine its kind (e.g., "Result", "Option", "Other") and extract its inner type(s) and potential error type.
-/// It specifically handles `Result` and `Option` types by parsing their generic arguments to get the contained types.
-/// For other types, it captures the full token stream as the output type.
-///
-/// # Arguments
-///
-/// * `ty` - A reference to a `syn::Type` representing the return type to analyze.
-///
-/// # Returns
-///
-/// A `Result<FnOutputToken, ErrorHandling>`:
-/// - `Ok(FnOutputToken)`: A struct containing the `kind` of return type, its `output_type`, and an optional `error_type`.
-/// - `Err(ErrorHandling)`: If whitespace removal fails during type extraction.
 fn analyze_return_type(ty: &Type) -> Result<FnOutputToken, ErrorHandling> {
     let mut kind = "Other".to_string();
     let mut output_type = ty.to_token_stream().to_string();
     let mut error_type = None;
-    if let Type::Path(TypePath { path, .. }) = ty {
-        if let Some(segment) = path.segments.last() {
+    if let Type::Path(TypePath { path, .. }) = ty &&
+        let Some(segment) = path.segments.last() {
             let ident_str = segment.ident.to_string();
             match ident_str.as_str() {
                 "Result" => {
@@ -458,19 +431,17 @@ fn analyze_return_type(ty: &Type) -> Result<FnOutputToken, ErrorHandling> {
                         args,
                         ..
                     }) = &segment.arguments
-                    {
-                        if let Some(inner_ty) = args.first() {
+                        && let Some(inner_ty) = args.first() {
                             output_type =
                                 remove_whitespace(inner_ty.to_token_stream().to_string())?;
                         }
-                    }
                 }
                 _ => {
                     kind = "Other".to_string();
                     output_type = ty.to_token_stream().to_string();
                 }
             }
-        }
+        
     }
     Ok(FnOutputToken {
         kind,

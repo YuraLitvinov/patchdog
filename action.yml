@@ -1,0 +1,56 @@
+name: 'Patchdog'
+description: > 
+  Generate comprehensive rustdoc comments for your project. 
+  Requires contents: write and pull-requests: write permissions.
+author: 'Yurii Litvinov'
+
+inputs:
+  config_file:
+    description: 'Contains API rate presets, excluded files and function and LLM prompt'
+    required: true
+    default: patchdog_config.yml
+
+  github_token:
+    description: 'GitHub token with repo access'
+    required: true
+
+  api_key_gemini:
+    description: 'Google Gemini API key'
+    required: true
+
+  api_key_openai:
+    description: 'OpenAI API key'
+    required: false
+
+  patchdog_name:
+    description: Commit signature name
+    required: false
+    default: 'github-actions[bot]'
+
+  patchdog_email:
+    description: Commit signature email
+    required: false
+    default: 'github-actions[bot]@users.noreply.github.com'
+  
+
+outputs: 
+  patchdog-run:
+    description: "Pull Request containing pending changes from base branch"
+
+runs: 
+  using: 'composite'
+  steps:
+    - name: Run patchdog # grabs patchdog_config.yml from root of the project
+      run: |
+        chmod +x run.sh
+        ./run.sh
+      env: 
+        API_KEY_GEMINI: ${{ inputs.api_key_gemini }}
+        API_KEY_OPENAI: ${{ inputs.api_key_openai }}
+        GH_TOKEN: ${{ inputs.github_token }}
+        BASE_BRANCH: ${{ github.base_ref }}
+        HEAD_BRANCH: ${{ github.head_ref }}
+        COMMIT_EMAIL: ${{ inputs.patchdog_email }}
+        COMMIT_NAME: ${{ inputs.patchdog_name }}
+        ASSIGNEE: ${{ github.event.pull_request.user.login }}
+

@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::{fmt::Display, time};
 use tracing::{Level, event};
 
-use crate::gemini::{AiRequest, RequestResponseConstruction};
+use crate::bot::{AiRequest, RequestResponseConstruction};
 //Theoretical maximum is 250_000, but is highly flawed in a way, that Gemini can 'tear' the response.
 //This behavior is explained in call_json_to_rust error case
 //Similar issue on https://github.com/googleapis/python-genai/issues/922
@@ -317,21 +317,6 @@ impl RequestToAgent {
         })
     }
 
-/// Sends a content generation request to the Google Gemini API using the provided file content and configuration arguments.
-/// It retrieves the API key from environment variables, initializes the Gemini client with the specified model, and sends the user message along with a system prompt.
-///
-/// # Arguments
-///
-/// * `file_content` - A string slice (`&str`) representing the content to be sent as a user message.
-/// * `arguments` - A `YamlRead` struct containing configuration details such as the system prompt.
-///
-/// # Returns
-///
-/// A `Result<String, ErrorHandling>`:
-/// - `Ok(String)`: The text content of the response from the Gemini API.
-/// - `Err(ErrorHandling)`: If the API key is not found, API communication fails, or any other error occurs during the process.
-
-
 /// Asynchronously sends batches of prepared requests to the Google Gemini API.
 /// It iterates through `WaitForTimeout` objects, converts `SingleFunctionData` to JSON, and sends each as a request.
 /// If there's more than one request batch, it introduces a one-minute delay between batches to respect API rate limits.
@@ -352,7 +337,7 @@ impl RequestToAgent {
         for single_request in request {
             for each in &single_request.prepared_requests {
                 let as_json = serde_json::to_string_pretty(&each.data)?;
-                match AiRequest::call_llm_gemini(&as_json, return_prompt()?).await {
+                match AiRequest::call_llm_gemini(&as_json).await {
                     //Handling exclusive case, where one of the requests may fail
                     Ok(r) => {
                         response.push(r);

@@ -1,18 +1,9 @@
 use crate::error::{
-    ErrorHandling, InvalidIoOperationsSnafu, LineOutOfBoundsSnafu, SeekerFailedSnafu,
+    ErrorHandling, InvalidIoOperationsSnafu, LineOutOfBoundsSnafu,
 };
 use crate::object_range::ObjectRange;
 use snafu::{ResultExt, ensure};
 use std::{fs::File, io::Write, path::PathBuf};
-//Advanced matching. This inefficient method is chosen due to error: look-around, including look-ahead and look-behind, is not supported
-/*
-pub const REGEX: &str = r#"\{\s*("uuid"\s*:\s*"[^"]*"\s*,\s*"fn_name"\s*:\s*"[^"]*"\s*,\s*"new_comment"\s*:\s*"[^"]*"
-|\s*"uuid"\s*:\s*"[^"]*"\s*,\s*"new_comment"\s*:\s*"[^"]*"\s*,\s*"fn_name"\s*:\s*"[^"]*"
-|\s*"fn_name"\s*:\s*"[^"]*"\s*,\s*"uuid"\s*:\s*"[^"]*"\s*,\s*"new_comment"\s*:\s*"[^"]*"
-|\s*"fn_name"\s*:\s*"[^"]*"\s*,\s*"new_comment"\s*:\s*"[^"]*"\s*,\s*"uuid"\s*:\s*"[^"]*"
-|\s*"new_comment"\s*:\s*"[^"]*"\s*,\s*"uuid"\s*:\s*"[^"]*"\s*,\s*"fn_name"\s*:\s*"[^"]*"
-|\s*"new_comment"\s*:\s*"[^"]*"\s*,\s*"fn_name"\s*:\s*"[^"]*"\s*,\s*"uuid"\s*:\s*"[^"]*")\s*\}"#;
-*/
 pub const REGEX: &str = r#"\{\s*"uuid"\s*:\s*"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",\s*"new_comment"\s*:\s*".*"\s*\}"#;
 pub struct FileExtractor;
 pub trait Files {
@@ -25,14 +16,8 @@ pub trait Files {
         from_line: usize,
         parsed: Vec<ObjectRange>,
     ) -> Result<String, ErrorHandling>;
-
-    fn export_object(
-        from_line_number: usize,
-        visited: &[ObjectRange],
-        src: &[String],
-    ) -> Result<String, ErrorHandling>;
-
-    fn string_to_vector(str_source: &str) -> Vec<String>;
+    fn string_to_vector(source: &str) -> Vec<String>;
+    
     fn push_to_vector(
         str_source: &[String],
         push: String,
@@ -76,6 +61,10 @@ impl Files for FileExtractor {
             writeln!(file, "{each}").context(InvalidIoOperationsSnafu)?;
         }
         Ok(())
+    }
+
+    fn string_to_vector(source: &str) -> Vec<String> {
+        source.lines().map(|line| line.to_string()).collect()
     }
 
 /// Inserts a given string into a vector of strings while preserving the original indentation.
@@ -141,54 +130,6 @@ impl Files for FileExtractor {
         }
         Ok(true)
     }
-    //Splits the string that is usually parsed from fs::read_to_string
-    //split_inclusive method is necessary for preserving newline indentation.
-/// Converts a multi-line string slice into a vector of strings, where each element in the vector represents a line from the input.
-/// Newline characters are removed, and each line is converted to its own `String`.
-///
-/// # Arguments
-///
-/// * `str_source` - A string slice (`&str`) containing the source text.
-///
-/// # Returns
-///
-/// A `Vec<String>` where each `String` is a line from the input `str_source`.
-    fn string_to_vector(str_source: &str) -> Vec<String> {
-        str_source.lines().map(|line| line.to_string()).collect()
-    }
-
-/// Exports the code snippet corresponding to a specific line number from a source, given a list of parsed object ranges.
-/// It iterates through `visited` `ObjectRange` items and attempts to find the `ObjectRange` that contains `line_number`.
-/// Once found, it extracts the code lines within that object's range.
-///
-/// # Arguments
-///
-/// * `line_number` - The 1-based line number to find within an object.
-/// * `visited` - A slice of `ObjectRange` structs, representing parsed Rust items with their line ranges.
-/// * `src` - A slice of `String`s representing the full source code, where each string is a line.
-///
-/// # Returns
-///
-/// A `Result<String, ErrorHandling>`:
-/// - `Ok(String)`: The extracted code snippet as a single string.
-/// - `Err(ErrorHandling::ExportObjectFailed)`: If no `ObjectRange` containing the `line_number` is found.
-    fn export_object(
-        line_number: usize,
-        visited: &[ObjectRange],
-        src: &[String],
-    ) -> Result<String, ErrorHandling> {
-        for item in visited {
-            let found = seeker(line_number, item, src);
-            if found.is_err() {
-                continue;
-            }
-            return found;
-        }
-        Err(ErrorHandling::ExportObjectFailed {
-            line_number,
-            src: format!("{visited:?}"),
-        })
-    }
 
 /// Extracts a code snippet from a source, preserving comments, based on a starting line and parsed object ranges.
 /// It iterates through parsed `ObjectRange` items, using `seeker_for_comments` to find a valid range.
@@ -227,33 +168,6 @@ impl Files for FileExtractor {
         }
         Err(ErrorHandling::LineOutOfBounds { line_number: 0 })
     }
-}
-//Finds an object, justifying whether the said line number belongs to the range of the object.
-//If it does, then object is printed with extract_by_line
-
-/// Checks if a `line_number` falls within the range of a given `ObjectRange` and, if so, extracts the corresponding code block.
-/// It ensures that `line_number` is within `item.line_ranges.start` and `item.line_ranges.end`.
-/// If the line number is within range, it uses `extract_by_line` to get the code snippet.
-///
-/// # Arguments
-///
-/// * `line_number` - The 1-based line number to check.
-/// * `item` - A reference to an `ObjectRange` struct, defining the start and end lines of a code object.
-/// * `src` - A slice of `String`s representing the full source code, where each string is a line.
-///
-/// # Returns
-///
-/// A `Result<String, ErrorHandling>`:
-/// - `Ok(String)`: The extracted code snippet as a single string.
-/// - `Err(ErrorHandling::SeekerFailedSnafu)`: If the `line_number` is not within the `item`'s defined range.
-fn seeker(line_number: usize, item: &ObjectRange, src: &[String]) -> Result<String, ErrorHandling> {
-    let line_start = item.line_ranges.start;
-    let line_end = item.line_ranges.end;
-    ensure!(
-        line_start <= line_number && line_end >= line_number,
-        SeekerFailedSnafu { line_number }
-    );
-    Ok(extract_by_line(src, &line_start, &line_end))
 }
 
 fn seeker_for_comments(
