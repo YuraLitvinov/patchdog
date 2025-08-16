@@ -52,7 +52,7 @@ runs:
         chmod +x run.sh
         ./run.sh
       shell: bash
-      with: 
+      env: 
         API_KEY_GEMINI: ${{ inputs.api_key_gemini }}
         GH_TOKEN: ${{ inputs.github_token }}
         BASE_BRANCH: ${{ inputs.base_branch }}
