@@ -5,11 +5,6 @@ description: >
 author: 'Yurii Litvinov'
 
 inputs:
-  config_file:
-    description: 'Contains API rate presets, excluded files and function and LLM prompt'
-    required: true
-    default: patchdog_config.yml
-
   github_token:
     description: 'GitHub token with repo access'
     required: true
@@ -37,17 +32,17 @@ inputs:
   patchdog_name:
     description: Commit signature name
     required: false
-    default: 'github-actions[bot]'
+    default: 'Patchdog'
 
   patchdog_email:
     description: Commit signature email
     required: false
-    default: 'github-actions[bot]@users.noreply.github.com'
+    default: 'some@email.com'
 
 
 outputs: 
   patchdog-run:
-    description: "Pull Request containing pending changes from base branch"
+    description: 'Pull Request containing pending changes from base branch'
 
 runs: 
   using: 'composite'
