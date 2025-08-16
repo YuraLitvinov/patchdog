@@ -23,13 +23,12 @@ jobs:
         run: |
           chmod +x build.sh 
           ./build.sh
-          mv build/patchdog build/patchdog-linux-x86_64
       - name: Publish release
         uses: actions/upload-artifact@v4
         with:
           name: Patchdog release
-          path: build/patchdog-linux-x86_64
+          path: build/patchdog
       - name: Create GitHub release
-        run: gh release create v${VERSION} ./build/patchdog-linux-x86_64 --title "Release v${VERSION}" --notes "Autorelease x86_64 musl binary"
+        run: gh release create v${VERSION} ./build/patchdog --title "First Release" --notes "Autorelease"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
