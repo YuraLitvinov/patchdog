@@ -12,6 +12,7 @@ fi
 curl -L -o patchdog-linux-x86_64 https://github.com/YuraLitvinov/patchdog/releases/latest/download/patchdog
 chmod +x patchdog-linux-x86_64
 git diff ${BASE_BRANCH}...${HEAD_BRANCH} > base_head.patch
+cat base_head.patch
 ./patchdog-linux-x86_64 --file-patch base_head.patch
 #Cleanup artifacts
 rm base_head.patch && rm patchdog-linux-x86_64
