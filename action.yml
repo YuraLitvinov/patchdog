@@ -44,6 +44,7 @@ runs:
       run: |
         chmod +x run.sh
         ./run.sh
+      shell: bash
       env: 
         API_KEY_GEMINI: ${{ inputs.api_key_gemini }}
         API_KEY_OPENAI: ${{ inputs.api_key_openai }}
