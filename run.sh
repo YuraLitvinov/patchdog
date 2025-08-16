@@ -14,7 +14,7 @@ chmod +x patchdog-linux-x86_64
 git diff ${BASE_BRANCH}...${HEAD_BRANCH} > base_head.patch
 ls
 ./patchdog-linux-x86_64 --file-patch base_head.patch
-
+echo "${BASE_BRANCH} ${HEAD_BRANCH}"
 #Cleanup artifacts
 rm base_head.patch && rm patchdog-linux-x86_64
 
