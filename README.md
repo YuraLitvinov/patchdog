@@ -69,6 +69,7 @@ Patchdog:
     Patchdog_settings:
         excluded_files: [tests/, crates/patchdog/src/tests.rs, crates/rust_parsing/src/error.rs]
         excluded_functions: [new, default, main]
+        llm_model: google # you may use google or openai
 
 ```
 - You may get the reference for setting up patchdog inside [patchdog repository](.github/workflows/patchdog.yml), or 
