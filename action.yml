@@ -4,6 +4,11 @@ description: >
   Requires contents: write and pull-requests: write permissions.
 author: 'Yurii Litvinov'
 
+
+branding:
+  color: 'red'     
+  icon: 'git-pull-request'
+
 inputs:
   github_token:
     description: 'GitHub token with repo access'
