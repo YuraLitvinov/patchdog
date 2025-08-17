@@ -13,6 +13,9 @@ pub struct ChangeFromPatch {
     pub range: Vec<Range<usize>>,
 }
 
+///   Processes a list of file paths, parsing each Rust file to identify changed code ranges based on `RustItemParser`'s analysis.
+///   For every file, it extracts the line ranges of all parsed Rust items (functions, structs, etc.) and aggregates them.
+///   The function returns a vector of `ChangeFromPatch` structs, where each struct contains the filename and a list of identified changed line ranges within that file, or an `ErrorHandling` on failure.
 /// Processes a list of file paths, parses each Rust file to identify changed code ranges,
 /// and aggregates these changes into a vector of `ChangeFromPatch` structs.
 ///
@@ -55,6 +58,15 @@ pub fn make_export(filenames: &Vec<PathBuf>) -> Result<Vec<ChangeFromPatch>, Err
     Ok(output_vec)
 }
 
+///   Checks for the presence of specific Rust items (identified by their type and name) within code snippets derived from a set of file changes. This function iterates through `exported_from_file` entries, reads the corresponding file content, and extracts specified code ranges. The extracted code is then parsed to determine if it contains any Rust items whose type and name match those provided in `rust_type` and `rust_name` respectively. It returns a vector of booleans, with each `true` indicating that a matching item was found within a processed code range.
+///   
+///   # Arguments
+///   * `exported_from_file` - A vector of `ChangeFromPatch` objects, each specifying a file and code ranges within it to analyze.
+///   * `rust_type` - A vector of strings representing Rust types to search for.
+///   * `rust_name` - A vector of strings representing Rust names to search for.
+///   
+///   # Returns
+///   A `Result` containing a `Vec<bool>` where `true` signifies the presence of a matching item, or an `ErrorBinding` if an I/O operation or parsing error occurs.
 pub fn justify_presence(
     exported_from_file: Vec<ChangeFromPatch>,
     rust_type: Vec<String>,

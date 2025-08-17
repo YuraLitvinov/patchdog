@@ -25,6 +25,9 @@ pub struct YamlRead {
     pub patchdog_settings: PathdogSettings
 }
 
+///   Reads the `patchdog_config.yaml` file from the current directory, parses its YAML content, and extracts various configuration settings.
+///   It retrieves the main prompt string, LLM model settings (OpenAI/Gemini models, token and request limits), and Patchdog-specific settings like excluded files and functions.
+///   The function returns these parsed settings encapsulated in a `YamlRead` struct, or an `ErrorHandling` if file reading or YAML parsing fails, providing default values in case of malformed YAML.
 pub fn return_prompt() -> Result<YamlRead, ErrorHandling> {
     let path = Path::new("patchdog_config.yaml").to_path_buf();
     let config = fs::read_to_string(&path).context(InvalidIoOperationsSnafu { path })?;

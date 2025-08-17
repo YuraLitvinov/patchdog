@@ -34,6 +34,9 @@ pub trait Files {
 
 impl Files for FileExtractor {
 
+///   Inserts a given string `changed_element` into a vector of strings representing file lines at a specified `line_index`.
+///   After modifying the in-memory representation of the file, this function then overwrites the file located at the provided `path` with the updated content.
+///   This utility is designed for in-place modification of file contents, specifically for inserting new lines or code snippets.
     fn write_to_vecstring(
         path: PathBuf,
         mut source: Vec<String>,

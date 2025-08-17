@@ -294,6 +294,9 @@ fn fallback_repair(output: Vec<String>) -> Result<Vec<RawResponse>, ErrorHandlin
     Ok(vec![])
 }
 
+///   Writes new comments into their respective Rust files based on a collection of `ResponseForm` objects.
+///   It first sorts the responses by line range in descending order to ensure correct insertion without invalidating subsequent line indices.
+///   For each response, the function reads the target file, converts its content into a vector of lines, inserts the provided `new_comment` at the specified line index, and then writes the modified content back to the file on disk.
 /// Writes the `new_comment` from each `ResponseForm` back into its corresponding file.
 /// The responses are sorted by `line_range.start` in descending order to prevent issues with line index shifts during insertion.
 /// For each response, it reads the file, converts its content to a vector of strings, inserts the new comment at the specified line index,
