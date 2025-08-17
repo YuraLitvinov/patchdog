@@ -15,7 +15,7 @@ if [ -f .git/MERGE_HEAD ]; then
 fi
 
 #Download and run latest release
-curl -L -o patchdog-linux-x86_64 https://github.com/YuraLitvinov/patchdog/releases/latest/download/patchdog
+curl -L -o patchdog-linux-x86_64 https://github.com/YuraLitvinov/patchdog/releases/latest/download/patchdog-linux-x86_64
 chmod +x patchdog-linux-x86_64
 git diff origin/$BASE_BRANCH...$HEAD_BRANCH > base_head.patch
 ./patchdog-linux-x86_64 --file-patch base_head.patch
