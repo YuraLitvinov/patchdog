@@ -15,8 +15,8 @@ jobs:
       pull-requests: write
 
     steps:
-      - name: Run Patchdog action
-        uses: ./
+      - name: Patchdog
+        uses: YuraLitvinov/patchdog@v1.2.50
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           api_key_gemini: ${{ secrets.API_KEY_GEMINI }}

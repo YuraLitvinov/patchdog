@@ -49,11 +49,12 @@ runs:
       with:
         ref: ${{ github.event.pull_request.head.ref }}
         fetch-depth: 0
-    - name: Run patchdog # grabs patchdog_config.yml from root of the project
-      run: |
-        chmod +x ${{ github.action_path }}/action/run.sh
-        ./${{ github.action_path }}/action/run.sh
+    - name: Run ls
       shell: bash
+      run: ls ${{ github.action_path }}
+    - name: Run patchdog # grabs patchdog_config.yml from root of the project
+      shell: bash
+      run: ${{ github.action_path }}/run.sh
       env: 
         API_KEY_GEMINI: ${{ inputs.api_key_gemini }}
         GH_TOKEN: ${{ inputs.github_token }}
