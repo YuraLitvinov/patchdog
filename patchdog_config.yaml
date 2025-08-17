@@ -1,0 +1,34 @@
+Patchdog:
+    prompt: | 
+        response_format = {"type": "json_object"} The provided data is a collection of valid Rust code.
+        [
+            {
+                "uuid": "", 
+                "data": {
+                    "fn_name": "",
+                    "function_text": "" 
+                    "context": {
+                        "class_name": "",
+                        "external_dependencies": [],
+                        "old_comment": []
+                    }
+                }
+            } 
+        ]
+        Instruction: Clone the request form, remove 'data' and append new field 'new_comment', generate, making strong assumptions about code functionality, 
+        Generate rustdoc /// comment specify return, input and functionality of the function, with emphasis on functionality - 2-3 sentences per 'data'. 
+        If present, use 'external_dependencies' as help, if you run into some sort of misunderstaing. Each new object should be located inside [] block. Return type should be a JSON object of this type:
+        [
+            {
+                "uuid": "", 
+                "new_comment": ""
+            } 
+        ]
+    LLM_settings:     
+        GEMINI_MODEL: models/gemini-2.5-flash
+        TOKENS_PER_MIN: 250000
+        REQUESTS_PER_MIN: 10
+        OPENAI_MODEL: gpt-3.5-turbo
+    Patchdog_settings:
+        excluded_files: [tests/, crates/patchdog/src/tests.rs, crates/rust_parsing/src/error.rs]
+        excluded_functions: [new, default, main]
