@@ -33,6 +33,6 @@ gh pr create \
   --title "Patchdog merge into $HEAD_BRANCH" \
   --body "PR initialized by patchdog" \
   --head "$PATCHDOG_BRANCH" \
-  --base "$BASE_BRANCH" \
+  --base "$HEAD_BRANCH" \
   --assignee "$ASSIGNEE" \
   --draft
