@@ -16,7 +16,7 @@ jobs:
 
     steps:
       - name: Patchdog
-        uses: YuraLitvinov/patchdog@v1.2.49
+        uses: YuraLitvinov/patchdog@v1.2.50
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           api_key_gemini: ${{ secrets.API_KEY_GEMINI }}
