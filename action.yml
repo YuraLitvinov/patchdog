@@ -50,10 +50,8 @@ runs:
         ref: ${{ github.event.pull_request.head.ref }}
         fetch-depth: 0
     - name: Run patchdog # grabs patchdog_config.yml from root of the project
-      runs:
-        using: bash
-        main: run.sh
       shell: bash
+      run: ${{ github.action_path }}/run.sh
       env: 
         API_KEY_GEMINI: ${{ inputs.api_key_gemini }}
         GH_TOKEN: ${{ inputs.github_token }}
