@@ -34,6 +34,18 @@ pub trait Files {
 
 impl Files for FileExtractor {
 
+/// Inserts a given `changed_element` string into a vector of source code lines at a specified `line_index` and then writes the modified content back to the original file path. This utility function is crucial for precisely inserting new lines of code or comments into an existing file structure. It handles file creation/overwriting and ensures proper line-by-line writing to the file system.
+///
+/// # Arguments
+///
+/// * `path` - The `PathBuf` to the file that will be written to.
+/// * `source` - A mutable `Vec<String>` representing the lines of the file content, which will be modified in-place.
+/// * `line_index` - The 1-based line number at which the `changed_element` should be inserted.
+/// * `changed_element` - The `String` content to insert into the file.
+///
+/// # Returns
+///
+/// A `Result<(), ErrorHandling>` indicating success or failure of the write operation.
 /// Inserts a given `changed_element` string into a vector of source code lines at a specified `line_index` and then writes the modified content back to the original file path.
 /// This utility function is crucial for precisely inserting new lines of code or comments into an existing file structure.
 /// It handles file creation/overwriting and ensures proper line-by-line writing to the file system.
