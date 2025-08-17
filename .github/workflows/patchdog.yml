@@ -15,10 +15,6 @@ jobs:
       pull-requests: write
 
     steps:
-      - name: Update version number
-        env:
-          PR_NUMBER: ${{ github.event.number }}
-        run: sed -i "s/^version = \".*\"/version = \"1.1.${PR_NUMBER}\"/" crates/patchdog/Cargo.toml
       - name: Run Patchdog action
         uses: ./action/
         with:
