@@ -25,6 +25,11 @@ pub struct YamlRead {
     pub patchdog_settings: PathdogSettings
 }
 
+/// Reads and parses the application's configuration from a YAML file specified by the `CONFIG_PATH` environment variable. This function extracts essential settings such as the main prompt, LLM-specific parameters like model names and rate limits, and Patchdog-specific exclusions for files and functions. It provides a structured `YamlRead` object containing all parsed data for further use.
+///
+/// # Returns
+///
+/// * `Result<YamlRead, ErrorHandling>` - A `Result` containing the parsed configuration as a `YamlRead` struct on success, or an `ErrorHandling` error if the file cannot be read, parsed, or if the YAML structure is unexpected.
 pub fn return_prompt() -> Result<YamlRead, ErrorHandling> {
     let path = Path::new(&std::env::var("CONFIG_PATH")?).to_path_buf();
     let config = fs::read_to_string(&path).context(InvalidIoOperationsSnafu { path })?;
