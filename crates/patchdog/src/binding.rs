@@ -7,10 +7,11 @@ use git2::Diff;
 use rayon::prelude::*;
 use rust_parsing::{self, ErrorHandling};
 use rust_parsing::ObjectRange;
-use rust_parsing::error::ErrorBinding;
+use rust_parsing::error::{ErrorBinding, InvalidIoOperationsSnafu};
 use rust_parsing::file_parsing::{FileExtractor, Files};
 use rust_parsing::rust_parser::{RustItemParser, RustParser};
 use serde::{Deserialize, Serialize};
+use snafu::ResultExt;
 use syn::{UseTree};
 use syn::Item;
 use std::collections::HashMap;
@@ -78,8 +79,8 @@ pub fn changes_from_patch(
     file_exclude: &[PathBuf]
 ) -> Result<Vec<Request>, ErrorBinding> {
     //Collect whole project once, instead of every time for each in function let objects = HashMap<(key, value)>
-    //key - (Filename, Option<trait_name> and fn name)
-    //value - name and type, body of function
+    //key - fn name
+    //value - PathObject
     //Context - FunctionSignature: input args and return types with comment
     //Context - structs as String (as is)
     //Collecting tasks separately to avoid filesystem overhead
@@ -89,7 +90,7 @@ pub fn changes_from_patch(
             each.range.par_iter().filter_map(move |obj| Some(LocalChange {
                 filename: each.filename.clone(),
                 range: obj.clone(),
-                file: fs::read_to_string(&each.filename).ok()?,
+                file: fs::read_to_string(&each.filename.clone()).context(InvalidIoOperationsSnafu { path: each.filename.clone() }).ok()?,
             }))
         })
         .collect();
@@ -142,14 +143,11 @@ pub fn changes_from_patch(
 
 //Seeking context inside same file, to match probable structures
 //Checking uses, to limit amount of crates to be parsed
-//Instead of parsing whole project - we parse few of the crates
-///   Identifies and extracts the source code of external Rust dependencies for a specified function within a project.
-///   It first parses `use` statements from the file at `change`, then collects all related Rust files, and subsequently extracts code segments from these files that are referenced within the provided `function_text`.
-///   The function returns a `Context` object, containing a list of strings where each string represents the source code of a detected external dependency, excluding the function itself.
+//Instead of parsing whole project - we parse few of the crates 
 pub fn find_context (change: PathBuf, fn_name: &str, function_text: &str) -> Result<Context, ErrorHandling> {
     let mut context = vec![];
     //Crate level-context seeking
-    let file = fs::read_to_string(&change)?;
+    let file = fs::read_to_string(&change).context(InvalidIoOperationsSnafu { path: &change })?;
     let parsed = syn::parse_file(&file)?;
     //Here we try to find the paths used in the certain file, if they are within the project, then,
     //We can reach them and get the context from there
@@ -170,7 +168,7 @@ pub fn find_context (change: PathBuf, fn_name: &str, function_text: &str) -> Res
         Some((path.file_stem()?.to_str()?.to_string(), path))
     ).collect::<HashMap<String, PathBuf>>();
     for path in assorted_paths.clone() {
-        let file = fs::read_to_string(&path.1)?;
+        let file = fs::read_to_string(&path.1).context(InvalidIoOperationsSnafu { path: &path.1 })?;
         let parsed = RustItemParser::parse_all_rust_items(&file)?;
         for parse in parsed {
             if use_map.contains_key(&parse.names.name) || use_map.contains_key("self") || use_map.contains_key("*") {
@@ -208,7 +206,7 @@ pub fn find_context (change: PathBuf, fn_name: &str, function_text: &str) -> Res
     let dependencies = context
     .into_par_iter()
     .filter_map(|dep| {
-        let a = fs::read_to_string(&dep.filename).ok()?;
+        let a = fs::read_to_string(&dep.filename).context(InvalidIoOperationsSnafu { path: dep.filename }).ok()?;
         let to_vec = FileExtractor::string_to_vector(&a)
             [dep.object.line_start()-1..dep.object.line_end()]
             .join("\n");
@@ -406,7 +404,7 @@ fn store_objects(
         .filter_map(|change| {
             let list_of_unique_files = get_easy_hunk(&diff, &change.filename()).ok()?;
             let path = relative_path.join(change.filename());
-            let file = fs::read_to_string(&path).ok()?;
+            let file = fs::read_to_string(&path).context(InvalidIoOperationsSnafu { path }).ok()?;
             let parsed = RustItemParser::parse_all_rust_items(&file).ok()?;
             Some(FullDiffInfo {
                 name: change.filename(),
@@ -418,20 +416,6 @@ fn store_objects(
     Ok(vec_of_surplus)
 }
 
-/// Exports detailed line differences from a Git patch, focusing on identifying lines that introduce changes within Rust code objects.
-/// It reads the patch file, extracts general diff information, then iterates through each changed hunk.
-/// For each hunk, it reads the corresponding file, parses its Rust items, and checks if the changed lines within the hunk fall outside of existing, valid Rust objects (indicating new or significantly altered structures).
-///
-/// # Arguments
-///
-/// * `path_to_patch` - A `PathBuf` specifying the path to the patch file.
-/// * `relative_path` - A `PathBuf` specifying the base directory for relative file paths.
-///
-/// # Returns
-///
-/// A `Result<Vec<Difference>, ErrorBinding>`:
-/// - `Ok(Vec<Difference>)`: A vector of `Difference` structs, each containing the filename and a list of line numbers that represent changes not neatly contained within existing Rust objects.
-/// - `Err(ErrorBinding)`: If file reading, object storage, or Rust item parsing fails.
 fn patch_export_change(
     path_to_patch: PathBuf,
     relative_path: PathBuf,
@@ -442,10 +426,8 @@ fn patch_export_change(
     let each_diff = store_objects(&relative_path, &patch_text)?;
     for diff_hunk in &each_diff {
         let path_to_file = relative_path.to_owned().join(&diff_hunk.name);
-        let file = fs::read_to_string(&path_to_file)?;
+        let file = fs::read_to_string(&path_to_file).context(InvalidIoOperationsSnafu { path: &path_to_file })?;
         let parsed = RustItemParser::parse_all_rust_items(&file)?;
-        let path = path_to_file;
-
         for each in &diff_hunk.hunk {
             let parsed_in_diff = &parsed;
             if FileExtractor::check_for_valid_object(parsed_in_diff, each.get_line())? {
@@ -454,7 +436,7 @@ fn patch_export_change(
             change_in_line.push(each.get_line());
         }
         line_and_file.push(Difference {
-            filename: path,
+            filename: path_to_file,
             line: change_in_line.to_owned(),
         });
         change_in_line.clear();

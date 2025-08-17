@@ -1,6 +1,7 @@
-use rust_parsing::error::{ErrorBinding, ErrorHandling};
+use rust_parsing::error::{ErrorBinding, ErrorHandling, InvalidIoOperationsSnafu};
 use rust_parsing::file_parsing::{FileExtractor, Files};
 use rust_parsing::rust_parser::{RustItemParser, RustParser};
+use snafu::ResultExt;
 use std::ops::Range;
 use std::path::PathBuf;
 use std::{env, fs};
@@ -30,7 +31,6 @@ pub fn make_export(filenames: &Vec<PathBuf>) -> Result<Vec<ChangeFromPatch>, Err
     for filename in filenames {
         let path = env::current_dir()?
             .join(filename);
-
         let parsed_file = RustItemParser::parse_rust_file(&path);
         match parsed_file {
             Ok(value) => {
@@ -55,21 +55,6 @@ pub fn make_export(filenames: &Vec<PathBuf>) -> Result<Vec<ChangeFromPatch>, Err
     Ok(output_vec)
 }
 
-/// Justifies the presence of exported code items by comparing them against expected Rust types and names.
-/// It reads the content of each file, extracts code snippets based on provided ranges,
-/// parses these snippets to determine their type and name, and then checks if they match any of the specified `rust_type` or `rust_name` criteria.
-///
-/// # Arguments
-///
-/// * `exported_from_file` - A `Vec<ChangeFromPatch>` containing information about changed code regions, including filenames and line ranges.
-/// * `rust_type` - A `Vec<String>` of Rust item types (e.g., "fn", "struct") to check against.
-/// * `rust_name` - A `Vec<String>` of Rust item names to check against.
-///
-/// # Returns
-///
-/// A `Result<Vec<bool>, ErrorBinding>`:
-/// - `Ok(Vec<bool>)`: A vector of booleans, where `true` indicates that an item from `exported_from_file` matched a specified type and name, and `false` otherwise.
-/// - `Err(ErrorBinding)`: If any file operation, string processing, or parsing fails.
 pub fn justify_presence(
     exported_from_file: Vec<ChangeFromPatch>,
     rust_type: Vec<String>,
@@ -77,7 +62,8 @@ pub fn justify_presence(
 ) -> Result<Vec<bool>, ErrorBinding> {
     let mut vecbool: Vec<bool> = Vec::new();
     for each_item in exported_from_file {
-        let file = fs::read_to_string(&each_item.filename)?;
+        let file = fs::read_to_string(&each_item.filename)
+            .context(InvalidIoOperationsSnafu { path: each_item.filename })?;
         let vectorized = FileExtractor::string_to_vector(&file);
         for object in each_item.range {
             //object.start - 1 is a relatively safe operation, as line number never starts with 0

@@ -1,8 +1,8 @@
 use crate::error::{
-    ErrorHandling, LineOutOfBoundsSnafu,
+    ErrorHandling, InvalidIoOperationsSnafu, LineOutOfBoundsSnafu
 };
 use crate::object_range::ObjectRange;
-use snafu::{ensure};
+use snafu::{ensure, ResultExt};
 use std::{fs::File, io::Write, path::PathBuf};
 pub const REGEX: &str = r#"\{\s*"uuid"\s*:\s*"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",\s*"new_comment"\s*:\s*".*"\s*\}"#;
 pub struct FileExtractor;
@@ -34,21 +34,6 @@ pub trait Files {
 
 impl Files for FileExtractor {
 
-/// Writes a modified vector of strings back to a file at a specific line index.
-/// It inserts the `changed_element` string into the `source` vector at `line_index - 1` (to account for 0-based indexing).
-/// Then, it overwrites the original file with the content of the modified `source` vector, writing each string on a new line.
-///
-/// # Arguments
-///
-/// * `path` - A `PathBuf` indicating the path to the file to be written.
-/// * `source` - A mutable `Vec<String>` representing the lines of the file, which will be modified.
-/// * `line_index` - The 1-based line number at which the `changed_element` should be inserted.
-/// * `changed_element` - The `String` content to insert into the file.
-///
-/// # Returns
-///
-/// An `Ok(())` on successful file write.
-/// An `Err(ErrorHandling::InvalidIoOperations)` if file creation or writing fails.
     fn write_to_vecstring(
         path: PathBuf,
         mut source: Vec<String>,
@@ -56,9 +41,9 @@ impl Files for FileExtractor {
         changed_element: String,
     ) -> Result<(), ErrorHandling> {
         source.insert(line_index.saturating_sub(1), changed_element);
-        let mut file = File::create(path.clone())?;
+        let mut file = File::create(path.clone()).context(InvalidIoOperationsSnafu { path: path.clone() })?;
         for each in &source {
-            writeln!(file, "{each}")?;
+            writeln!(file, "{each}").context(InvalidIoOperationsSnafu { path: path.clone() })?;
         }
         Ok(())
     }

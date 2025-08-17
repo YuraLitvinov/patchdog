@@ -48,7 +48,7 @@ mod tests {
     #[test]
     fn find_all_fn() {
         let source = fs::read_to_string(PATH_BASE)
-            .context(InvalidIoOperationsSnafu)
+            .context(InvalidIoOperationsSnafu { path: PATH_BASE })
             .expect("Failed to read file");
         let parsed = RustItemParser::parse_all_rust_items(&source).expect("Failed to parse");
         for object in parsed {
@@ -76,7 +76,7 @@ mod tests {
         let expected_behavior: &str = "../../tests/test_lib.rs\n../../tests/data.rs";
         let path = Path::new("../../tests/lib.rs");
         let source = fs::read_to_string(&path)
-            .context(InvalidIoOperationsSnafu)
+            .context(InvalidIoOperationsSnafu { path: path })
             .expect("Failed to read file");
         let parsed = RustItemParser::parse_all_rust_items(&source).expect("Failed to parse");
         let mut obj_vector: Vec<String> = Vec::new();

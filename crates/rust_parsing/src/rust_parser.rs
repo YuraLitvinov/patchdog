@@ -1,4 +1,4 @@
-use crate::error::ErrorHandling;
+use crate::error::{ErrorHandling, InvalidIoOperationsSnafu};
 use crate::object_range::{Name, ObjectRange};
 use proc_macro2::TokenStream;
 use proc_macro2::{Spacing, TokenTree};
@@ -15,6 +15,7 @@ use syn::{File, ReturnType};
 use syn::{FnArg, parse_str};
 use syn::{ImplItem, Item};
 use tracing::{Level, event};
+use snafu::ResultExt;
 /*
 1. Парсер патчей
 2. Раст парсер
@@ -62,28 +63,10 @@ pub trait RustParser {
 pub struct RustItemParser;
 
 impl RustParser for RustItemParser {
-/// Parses a Rust file from a given path, converting its content into an Abstract Syntax Tree (AST).
-/// It then visits the items in the AST to extract their line ranges and names, returning them as a vector of `ObjectRange` structs.
-///
-/// # Arguments
-///
-/// * `src`: A reference to a `Path` pointing to the Rust source file.
-///
-/// # Returns
-///
-/// A `Result` containing a `Vec<ObjectRange>` representing the parsed items, or an `ErrorHandling` if the file cannot be read or parsing fails.
-    /// Parses a Rust file from a given path, converting its content into an Abstract Syntax Tree (AST).
-    /// It then visits the items in the AST to extract their line ranges and names, returning them as a vector of `ObjectRange` structs.
-    ///
-    /// # Arguments
-    ///
-    /// * `src`: A reference to a `Path` pointing to the Rust source file.
-    ///
-    /// # Returns
-    ///
-    /// A `Result` containing a `Vec<ObjectRange>` representing the parsed items, or an `ErrorHandling` if the file cannot be read or parsing fails.
+
     fn parse_rust_file(src: &Path) -> Result<Vec<ObjectRange>, ErrorHandling> {
-        let file = fs::read_to_string(src)?;
+        let file = fs::read_to_string(src)
+            .context(InvalidIoOperationsSnafu { path: src })?;
         let ast: File = parse_str(&file)?;
         visit_items(&ast.items)
     }

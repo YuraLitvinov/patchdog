@@ -17,6 +17,8 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::{fs, path::PathBuf, env};
 use tracing::{Level, event};
+use snafu::ResultExt;
+use rust_parsing::error::InvalidIoOperationsSnafu;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None, group(
@@ -318,7 +320,7 @@ pub fn write_to_file(response: Vec<ResponseForm>) -> Result<(), ErrorHandling> {
     //Typical representation of file as vector of lines
     for each in response {
         let path = each.data.metadata.filepath;
-        let file = fs::read_to_string(&path)?;
+        let file = fs::read_to_string(&path).context(InvalidIoOperationsSnafu { path: &path })?;
         let as_vec = FileExtractor::string_to_vector(&file);
         FileExtractor::write_to_vecstring(
             path,

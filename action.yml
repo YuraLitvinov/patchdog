@@ -12,18 +12,6 @@ inputs:
   api_key_gemini:
     description: 'Google Gemini API key'
     required: true
-  
-  base_branch:
-    description: Base branch of PR 
-    required: true
-
-  head_branch:
-    description: Head branch of PR 
-    required: true
-
-  assignee:
-    description: Who will be assigned to audit the PR initialized by patchdog
-    required: true
 
   api_key_openai:
     description: 'OpenAI API key'
@@ -42,23 +30,36 @@ inputs:
 
 outputs: 
   patchdog-run:
-    description: 'Pull Request containing pending changes from base branch'
+    description: 'Pull request containing pending changes from base branch'
 
 runs: 
   using: 'composite'
   steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.pull_request.head.ref }}
+        fetch-depth: 0
+    - name: Ensure pull_request context
+      shell: bash
+      run: |
+        if [ -z "${{ github.event.pull_request.head.ref }}" ]; then
+          echo "This action is to be ran inside PR"
+          exit 1
+        fi
     - name: Run patchdog # grabs patchdog_config.yml from root of the project
       run: |
-        chmod +x run.sh
-        ./run.sh
+        chmod +x action/run.sh
+        ./action/run.sh
       shell: bash
       env: 
         API_KEY_GEMINI: ${{ inputs.api_key_gemini }}
         GH_TOKEN: ${{ inputs.github_token }}
-        BASE_BRANCH: ${{ inputs.base_branch }}
-        HEAD_BRANCH: ${{ inputs.head_branch }}
-        ASSIGNEE: ${{ inputs.assignee }}
+        API_KEY_OPENAI: ${{ inputs.api_key_openai }}
         COMMIT_EMAIL: ${{ inputs.patchdog_email }}
         COMMIT_NAME: ${{ inputs.patchdog_name }}
-        API_KEY_OPENAI: ${{ inputs.api_key_openai }}
+        BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
+        HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+        ASSIGNEE: ${{ github.event.pull_request.user.login }} 
+
 
