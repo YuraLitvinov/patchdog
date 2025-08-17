@@ -109,11 +109,15 @@ jobs:
 # by default, actions can't get PR metadata by themselves, so we have to pass this metadata ourselves
 # provided variable are all the required variables,
 # you may as well use aforementioned commit author signature patchdog_name and patchdog_email
+# custom paths to config.yaml are also supported and default path is said config.yaml
           base_branch: ${{ github.event.pull_request.base.ref }}
           head_branch: ${{ github.event.pull_request.head.ref }} 
           assignee: ${{ github.event.pull_request.user.login }} 
 ```
-
+  - List of available optional variables:
+    - patchdog_name
+    - patchdog_email
+    - config_path
 
 ## Internal composition
 
