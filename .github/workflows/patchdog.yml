@@ -16,7 +16,7 @@ jobs:
 
     steps:
       - name: Run Patchdog action
-        uses: ./action/
+        uses: ./
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           api_key_gemini: ${{ secrets.API_KEY_GEMINI }}
