@@ -101,7 +101,7 @@ pub async fn call(request: Vec<Request>) -> Result<Vec<ResponseForm>, ErrorBindi
             let clear_element = pool_of_requests.remove(&matched.data.uuid).ok_or("None");
             match clear_element {
                 Ok(ok) => responses_collected.push(ResponseForm {
-                    data: ok,
+                    data: ok.to_owned(),
                     new_comment: matched.new_comment,
                 }),
                 Err(_) => continue,
