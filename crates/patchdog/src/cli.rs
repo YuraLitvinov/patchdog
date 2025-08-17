@@ -84,6 +84,17 @@ pub async fn cli_patch_to_agent() -> Result<(), ErrorBinding> {
     }
 }
 
+/// Asynchronously processes a batch of `Request` objects by preparing them for an external agent, sending them, and collecting the corresponding responses.
+///
+/// This function first organizes the incoming requests, then uses `RequestToAgent` to prepare and manage these requests into sendable batches, accounting for capacity and rate limits. After sending these batches, it processes the received responses, matching them back to their original requests to construct `ResponseForm` objects.
+///
+/// If any requests do not receive a valid or matched response, this function recursively retries processing those unhandled requests, ensuring robust handling of partial or failed responses.
+///
+/// # Arguments
+/// * `request` - A `Vec<Request>` containing the individual requests to be processed.
+///
+/// # Returns
+/// * `Result<Vec<ResponseForm>, ErrorBinding>` - On success, returns a `Vec<ResponseForm>` where each `ResponseForm` contains the original request data and the agent's generated comment. Returns an `ErrorBinding` if any step in the request-response cycle encounters an unrecoverable error.
 pub async fn call(request: Vec<Request>) -> Result<Vec<ResponseForm>, ErrorBinding> {
     let mut responses_collected = Vec::new();
     let mut pool_of_requests = HashMap::new();
