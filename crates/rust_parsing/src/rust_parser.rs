@@ -64,6 +64,17 @@ pub struct RustItemParser;
 
 impl RustParser for RustItemParser {
 
+/// Parses a Rust source file from a given path into its Abstract Syntax Tree (AST) and extracts top-level Rust items.
+/// It reads the file content, then uses the `syn` crate to parse it into an AST representation.
+/// The function then visits the items in the AST to identify and collect information about each Rust item, such as functions, structs, or enums, along with their line ranges.
+///
+/// # Arguments
+///
+/// * `src` - A reference to a `Path` pointing to the Rust source file to be parsed.
+///
+/// # Returns
+///
+/// A `Result<Vec<ObjectRange>, ErrorHandling>` containing a vector of `ObjectRange` structs, each representing a parsed Rust item, or an error if file reading or AST parsing fails.
     fn parse_rust_file(src: &Path) -> Result<Vec<ObjectRange>, ErrorHandling> {
         let file = fs::read_to_string(src)
             .context(InvalidIoOperationsSnafu { path: src })?;

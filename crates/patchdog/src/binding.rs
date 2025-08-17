@@ -62,6 +62,18 @@ fn file_belongs_to_dir(file: &Path, dir: &Path) -> std::io::Result<bool> {
     Ok(file_path.starts_with(&dir_path))
 }
 
+/// Checks if a given file is allowed for processing, based on a list of exclusion directories.
+/// It iterates through the provided `exclusions` list and uses `file_belongs_to_dir` to determine if the `file`'s path falls under any of these excluded directories.
+/// This function is crucial for filtering out files that should not be analyzed or modified.
+///
+/// # Arguments
+///
+/// * `file` - A reference to a `Path` representing the file to check.
+/// * `exclusions` - A slice of `PathBuf` representing directories that are excluded.
+///
+/// # Returns
+///
+/// A `std::io::Result<bool>` which is `true` if the file is allowed (not in any excluded directory), and `false` otherwise.
 fn is_file_allowed(file: &Path, exclusions: &[PathBuf]) -> std::io::Result<bool> {
     for dir in exclusions {
         if file_belongs_to_dir(file, dir)? {
@@ -71,6 +83,20 @@ fn is_file_allowed(file: &Path, exclusions: &[PathBuf]) -> std::io::Result<bool>
     Ok(true) // not in any excluded dir
 }
 
+/// Processes a collection of `ChangeFromPatch` items to generate structured `Request` objects, typically for an LLM or similar external service.
+/// It filters changes based on file exclusion lists and whether the changed Rust item matches specified types or names, also considering functions explicitly excluded in configuration.
+/// For each relevant change, the function extracts the full function text and gathers its surrounding context, including external dependencies, to form a comprehensive `Request` that can be sent for further analysis or generation.
+///
+/// # Arguments
+///
+/// * `exported_from_file` - A `Vec<ChangeFromPatch>` containing information about code changes.
+/// * `rust_type` - A `Vec<String>` of Rust item types to include.
+/// * `rust_name` - A `Vec<String>` of Rust item names to include.
+/// * `file_exclude` - A slice of `PathBuf` representing files or directories to exclude from processing.
+///
+/// # Returns
+///
+/// A `Result<Vec<Request>, ErrorBinding>` containing the processed requests, or an error if context gathering or parsing fails.
 pub fn changes_from_patch(
     exported_from_file: Vec<ChangeFromPatch>,
     rust_type: Vec<String>,
@@ -143,6 +169,19 @@ pub fn changes_from_patch(
 //Seeking context inside same file, to match probable structures
 //Checking uses, to limit amount of crates to be parsed
 //Instead of parsing whole project - we parse few of the crates 
+/// Gathers comprehensive contextual information for a given Rust function by analyzing its containing file and related imports.
+/// It identifies `use` statements to map imported modules and items to their corresponding file paths within the project.
+/// The function then extracts the source code for these relevant external dependencies and returns them as part of the `Context` struct, alongside other metadata.
+///
+/// # Arguments
+///
+/// * `change` - The `PathBuf` to the file containing the function.
+/// * `fn_name` - The name of the function for which to find context.
+/// * `function_text` - The full source code of the function.
+///
+/// # Returns
+///
+/// A `Result<Context, ErrorHandling>` containing the collected context (external dependencies, etc.) or an error if file operations or parsing fail.
 pub fn find_context (change: PathBuf, fn_name: &str, function_text: &str) -> Result<Context, ErrorHandling> {
     let mut context = vec![];
     //Crate level-context seeking
@@ -392,6 +431,18 @@ fn flatten_tree(tree: &UseTree, ident: String, module: String, acc: &mut Vec<Use
     }
 }
 
+/// Parses a Git patch to extract detailed information about changes to Rust source files.
+/// For each file identified in the patch, it reads the file's content, parses all Rust items (functions, structs, comments, etc.) within it, and retrieves the specific hunks (changed blocks of code) from the patch.
+/// The collected data is then structured into `FullDiffInfo` objects, providing a comprehensive view of the affected files, their parsed Rust items, and the exact lines changed in the patch.
+///
+/// # Arguments
+///
+/// * `relative_path` - A reference to a `Path` representing the base directory relative to which file paths in the patch are resolved.
+/// * `patch_src` - A byte slice (`&[u8]`) containing the raw Git patch content.
+///
+/// # Returns
+///
+/// A `Result<Vec<FullDiffInfo>, Git2ErrorHandling>` containing detailed information about the changes for each file in the patch, or an error if parsing or file operations fail.
 fn store_objects(
     relative_path: &Path,
     patch_src: &[u8],
@@ -415,6 +466,18 @@ fn store_objects(
     Ok(vec_of_surplus)
 }
 
+/// Processes a Git patch to identify lines of code that have been changed and are *not* part of existing, recognized Rust items.
+/// It reads the patch and gathers `FullDiffInfo` for each changed file, then iterates through each hunk to determine which changed lines fall outside of parsed Rust structures.
+/// The function returns a list of `Difference` structs, indicating files and specific lines within them that represent new or modified code segments not belonging to an existing function, struct, or other parsed item.
+///
+/// # Arguments
+///
+/// * `path_to_patch` - The `PathBuf` to the Git patch file.
+/// * `relative_path` - The `PathBuf` to the root of the repository or project, used to resolve file paths from the patch.
+///
+/// # Returns
+///
+/// A `Result<Vec<Difference>, ErrorBinding>` containing a list of files and their associated new/modified lines, or an error if file operations or parsing fail.
 fn patch_export_change(
     path_to_patch: PathBuf,
     relative_path: PathBuf,
