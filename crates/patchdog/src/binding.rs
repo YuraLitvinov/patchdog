@@ -72,6 +72,7 @@ fn is_file_allowed(file: &Path, exclusions: &[PathBuf]) -> std::io::Result<bool>
 }
 
 
+/// Filters and processes a collection of identified file changes, generating a list of `Request` objects for further processing. ///   It operates in parallel, excluding files specified in `file_exclude` and functions listed in the `patchdog_settings.excluded_functions` from the configuration. ///   For each allowed change, it extracts the function's source code, determines its name and type, finds relevant context (dependencies), and packages this information into a `Request` for external use, such as for an LLM.
 pub fn changes_from_patch(
     exported_from_file: Vec<ChangeFromPatch>,
     rust_type: Vec<String>,
@@ -144,6 +145,7 @@ pub fn changes_from_patch(
 //Seeking context inside same file, to match probable structures
 //Checking uses, to limit amount of crates to be parsed
 //Instead of parsing whole project - we parse few of the crates 
+/// Identifies and extracts the contextual dependencies of a specific Rust function within a project. ///   It reads the function's source file to parse `use` statements and locate related project files containing definitions of imported items. ///   The function then parses the given `function_text` to identify internal references, filtering collected definitions to include only those referenced objects that are not the function itself. The source code of these identified dependencies is then collected to form the `Context`.
 pub fn find_context (change: PathBuf, fn_name: &str, function_text: &str) -> Result<Context, ErrorHandling> {
     let mut context = vec![];
     //Crate level-context seeking
@@ -393,6 +395,7 @@ fn flatten_tree(tree: &UseTree, ident: String, module: String, acc: &mut Vec<Use
     }
 }
 
+/// Processes a Git patch to extract detailed information about changed Rust files and their contents. ///   It takes a raw patch buffer and a relative path, parsing the patch to identify affected files and their associated hunks (sections of change). ///   For each identified changed file, it reads its current content, parses all Rust items within it, and then maps these parsed objects to the relevant hunks from the patch, aggregating this into `FullDiffInfo` structs.
 fn store_objects(
     relative_path: &Path,
     patch_src: &[u8],
@@ -416,6 +419,7 @@ fn store_objects(
     Ok(vec_of_surplus)
 }
 
+/// Analyzes a Git patch file to pinpoint specific line changes in Rust files that do not belong to existing parsed Rust code items. ///   It reads the patch content, uses `store_objects` to get comprehensive diff data including parsed Rust objects and hunks. ///   The function then iterates through the hunks, checking each changed line against the known ranges of Rust items; lines that fall outside these ranges are collected as independent changes.
 fn patch_export_change(
     path_to_patch: PathBuf,
     relative_path: PathBuf,
