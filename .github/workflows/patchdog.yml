@@ -23,12 +23,12 @@ jobs:
       - name: Update version number
         env:
           PR_NUMBER: ${{ github.event.number }}
-        run: sed -i "s/^version = \".*\"/version = \"1.1.${PR_NUMBER}\"/" crates/patchdog/Cargo.toml
+        run: sed -i "s/^version = \".*\"/version = \"1.1.${PR_NUMBER}\"/" crates/patchdog/Cargo.toml 
       - name: Run Patchdog action
         uses: ./
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           api_key_gemini: ${{ secrets.API_KEY_GEMINI }}
-          base_branch: ${{ github.event.pull_request.base.ref }}
+          base_branch: ${{ github.event.pull_request.base.ref }} 
           head_branch: ${{ github.event.pull_request.head.ref }}
           assignee: ${{ github.event.pull_request.user.login }} 
