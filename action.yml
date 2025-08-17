@@ -49,6 +49,9 @@ runs:
       with:
         ref: ${{ github.event.pull_request.head.ref }}
         fetch-depth: 0
+    - name: Run ls
+      shell: bash
+      run: ls ${{ github.action_path }}
     - name: Run patchdog # grabs patchdog_config.yml from root of the project
       shell: bash
       run: ${{ github.action_path }}/run.sh
