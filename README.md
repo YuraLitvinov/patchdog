@@ -5,8 +5,7 @@ When the draft PR is approved, it merges into your **main PR** with all included
 The goal is to save time, make code clearer by providing concise and well thought-through comments for your functions.
 
 **Example:**  
-[Pull Request #19](https://github.com/YuraLitvinov/patchdog/pull/19) — commit `b6c8a972d768d6da1a280b7b060629597c0cc160`
-
+[Pull Request #52](https://github.com/YuraLitvinov/patchdog/pull/52) - patchdog PR merges into [Pull Request #51](https://github.com/YuraLitvinov/patchdog/pull/51)
 ---
 
 ## Features
@@ -93,17 +92,11 @@ jobs:
       pull-requests: write
 
     steps:
-# important step here, here we clone the repository, so our action is able to access it
-      - name: Checkout repository 
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.head_ref }}
-          fetch-depth: 0
       - name: Run Patchdog action
         uses: YuraLitvinov/patchdog # marketplace-defined path
         with: 
-#only crucial variables are being passed to patchdog in this case, you may as well change commit author signature
-#by default it is Patchdog, some@email.com
+#only crucial variables are being passed to patchdog in this case 
+#you may as well change commit author signature by default it is Patchdog, some@email.com and specify path to config.yaml
           github_token: ${{ secrets.GITHUB_TOKEN }}
           api_key_gemini: ${{ secrets.API_KEY_GEMINI }}
 ```
