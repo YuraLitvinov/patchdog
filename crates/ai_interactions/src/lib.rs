@@ -1,9 +1,10 @@
-pub mod parse_json;
 use rust_parsing::{error::InvalidIoOperationsSnafu, ErrorHandling};
 use snafu::ResultExt;
 use std::fs;
 use yaml_rust2::{Yaml, YamlLoader};
 use std::path::Path;
+use tracing::{event, Level};
+
 #[derive(Debug)]
 pub struct LLMSettings {
     pub openai_model: String,
@@ -15,7 +16,8 @@ pub struct LLMSettings {
 #[derive(Debug)]
 pub struct PathdogSettings {
     pub excluded_files: Vec<String>,
-    pub excluded_functions: Vec<String>
+    pub excluded_functions: Vec<String>,
+    pub llm_model: String
 }
 
 #[derive(Debug)]
@@ -25,15 +27,10 @@ pub struct YamlRead {
     pub patchdog_settings: PathdogSettings
 }
 
-/// Reads and parses a YAML configuration file, specified by the `CONFIG_PATH` environment variable, to extract various application settings.
-/// This function deserializes fields such as the main `prompt`, `LLM_settings` (including `openai_model`, `gemini_model`, `tokens_per_min`, and `requests_per_min`), and `Patchdog_settings` (for `excluded_files` and `excluded_functions`).
-/// It returns a structured `YamlRead` object containing these configurations, providing default values for any missing or improperly formatted fields.
-///
-/// # Returns
-/// A `Result<YamlRead, ErrorHandling>` containing the parsed configuration on success, or an `ErrorHandling` variant if the file cannot be read or parsed.
+
 pub fn return_prompt() -> Result<YamlRead, ErrorHandling> {
     let path = Path::new(&std::env::var("CONFIG_PATH")?).to_path_buf();
-    let config = fs::read_to_string(&path).context(InvalidIoOperationsSnafu { path })?;
+    let config = fs::read_to_string(&path).context(InvalidIoOperationsSnafu { path: path.clone() })?;
     let docs = YamlLoader::load_from_str(&config)?;
     let doc = &docs[0];
     if let Yaml::Hash(patchdog) = doc {
@@ -72,6 +69,10 @@ pub fn return_prompt() -> Result<YamlRead, ErrorHandling> {
             .and_then(|v| v.as_vec())
             .map(|arr| arr.iter().filter_map(|item| item.as_str().map(String::from)).collect())
             .unwrap_or_default();
+       let llm_model = patchdog_settings
+            .get(&Yaml::String("llm_model".into()))
+            .and_then(|v| v.as_str().map(String::from))
+            .unwrap_or_default();
 
                 Ok(YamlRead {
             prompt,
@@ -84,10 +85,12 @@ pub fn return_prompt() -> Result<YamlRead, ErrorHandling> {
             patchdog_settings: PathdogSettings {
                 excluded_files,
                 excluded_functions,
+                llm_model
             },
         })
         }
         else {
+        event!(Level::ERROR, "No proper configuration provided inside {}, at patchdog key", path.display());
         Ok(YamlRead {
             prompt: "".to_string(),
             llm_settings: LLMSettings {
@@ -99,12 +102,14 @@ pub fn return_prompt() -> Result<YamlRead, ErrorHandling> {
             patchdog_settings: PathdogSettings {
                 excluded_files: vec![],
                 excluded_functions: vec![],
+                llm_model: String::new()
             },
         })
         }
 
 
     } else {
+        event!(Level::ERROR, "Couldn't find patchdog key in {}", path.display());
         // Default config if YAML isn't structured properly
         Ok(YamlRead {
             prompt: "".to_string(),
@@ -117,6 +122,7 @@ pub fn return_prompt() -> Result<YamlRead, ErrorHandling> {
             patchdog_settings: PathdogSettings {
                 excluded_files: vec![],
                 excluded_functions: vec![],
+                llm_model: String::new()
             },
         })
     }

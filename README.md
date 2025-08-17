@@ -20,7 +20,7 @@ The goal is to save time, make code clearer by providing concise and well though
 - Runs locally or in GitHub Actions.
 - Automatically detects if the are conflicts present with base branch, halting further execution
 - Gracefully merges into your main PR without any conflicts after patchdog PR into your head branch is submitted
-- The Action itself is free of charge. API rates are determined by Google, or other provider of such service when the support will be provided in future for local models, Anthropic and OpenAI.
+- The Action itself is free of charge. API rates are determined by Google, or other provider of such service, e.g. OpenAI.
 ---
 
 ## Requirements
@@ -32,7 +32,7 @@ The goal is to save time, make code clearer by providing concise and well though
 
 	- Github token
 
-	- API key for Gemini
+	- API key for Gemini, GPT
 
 	- [Configuration file](config.yaml) where your personal settings are stored. You may manipulate the prompt as well to get more verbose or compact comments. Config has to be located inside your root directory. 
 ```yaml
@@ -100,24 +100,21 @@ jobs:
           ref: ${{ github.head_ref }}
           fetch-depth: 0
       - name: Run Patchdog action
-        uses: ./ # marketplace-defined path
+        uses: YuraLitvinov/patchdog # marketplace-defined path
         with: 
 #only crucial variables are being passed to patchdog in this case, you may as well change commit author signature
 #by default it is Patchdog, some@email.com
           github_token: ${{ secrets.GITHUB_TOKEN }}
           api_key_gemini: ${{ secrets.API_KEY_GEMINI }}
-# by default, actions can't get PR metadata by themselves, so we have to pass this metadata ourselves
-# provided variable are all the required variables,
-# you may as well use aforementioned commit author signature patchdog_name and patchdog_email
-# custom paths to config.yaml are also supported and default path is said config.yaml
-          base_branch: ${{ github.event.pull_request.base.ref }}
-          head_branch: ${{ github.event.pull_request.head.ref }} 
-          assignee: ${{ github.event.pull_request.user.login }} 
 ```
   - List of available optional variables:
     - patchdog_name
     - patchdog_email
     - config_path
+  - Although these variables are mentioned as 'optional', it is disregarded to actually leave them to be 'as is', 
+  because default placeholder email that is currently used is not a valid email and may cause Github to hallucinate and 
+  create non-existant contributors, such as 'cashbobhudson' inside my repository. This pseudouser appears when email is
+  set to some@email.com and already was mentioned before on Reddit. 
 
 ## Internal composition
 

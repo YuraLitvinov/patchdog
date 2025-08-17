@@ -317,27 +317,13 @@ impl RequestToAgent {
         })
     }
 
-/// Asynchronously sends batches of prepared requests to the Google Gemini API.
-/// It iterates through `WaitForTimeout` objects, converts `SingleFunctionData` to JSON, and sends each as a request.
-/// If there's more than one request batch, it introduces a one-minute delay between batches to respect API rate limits.
-/// Errors during any request are immediately propagated.
-///
-/// # Arguments
-///
-/// * `request` - A reference to a `Vec<WaitForTimeout>` containing the batches of requests to send.
-///
-/// # Returns
-///
-/// A `Result<Vec<String>, ErrorHandling>`:
-/// - `Ok(Vec<String>)`: A vector of `String`s, where each string is the successful response text from the API.
-/// - `Err(ErrorHandling)`: If any request fails or an error occurs during JSON serialization or API communication.
     pub async fn send_batches(request: &Vec<WaitForTimeout>) -> Result<Vec<String>, ErrorHandling> {
         let mut response = vec![];
         let one_minute = time::Duration::from_secs(61);
         for single_request in request {
             for each in &single_request.prepared_requests {
                 let as_json = serde_json::to_string_pretty(&each.data)?;
-                match AiRequest::call_llm_gemini(&as_json).await {
+                match AiRequest::switch_llm(&as_json).await {
                     //Handling exclusive case, where one of the requests may fail
                     Ok(r) => {
                         response.push(r);
