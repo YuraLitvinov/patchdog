@@ -47,6 +47,10 @@ pub struct ResponseForm {
     new_comment: String,
 }
 
+/// Processes command-line arguments to orchestrate the application of code patches through an external agent. This function parses command-line inputs to determine the patch file and specific Rust item types/names to target, filtering out excluded files and functions. It then sends these as requests to an external agent and processes the agent's responses, writing the generated content back to the appropriate source files.
+///
+/// # Returns
+/// * `Result<(), ErrorBinding>` - An empty `Result` indicating success, or an `ErrorBinding` if an error occurs during processing, such as parsing arguments, preparing requests, or writing to files.
 pub async fn cli_patch_to_agent() -> Result<(), ErrorBinding> {
     //Mode accepts type and name of the object for the sake of debugging. It autodefaults to any fn
     let commands = Mode::parse();
@@ -84,6 +88,13 @@ pub async fn cli_patch_to_agent() -> Result<(), ErrorBinding> {
     }
 }
 
+/// Asynchronously processes a collection of `Request` objects by preparing them for submission to an external agent, accounting for rate limits and batching. It sends these prepared requests and then meticulously collects and matches the agent's responses back to their original requests. If any requests fail to receive a valid response, the function employs a recursive retry mechanism to ensure robust completion.
+///
+/// # Arguments
+/// * `request` - A `Vec<Request>` containing the individual requests to be processed.
+///
+/// # Returns
+/// * `Result<Vec<ResponseForm>, ErrorBinding>` - On success, returns a `Vec<ResponseForm>` where each `ResponseForm` contains the original request data and the agent's generated comment. Returns an `ErrorBinding` if any step in the request-response cycle encounters an unrecoverable error.
 /// Asynchronously processes a batch of `Request` objects by preparing them for an external agent, sending them, and collecting the corresponding responses.
 ///
 /// This function first organizes the incoming requests, then uses `RequestToAgent` to prepare and manage these requests into sendable batches, accounting for capacity and rate limits. After sending these batches, it processes the received responses, matching them back to their original requests to construct `ResponseForm` objects.
