@@ -15,11 +15,6 @@ jobs:
       pull-requests: write
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.head_ref }}
-          fetch-depth: 0
       - name: Update version number
         env:
           PR_NUMBER: ${{ github.event.number }}
@@ -29,6 +24,3 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           api_key_gemini: ${{ secrets.API_KEY_GEMINI }}
-          base_branch: ${{ github.event.pull_request.base.ref }} 
-          head_branch: ${{ github.event.pull_request.head.ref }}
-          assignee: ${{ github.event.pull_request.user.login }} 

@@ -3,6 +3,8 @@ use snafu::ResultExt;
 use std::fs;
 use yaml_rust2::{Yaml, YamlLoader};
 use std::path::Path;
+use tracing::{event, Level};
+
 #[derive(Debug)]
 pub struct LLMSettings {
     pub openai_model: String,
@@ -28,7 +30,7 @@ pub struct YamlRead {
 
 pub fn return_prompt() -> Result<YamlRead, ErrorHandling> {
     let path = Path::new(&std::env::var("CONFIG_PATH")?).to_path_buf();
-    let config = fs::read_to_string(&path).context(InvalidIoOperationsSnafu { path })?;
+    let config = fs::read_to_string(&path).context(InvalidIoOperationsSnafu { path: path.clone() })?;
     let docs = YamlLoader::load_from_str(&config)?;
     let doc = &docs[0];
     if let Yaml::Hash(patchdog) = doc {
@@ -88,6 +90,7 @@ pub fn return_prompt() -> Result<YamlRead, ErrorHandling> {
         })
         }
         else {
+        event!(Level::ERROR, "No proper configuration provided inside {}, at patchdog key", path.display());
         Ok(YamlRead {
             prompt: "".to_string(),
             llm_settings: LLMSettings {
@@ -106,6 +109,7 @@ pub fn return_prompt() -> Result<YamlRead, ErrorHandling> {
 
 
     } else {
+        event!(Level::ERROR, "Couldn't find patchdog key in {}", path.display());
         // Default config if YAML isn't structured properly
         Ok(YamlRead {
             prompt: "".to_string(),

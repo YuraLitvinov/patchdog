@@ -17,18 +17,6 @@ inputs:
   api_key_gemini:
     description: 'Google Gemini API key'
     required: true
-  
-  base_branch:
-    description: Base branch of PR 
-    required: true
-
-  head_branch:
-    description: Head branch of PR 
-    required: true
-
-  assignee:
-    description: Who will be assigned to audit the PR initialized by patchdog
-    required: true
 
   api_key_openai:
     description: 'OpenAI API key'
@@ -63,15 +51,15 @@ runs:
         fetch-depth: 0
     - name: Run patchdog # grabs patchdog_config.yml from root of the project
       run: |
-        chmod +x action/run.sh
-        ./action/run.sh
+        chmod +x ${{ github.action_path }}/action/run.sh
+        ./${{ github.action_path }}/action/run.sh
       shell: bash
       env: 
         API_KEY_GEMINI: ${{ inputs.api_key_gemini }}
         GH_TOKEN: ${{ inputs.github_token }}
-        BASE_BRANCH: ${{ inputs.base_branch }}
-        HEAD_BRANCH: ${{ inputs.head_branch }}
-        ASSIGNEE: ${{ inputs.assignee }}
+        BASE_BRANCH: ${{ github.event.pull_request.base.ref }} 
+        HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+        ASSIGNEE: ${{ github.event.pull_request.user.login }} 
         COMMIT_EMAIL: ${{ inputs.patchdog_email }}
         COMMIT_NAME: ${{ inputs.patchdog_name }}
         API_KEY_OPENAI: ${{ inputs.api_key_openai }}

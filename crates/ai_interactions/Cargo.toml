@@ -7,3 +7,4 @@ edition = "2024"
 rust_parsing = { path = "../rust_parsing" }
 snafu = { workspace = true }
 yaml-rust2 = { workspace = true }
+tracing = { workspace = true }
