@@ -1,4 +1,3 @@
-pub mod parse_json;
 use rust_parsing::{error::InvalidIoOperationsSnafu, ErrorHandling};
 use snafu::ResultExt;
 use std::fs;

@@ -9,6 +9,7 @@ pub trait RequestResponseConstruction {
     async fn switch_llm(file_content: &str) -> Result<String, ErrorHandling>;
     async fn call_llm_gemini(file_content: &str) -> Result<String, ErrorHandling>;
     async fn call_llm_openai(file_content: &str) -> Result<String, ErrorHandling>;
+
 }
 
 pub struct AiRequest;
@@ -22,7 +23,7 @@ impl RequestResponseConstruction for AiRequest {
         match model { 
             "openai" => AiRequest::call_llm_openai(file_content).await,
             "google" => AiRequest::call_llm_gemini(file_content).await,
-            _ => Ok(format!("No such model {}", model))  
+            _ => Ok(format!("Specified model {} is not supported", model))  
         }
     }
 
@@ -41,7 +42,7 @@ impl RequestResponseConstruction for AiRequest {
     async fn call_llm_openai(file_content: &str) -> Result<String, ErrorHandling> {
         let api_key = var("API_KEY_OPENAI")?;
         let client = Client::new(&api_key);
-        let args = openai_rust::chat::ChatArguments::new(std::env::var("OPENAI_MODEL")?, vec![
+        let args = openai_rust::chat::ChatArguments::new(return_prompt()?.llm_settings.openai_model, vec![
             openai_rust::chat::Message {
                 role: "user".to_owned(),
                 content: return_prompt()?.prompt.to_string(),

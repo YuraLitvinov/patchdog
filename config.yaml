@@ -28,8 +28,8 @@ Patchdog:
         GEMINI_MODEL: models/gemini-2.5-flash
         TOKENS_PER_MIN: 250000
         REQUESTS_PER_MIN: 10
-        OPENAI_MODEL: gpt-3.5-turbo
+        OPENAI_MODEL: gpt-5-mini
     Patchdog_settings:
         excluded_files: [tests/, crates/patchdog/src/tests.rs, crates/rust_parsing/src/error.rs]
         excluded_functions: [new, default, main]
-        llm_model: openai
+        llm_model: google

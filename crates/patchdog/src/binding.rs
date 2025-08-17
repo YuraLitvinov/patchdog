@@ -1,4 +1,3 @@
-use ai_interactions::parse_json::ChangeFromPatch;
 use ai_interactions::return_prompt;
 use clap::error::Result;
 use gemini::request_preparation::{Context, Metadata, Request, SingleFunctionData};
@@ -55,6 +54,15 @@ pub struct LocalContext {
     pub context_name: String,  
     pub context_path: String,  
 }
+
+#[derive(Debug)]
+pub struct ChangeFromPatch {
+    pub filename: PathBuf,
+    pub range: Vec<Range<usize>>,
+}
+
+
+
 
 fn file_belongs_to_dir(file: &Path, dir: &Path) -> std::io::Result<bool> {
     let file_path = fs::canonicalize(file)?;
