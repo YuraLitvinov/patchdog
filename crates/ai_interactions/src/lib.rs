@@ -25,6 +25,12 @@ pub struct YamlRead {
     pub patchdog_settings: PathdogSettings
 }
 
+/// Reads and parses a YAML configuration file, whose path is determined by the `CONFIG_PATH` environment variable, to retrieve various application settings.
+/// This function extracts critical configurations including the primary `prompt`, `LLM_settings` such as `openai_model`, `gemini_model`, `tokens_per_min`, and `requests_per_min`, alongside `Patchdog_settings` for `excluded_files` and `excluded_functions`.
+/// It returns a structured `YamlRead` object, providing default values for any configuration elements that are missing or improperly formatted within the YAML.
+///
+/// # Returns
+/// A `Result<YamlRead, ErrorHandling>` where `Ok(YamlRead)` contains the parsed application configuration, or `Err(ErrorHandling)` if an I/O error occurs, the environment variable is missing, or the YAML parsing fails.
 /// Reads and parses a YAML configuration file, specified by the `CONFIG_PATH` environment variable, to extract various application settings.
 /// This function deserializes fields such as the main `prompt`, `LLM_settings` (including `openai_model`, `gemini_model`, `tokens_per_min`, and `requests_per_min`), and `Patchdog_settings` (for `excluded_files` and `excluded_functions`).
 /// It returns a structured `YamlRead` object containing these configurations, providing default values for any missing or improperly formatted fields.
