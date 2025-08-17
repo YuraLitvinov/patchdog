@@ -47,6 +47,13 @@ pub struct ResponseForm {
     new_comment: String,
 }
 
+/// Asynchronously executes the CLI-driven patch application process, interacting with an external agent.
+/// This function parses command-line arguments, reads a specified patch file, and then filters the identified code changes based on configured exclusion lists.
+/// It constructs structured requests from the filtered changes, dispatches them to an external agent (e.g., an LLM), and subsequently writes any generated responses or comments back to the source files, returning success or an error if any step fails.
+///
+/// # Returns
+///
+/// A `Result<(), ErrorBinding>` indicating the success or failure of the patching operation.
 pub async fn cli_patch_to_agent() -> Result<(), ErrorBinding> {
     //Mode accepts type and name of the object for the sake of debugging. It autodefaults to any fn
     let commands = Mode::parse();
@@ -84,6 +91,17 @@ pub async fn cli_patch_to_agent() -> Result<(), ErrorBinding> {
     }
 }
 
+/// Asynchronously processes a collection of `Request` objects by preparing, sending, and managing responses from an external agent.
+/// This function initializes an agent, batches the incoming requests according to capacity and rate limits, and sends these batches for processing.
+/// It then collects and matches the responses, recursively retrying any requests that did not receive a valid or matched response to ensure comprehensive handling.
+///
+/// # Arguments
+///
+/// * `request` - A `Vec<Request>` containing the individual requests to be processed by the agent.
+///
+/// # Returns
+///
+/// A `Result<Vec<ResponseForm>, ErrorBinding>` containing a vector of `ResponseForm` objects on success, where each form includes the original request data and the agent's generated comment. Returns an `ErrorBinding` if an unrecoverable error occurs during the request-response cycle.
 /// Asynchronously processes a batch of `Request` objects by preparing them for an external agent, sending them, and collecting the corresponding responses.
 ///
 /// This function first organizes the incoming requests, then uses `RequestToAgent` to prepare and manage these requests into sendable batches, accounting for capacity and rate limits. After sending these batches, it processes the received responses, matching them back to their original requests to construct `ResponseForm` objects.
