@@ -51,8 +51,8 @@ runs:
         fetch-depth: 0
     - name: Run patchdog # grabs patchdog_config.yml from root of the project
       run: |
-        chmod +x ${{ github.action_path }}/action/run.sh
-        ./${{ github.action_path }}/action/run.sh
+        chmod +x ${{ github.action_path }}/run.sh
+        .${{ github.action_path }}/run.sh
       shell: bash
       env: 
         API_KEY_GEMINI: ${{ inputs.api_key_gemini }}
