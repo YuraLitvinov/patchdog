@@ -43,6 +43,11 @@ inputs:
     description: Commit signature email
     required: false
     default: some@email.com
+    
+  config_path:
+    description: Specify default path to config
+    required: false
+    default: config.yaml
 
 outputs: 
   patchdog-run:
@@ -70,5 +75,6 @@ runs:
         COMMIT_EMAIL: ${{ inputs.patchdog_email }}
         COMMIT_NAME: ${{ inputs.patchdog_name }}
         API_KEY_OPENAI: ${{ inputs.api_key_openai }}
+        CONFIG_PATH: ${{ inputs.config_path }}
 
 
