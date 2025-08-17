@@ -71,7 +71,6 @@ fn is_file_allowed(file: &Path, exclusions: &[PathBuf]) -> std::io::Result<bool>
     Ok(true) // not in any excluded dir
 }
 
-
 pub fn changes_from_patch(
     exported_from_file: Vec<ChangeFromPatch>,
     rust_type: Vec<String>,

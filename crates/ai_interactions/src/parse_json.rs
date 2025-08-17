@@ -13,18 +13,6 @@ pub struct ChangeFromPatch {
     pub range: Vec<Range<usize>>,
 }
 
-/// Processes a list of file paths, parses each Rust file to identify changed code ranges,
-/// and aggregates these changes into a vector of `ChangeFromPatch` structs.
-///
-/// # Arguments
-///
-/// * `filenames` - A reference to a `Vec<PathBuf>` containing the paths to the files to be processed.
-///
-/// # Returns
-///
-/// A `Result<Vec<ChangeFromPatch>, ErrorHandling>`:
-/// - `Ok(Vec<ChangeFromPatch>)`: A vector where each `ChangeFromPatch` contains the filename and a list of changed line ranges within that file.
-/// - `Err(ErrorHandling)`: If any file operation or parsing fails.
 pub fn make_export(filenames: &Vec<PathBuf>) -> Result<Vec<ChangeFromPatch>, ErrorHandling> {
     let mut output_vec: Vec<ChangeFromPatch> = Vec::new();
     let mut vector_of_changed: Vec<Range<usize>> = Vec::new();
