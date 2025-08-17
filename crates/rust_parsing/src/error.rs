@@ -27,9 +27,10 @@ pub enum ErrorHandling {
     LineOutOfBounds {
         line_number: usize,
     },
-    #[snafu(display("{source}"))]
+    #[snafu(display("{source} in {path:#?}"))]
     InvalidIoOperations {
-        source: std::io::Error
+        path: PathBuf,
+        source: std::io::Error,
     },
     #[snafu(display("{source}"))]
     StdVarError {
@@ -89,6 +90,9 @@ pub enum ErrorHandling {
     },
     ConvertAnyhow {
         source: anyhow::Error
+    },
+    InvalidRead {
+        source: std::io::Error
     }
 }
 
@@ -106,6 +110,19 @@ impl From<Git2ErrorHandling> for ErrorBinding {
 
 }
 
+impl From<std::io::Error> for ErrorHandling {
+    fn from(e: std::io::Error) -> Self {
+        ErrorHandling::InvalidRead { source: e }
+    }
+}
+
+
+impl From<std::io::Error> for ErrorBinding {
+    fn from(e: std::io::Error) -> Self {
+        ErrorBinding::RustParsing(ErrorHandling::InvalidRead { source: e })
+    }
+}
+
 impl From<ErrorHandling> for ErrorBinding {
 
     fn from(rust: ErrorHandling) -> Self {
@@ -117,19 +134,6 @@ impl From<regex::Error> for ErrorHandling {
     fn from (e: regex::Error) -> Self {
         let e: ErrorHandling = e.into();
         e
-    }
-}
-
-impl From<std::io::Error> for ErrorHandling {
-
-    fn from(e: std::io::Error) -> Self {
-        ErrorHandling::InvalidIoOperations { source: e }
-    }
-}
-impl From<std::io::Error> for ErrorBinding {
-
-    fn from(e: std::io::Error) -> Self {
-        ErrorBinding::RustParsing(ErrorHandling::InvalidIoOperations { source: e })
     }
 }
 

@@ -1,8 +1,9 @@
 pub mod parse_json;
-use rust_parsing::ErrorHandling;
+use rust_parsing::{error::InvalidIoOperationsSnafu, ErrorHandling};
+use snafu::ResultExt;
 use std::fs;
 use yaml_rust2::{Yaml, YamlLoader};
-
+use std::path::Path;
 #[derive(Debug)]
 pub struct LLMSettings {
     pub openai_model: String,
@@ -24,8 +25,16 @@ pub struct YamlRead {
     pub patchdog_settings: PathdogSettings
 }
 
+/// Reads and parses the `patchdog_config.yaml` file to extract various configuration settings.
+/// It retrieves LLM-related parameters such as OpenAI and Gemini models, tokens per minute, and requests per minute, along with Patchdog-specific settings like excluded files and functions.
+/// This function returns a structured `YamlRead` object containing all parsed configuration, or a default configuration if the file is not found or malformed.
+///
+/// # Returns
+///
+/// A `Result<YamlRead, ErrorHandling>` containing the parsed configuration or an error if the operation fails.
 pub fn return_prompt() -> Result<YamlRead, ErrorHandling> {
-    let config = fs::read_to_string("patchdog_config.yaml")?;
+    let path = Path::new("patchdog_config.yaml").to_path_buf();
+    let config = fs::read_to_string(&path).context(InvalidIoOperationsSnafu { path })?;
     let docs = YamlLoader::load_from_str(&config)?;
     let doc = &docs[0];
     if let Yaml::Hash(patchdog) = doc {

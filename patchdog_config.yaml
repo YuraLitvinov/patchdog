@@ -16,9 +16,8 @@ Patchdog:
             } 
         ]
         Instruction: Clone the request form, remove 'data' and append new field 'new_comment', generate, making strong assumptions about code functionality, 
-        generate rustdoc /// style comment specify return, input and functionality of the function, with emphasis on functionality - 2-3 sentences per 'data'. 
-        If present, use 'external_dependencies' as help, if you run into some sort of misunderstaing. After each triple slash make exactly three spaces, before starting writing into newline.
-        Each new object should be located inside [] block. Return type should be a JSON object of this type:
+        Generate rustdoc /// comment specify return, input and functionality of the function, with emphasis on functionality - 2-3 sentences per 'data'. 
+        If present, use 'external_dependencies' as help, if you run into some sort of misunderstaing. Each new object should be located inside [] block. Return type should be a JSON object of this type:
         [
             {
                 "uuid": "", 

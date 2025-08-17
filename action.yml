@@ -39,18 +39,22 @@ inputs:
     required: false
     default: some@email.com
 
-
 outputs: 
   patchdog-run:
-    description: 'Pull Request containing pending changes from base branch'
+    description: 'Pull request containing pending changes from base branch'
 
 runs: 
   using: 'composite'
   steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.pull_request.head.ref }}
+        fetch-depth: 0
     - name: Run patchdog # grabs patchdog_config.yml from root of the project
       run: |
-        chmod +x run.sh
-        ./run.sh
+        chmod +x action/run.sh
+        ./action/run.sh
       shell: bash
       env: 
         API_KEY_GEMINI: ${{ inputs.api_key_gemini }}
@@ -61,4 +65,5 @@ runs:
         COMMIT_EMAIL: ${{ inputs.patchdog_email }}
         COMMIT_NAME: ${{ inputs.patchdog_name }}
         API_KEY_OPENAI: ${{ inputs.api_key_openai }}
+
 

@@ -17,6 +17,8 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::{fs, path::PathBuf, env};
 use tracing::{Level, event};
+use snafu::ResultExt;
+use rust_parsing::error::InvalidIoOperationsSnafu;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None, group(
@@ -272,6 +274,17 @@ fn matching(prepared: &Vec<WaitForTimeout>, response: &[RawResponse]) -> Vec<Lin
     matched
 }
 
+/// Attempts to repair a potentially malformed JSON response by iteratively truncating the input and appending a closing JSON delimiter.
+/// This function is designed as a robust fallback to recover valid JSON structures from partial or broken string inputs, particularly useful when dealing with unreliable external API responses.
+/// It tries to deserialize the modified string into a `Vec<RawResponse>` and returns the first successful result.
+///
+/// # Arguments
+///
+/// * `output` - A `Vec<String>` representing the lines of a potentially incomplete or malformed JSON string.
+///
+/// # Returns
+///
+/// A `Result<Vec<RawResponse>, ErrorHandling>` containing the successfully deserialized responses, or an empty vector if no valid structure can be recovered after all attempts.
 fn fallback_repair(output: Vec<String>) -> Result<Vec<RawResponse>, ErrorHandling> {
     let mut clone_out = output;
     for _ in 0..clone_out.len() {
@@ -292,19 +305,17 @@ fn fallback_repair(output: Vec<String>) -> Result<Vec<RawResponse>, ErrorHandlin
     Ok(vec![])
 }
 
-/// Writes the `new_comment` from each `ResponseForm` back into its corresponding file.
-/// The responses are sorted by `line_range.start` in descending order to prevent issues with line index shifts during insertion.
-/// For each response, it reads the file, converts its content to a vector of strings, inserts the new comment at the specified line index,
-/// and then writes the modified content back to the file.
+/// Writes generated comments or other code changes into specified files based on structured response data.
+/// It sorts the responses by line number in descending order to prevent index shifting issues when inserting multiple changes into the same file.
+/// For each response, it reads the target file, inserts the `new_comment` at the designated line range, and then overwrites the file with the updated content.
 ///
 /// # Arguments
 ///
-/// * `response` - A `Vec<ResponseForm>` containing the responses with original file data and new comments.
+/// * `response` - A `Vec<ResponseForm>` containing the data to be written, including file paths, line ranges, and the new comments.
 ///
 /// # Returns
 ///
-/// An `Ok(())` on successful writing to all files.
-/// An `Err(ErrorHandling)` if any file operation (reading, creating, writing) fails.
+/// A `Result<(), ErrorHandling>` indicating success or failure of the write operations.
 pub fn write_to_file(response: Vec<ResponseForm>) -> Result<(), ErrorHandling> {
     let mut response = response;
     response.sort_by(|a, b| {
@@ -318,7 +329,7 @@ pub fn write_to_file(response: Vec<ResponseForm>) -> Result<(), ErrorHandling> {
     //Typical representation of file as vector of lines
     for each in response {
         let path = each.data.metadata.filepath;
-        let file = fs::read_to_string(&path)?;
+        let file = fs::read_to_string(&path).context(InvalidIoOperationsSnafu { path: &path })?;
         let as_vec = FileExtractor::string_to_vector(&file);
         FileExtractor::write_to_vecstring(
             path,
