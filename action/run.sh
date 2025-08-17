@@ -25,7 +25,7 @@ rm base_head.patch && rm patchdog-linux-x86_64
 #Create a unique pull request
 PATCHDOG_BRANCH="patchdog-$(uuidgen)"
 git checkout -b "$PATCHDOG_BRANCH"
-git add . ':(exclude).github/workflows/'
+git add . 
 
 git commit -m "Patchdog-included changes for $HEAD_BRANCH"
 git push origin $PATCHDOG_BRANCH
