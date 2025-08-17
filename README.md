@@ -2,6 +2,7 @@
 
 **Patchdog** is a development tool that creates a **draft pull request** containing generated documentation for your code changes.  
 When the draft PR is approved, it merges into your **main PR** with all included commits.  
+The goal is to save time, make code clearer by providing concise and well thought-through comments for your functions.
 
 **Example:**  
 [Pull Request #19](https://github.com/YuraLitvinov/patchdog/pull/19) — commit `b6c8a972d768d6da1a280b7b060629597c0cc160`
@@ -17,7 +18,9 @@ When the draft PR is approved, it merges into your **main PR** with all included
 - Identifies changed functions and gathers relevant context.
 - Respects API rate limits and token budgets for the configured LLM.
 - Runs locally or in GitHub Actions.
-- The Action itself is free of charge. API rates are determined by Google, or other provider of such service, e.g. OpenAI, Anthropic.
+- Automatically detects if the are conflicts present with base branch, halting further execution
+- Gracefully merges into your main PR without any conflicts after patchdog PR into your head branch is submitted
+- The Action itself is free of charge. API rates are determined by Google, or other provider of such service when the support will be provided in future for local models, Anthropic and OpenAI.
 ---
 
 ## Requirements
@@ -29,43 +32,131 @@ When the draft PR is approved, it merges into your **main PR** with all included
 
 	- Github token
 
-	- API key for LLM
+	- API key for Gemini
 
-	- Configuration file where your personal settings are stored. You may manipulate the prompt as well to get more verbose or compact comments
+	- [Configuration file](config.yaml) where your personal settings are stored. You may manipulate the prompt as well to get more verbose or compact comments. Config has to be located inside your root directory. 
+```yaml
+Patchdog:
+    prompt: | 
+        response_format = {"type": "json_object"} The provided data is a collection of valid Rust code.
+        [
+            {
+                "uuid": "", 
+                "data": {
+                    "fn_name": "",
+                    "function_text": "" 
+                    "context": {
+                        "class_name": "",
+                        "external_dependencies": [],
+                        "old_comment": []
+                    }
+                }
+            } 
+        ]
+        Instruction: Clone the request form, remove 'data' and append new field 'new_comment', generate, making strong assumptions about code functionality, 
+        Generate rustdoc /// comment specify return, input and functionality of the function, with emphasis on functionality - 2-3 sentences per 'data'. 
+        If present, use 'external_dependencies' as help, if you run into some sort of misunderstaing. Each new object should be located inside [] block. Return type should be a JSON object of this type:
+        [
+            {
+                "uuid": "", 
+                "new_comment": ""
+            } 
+        ]
+    LLM_settings:     
+        GEMINI_MODEL: models/gemini-2.5-flash
+        TOKENS_PER_MIN: 250000
+        REQUESTS_PER_MIN: 10
+        OPENAI_MODEL: gpt-3.5-turbo
+    Patchdog_settings:
+        excluded_files: [tests/, crates/patchdog/src/tests.rs, crates/rust_parsing/src/error.rs]
+        excluded_functions: [new, default, main]
 
-- You might get the reference for setting up patchdog inside patchdog repository, .github/workflows/patchdog.yml
+```
+- You may get the reference for setting up patchdog inside [patchdog repository](.github/workflows/patchdog.yml), or 
+```yaml
+name: Quickstart
 
-### Local Development
+on:
+# You may specify the type of PR that triggers the action
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  run_patchdog:
+#only linux is supported, but many flavors, as patchdog binaries are statically linked
+    runs-on: ubuntu-latest
+#these are the permission without which the actions wouldn't work
+    permissions: 
+      contents: write
+      pull-requests: write
+
+    steps:
+# important step here, here we clone the repository, so our action is able to access it
+      - name: Checkout repository 
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+      - name: Run Patchdog action
+        uses: ./ # marketplace-defined path
+        with: 
+#only crucial variables are being passed to patchdog in this case, you may as well change commit author signature
+#by default it is Patchdog, some@email.com
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          api_key_gemini: ${{ secrets.API_KEY_GEMINI }}
+# by default, actions can't get PR metadata by themselves, so we have to pass this metadata ourselves
+# provided variable are all the required variables,
+# you may as well use aforementioned commit author signature patchdog_name and patchdog_email
+          base_branch: ${{ github.event.pull_request.base.ref }}
+          head_branch: ${{ github.event.pull_request.head.ref }} 
+          assignee: ${{ github.event.pull_request.user.login }} 
+```
+
+
+## Internal composition
+
+### Running locally
 
 - Rust toolchain installed.
 
 - .env file containing your secret API key.
 
-- System dependencies:
-
-- openssl
-
-- pkg-config
-
-
 ---
 
-## Build Instructions
-
-### Build on your host system (glibc) 
+### Build Instructions
+#### Clone the repository 
+```bash
+git clone git@github.com:YuraLitvinov/patchdog.git
+```
+#### Build on your host system for (glibc) --dynamic
 ```bash
 cargo build --release
 ```
+- Dependencies:
+
+  - openssl
+
+  - pkg-config
+
 **OR** 
-### (musl)
+#### for (musl) --static
+- Dependencies
+  - Docker setup
+
 ```bash
 ./build.sh
 ```
-# How It Works
+## How It Works
 
-  
+#### 1. Getting the changes
 
-#### 1. Patch Parsing
+- We create a git diff against your PR branch and where you are merging
+- All changes that are not relevant are dropped at parsing
+- Changes that are relevant and exist within the code are then being passed further
+
+#### 2. Patch Parsing
 
   
 
@@ -83,7 +174,7 @@ cargo build --release
 
   
 
-#### 2. Interface
+#### 3. Interface
 
   
 
@@ -103,9 +194,7 @@ cargo build --release
 
 - processing the responses with match_request_response
 
-- fallback_repair to autocorrect the broken JSON,
-
-that the LLM could've returned after serde failed
+- fallback_repair to autocorrect the broken JSON - attempts to strip the JSON, that the LLM could've returned after serde failed until it returns any viable result, elsewise we parse it with REGEX,
 
 - in `binding.rs`: grouping methods, all public methods are moved to the top of the file
 
@@ -115,7 +204,7 @@ that the LLM could've returned after serde failed
 
   
 
-#### 3. Data Flow
+#### 4. Data Flow
 
   
 
@@ -133,7 +222,7 @@ that the LLM could've returned after serde failed
 
   
 
-#### 4. LLM Interaction
+#### 5. LLM Interaction
 
   
 
@@ -141,5 +230,5 @@ that the LLM could've returned after serde failed
 
 - Broken answers trigger recursive retries until all requests succeed.
 
-#### 5. Result writing
+#### 6. Result writing
 - When quantity of responses matches with requests, the requests are written simultaneously
