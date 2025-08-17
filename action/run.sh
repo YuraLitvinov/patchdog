@@ -9,7 +9,10 @@ git fetch origin ${BASE_BRANCH}
 
 #Test if PR contains conflict and abort any further actions
 git merge --no-commit --no-ff origin/"$BASE_BRANCH" || exit 1
-git merge --abort
+
+if [ -f .git/MERGE_HEAD ]; then
+  git merge --abort
+fi
 
 #Download and run latest release
 curl -L -o patchdog-linux-x86_64 https://github.com/YuraLitvinov/patchdog/releases/latest/download/patchdog

@@ -51,13 +51,6 @@ runs:
       with:
         ref: ${{ github.event.pull_request.head.ref }}
         fetch-depth: 0
-    - name: Ensure pull_request context
-      shell: bash
-      run: |
-        if [ -z "${{ github.event.pull_request.head.ref }}" ]; then
-          echo "This action is to be ran inside PR"
-          exit 1
-        fi
     - name: Run patchdog # grabs patchdog_config.yml from root of the project
       run: |
         chmod +x action/run.sh
