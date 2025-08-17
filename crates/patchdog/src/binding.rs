@@ -602,7 +602,7 @@ fn handle_struct(strukt: syn::ExprStruct, objects: &mut Vec<LocalContext>, paren
         .path
         .get_ident()
         .into_iter()
-        .filter_map(|i| Some(i.to_string()))
+        .map(|i| i.to_string())
         .collect::<String>();
     let full_path = if parent_path.is_empty() { 
         ident.clone() 
