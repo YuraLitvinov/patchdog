@@ -1,7 +1,5 @@
 name: 'Patchdog'
-description: > 
-  Generate comprehensive rustdoc comments for your project. 
-  Requires contents: write and pull-requests: write permissions.
+description: 'Rust "rustdoc" comment generator. Multiple LLM flavors are supported'
 author: 'Yurii Litvinov'
 
 
