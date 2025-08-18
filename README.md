@@ -33,6 +33,8 @@ The goal is to save time, make code clearer by providing concise and well though
 
 	- API key for Gemini, GPT
 
+  - In repository settings, actions, general - scroll down and select 'Allow GitHub Actions to create and approve pull requests' 
+
 	- [Configuration file](config.yaml) where your personal settings are stored. You may manipulate the prompt as well to get more verbose or compact comments. Config has to be located inside your root directory. 
 ```yaml
 Patchdog:
@@ -192,6 +194,11 @@ cargo build --release
 - fallback_repair to autocorrect the broken JSON - attempts to strip the JSON, that the LLM could've returned after serde failed until it returns any viable result, elsewise we parse it with REGEX,
 
 - in `binding.rs`: grouping methods, all public methods are moved to the top of the file
+  
+  - find_context() functions gathers context and writes it to SingleFunctionData, 
+  any contributions to make it work better, for example, through parsing Cargo.toml would be highly appreciated.
+  Any viable function context greatly increases quality of generated documented. It works for small projects, but for 
+  bigger projects it may be not so viable as of now
 
 -  `git_parsing` contains a few methods, to sort relevant changes from all hunks
 
