@@ -21,3 +21,21 @@ uuid = { workspace = true }
 tracing-subscriber = { version = "0.3.19", features = ["fmt"] }
 rayon = { workspace = true }
 tokio = { workspace = true }
+
+
+ra_ap_vfs = "0.0.300"
+ra_ap_project_model = "0.0.300"
+camino = "1.1.11"
+rustc-hash = "2.1.1"
+ra_ap_base_db = "0.0.300"
+idx = "0.2.0"
+la-arena = "0.3.1"
+ra_ap_syntax = "0.0.300"
+ra_ap_hir = "0.0.300"
+ra_ap_hir_def = "0.0.300"
+ra_ap_hir_expand = "0.0.300"
+proc-macro2 = { version = "1", features = ["span-locations"] }
+salsa-macros = "0.23.0"
+salsa = "0.23.0"
+ra_ap_ide_db = "0.0.300"
+triomphe = "0.1.14"

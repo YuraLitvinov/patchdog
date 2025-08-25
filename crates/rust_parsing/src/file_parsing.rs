@@ -1,8 +1,6 @@
-use crate::error::{
-    ErrorHandling, InvalidIoOperationsSnafu, LineOutOfBoundsSnafu
-};
+use crate::error::{ErrorHandling, InvalidIoOperationsSnafu, LineOutOfBoundsSnafu};
 use crate::object_range::ObjectRange;
-use snafu::{ensure, ResultExt};
+use snafu::{ResultExt, ensure};
 use std::{fs::File, io::Write, path::PathBuf};
 pub const REGEX: &str = r#"\{\s*"uuid"\s*:\s*"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",\s*"new_comment"\s*:\s*".*"\s*\}"#;
 pub struct FileExtractor;
@@ -17,7 +15,7 @@ pub trait Files {
         parsed: Vec<ObjectRange>,
     ) -> Result<String, ErrorHandling>;
     fn string_to_vector(source: &str) -> Vec<String>;
-    
+
     fn push_to_vector(
         str_source: &[String],
         push: String,
@@ -33,21 +31,20 @@ pub trait Files {
 }
 
 impl Files for FileExtractor {
-
-/// Inserts a given `changed_element` string into a vector of source code lines at a specified `line_index` and then writes the modified content back to the original file path.
-/// This utility function is crucial for precisely inserting new lines of code or comments into an existing file structure.
-/// It handles file creation/overwriting and ensures proper line-by-line writing to the file system.
-///
-/// # Arguments
-///
-/// * `path` - The `PathBuf` to the file that will be written to.
-/// * `source` - A mutable `Vec<String>` representing the lines of the file content, which will be modified in-place.
-/// * `line_index` - The 1-based line number at which the `changed_element` should be inserted.
-/// * `changed_element` - The `String` content to insert into the file.
-///
-/// # Returns
-///
-/// A `Result<(), ErrorHandling>` indicating success or failure of the write operation.
+    /// Inserts a given `changed_element` string into a vector of source code lines at a specified `line_index` and then writes the modified content back to the original file path.
+    /// This utility function is crucial for precisely inserting new lines of code or comments into an existing file structure.
+    /// It handles file creation/overwriting and ensures proper line-by-line writing to the file system.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - The `PathBuf` to the file that will be written to.
+    /// * `source` - A mutable `Vec<String>` representing the lines of the file content, which will be modified in-place.
+    /// * `line_index` - The 1-based line number at which the `changed_element` should be inserted.
+    /// * `changed_element` - The `String` content to insert into the file.
+    ///
+    /// # Returns
+    ///
+    /// A `Result<(), ErrorHandling>` indicating success or failure of the write operation.
     fn write_to_vecstring(
         path: PathBuf,
         mut source: Vec<String>,
@@ -55,7 +52,8 @@ impl Files for FileExtractor {
         changed_element: String,
     ) -> Result<(), ErrorHandling> {
         source.insert(line_index.saturating_sub(1), changed_element);
-        let mut file = File::create(path.clone()).context(InvalidIoOperationsSnafu { path: path.clone() })?;
+        let mut file =
+            File::create(path.clone()).context(InvalidIoOperationsSnafu { path: path.clone() })?;
         for each in &source {
             writeln!(file, "{each}").context(InvalidIoOperationsSnafu { path: path.clone() })?;
         }
@@ -66,22 +64,22 @@ impl Files for FileExtractor {
         source.lines().map(|line| line.to_string()).collect()
     }
 
-/// Inserts a given string into a vector of strings while preserving the original indentation.
-/// It calculates the whitespace from the first line of `str_source` and prepends it to `push`.
-/// The `push_where` boolean determines whether to insert the new string at the beginning (`true`) or the end (`false`) of the `source_clone` vector.
-///
-/// # Arguments
-///
-/// * `str_source` - A slice of `String`s representing the original source lines.
-/// * `push` - The `String` content to be inserted.
-/// * `push_where` - A `bool` indicating where to insert: `true` for the beginning, `false` for the end.
-///
-/// # Returns
-///
-/// A `Result<Vec<String>, ErrorHandling>`:
-/// - `Ok(Vec<String>)`: A new vector of strings with the `push` content inserted and correctly indented.
-/// - `Err(ErrorHandling::LineOutOfBounds)`: If `str_source` is empty and a whitespace cannot be determined.
-/// - `Err(ErrorHandling)`: If `remove_whitespace` fails.
+    /// Inserts a given string into a vector of strings while preserving the original indentation.
+    /// It calculates the whitespace from the first line of `str_source` and prepends it to `push`.
+    /// The `push_where` boolean determines whether to insert the new string at the beginning (`true`) or the end (`false`) of the `source_clone` vector.
+    ///
+    /// # Arguments
+    ///
+    /// * `str_source` - A slice of `String`s representing the original source lines.
+    /// * `push` - The `String` content to be inserted.
+    /// * `push_where` - A `bool` indicating where to insert: `true` for the beginning, `false` for the end.
+    ///
+    /// # Returns
+    ///
+    /// A `Result<Vec<String>, ErrorHandling>`:
+    /// - `Ok(Vec<String>)`: A new vector of strings with the `push` content inserted and correctly indented.
+    /// - `Err(ErrorHandling::LineOutOfBounds)`: If `str_source` is empty and a whitespace cannot be determined.
+    /// - `Err(ErrorHandling)`: If `remove_whitespace` fails.
     fn push_to_vector(
         str_source: &[String],
         push: String,
@@ -104,20 +102,20 @@ impl Files for FileExtractor {
         Ok(source_clone)
     }
 
-/// Checks if a given `line_number` falls within the line range of any `ObjectRange` in the `parsed` slice.
-/// This function is typically used to determine if a specific line belongs to an existing parsed Rust item (like a function, struct, etc.).
-///
-/// # Arguments
-///
-/// * `parsed` - A slice of `ObjectRange` structs, each representing a parsed Rust item with its line range.
-/// * `line_number` - The 1-based line number to check.
-///
-/// # Returns
-///
-/// A `Result<bool, ErrorHandling>`:
-/// - `Ok(false)`: If the `line_number` is found within the range of any `ObjectRange`.
-/// - `Ok(true)`: If the `line_number` is not found within the range of any `ObjectRange`.
-/// - `Err(ErrorHandling)`: Currently, no errors are explicitly returned, but the signature indicates potential for error propagation.
+    /// Checks if a given `line_number` falls within the line range of any `ObjectRange` in the `parsed` slice.
+    /// This function is typically used to determine if a specific line belongs to an existing parsed Rust item (like a function, struct, etc.).
+    ///
+    /// # Arguments
+    ///
+    /// * `parsed` - A slice of `ObjectRange` structs, each representing a parsed Rust item with its line range.
+    /// * `line_number` - The 1-based line number to check.
+    ///
+    /// # Returns
+    ///
+    /// A `Result<bool, ErrorHandling>`:
+    /// - `Ok(false)`: If the `line_number` is found within the range of any `ObjectRange`.
+    /// - `Ok(true)`: If the `line_number` is not found within the range of any `ObjectRange`.
+    /// - `Err(ErrorHandling)`: Currently, no errors are explicitly returned, but the signature indicates potential for error propagation.
     fn check_for_valid_object(
         parsed: &[ObjectRange],
         line_number: usize,
@@ -130,22 +128,22 @@ impl Files for FileExtractor {
         Ok(true)
     }
 
-/// Extracts a code snippet from a source, preserving comments, based on a starting line and parsed object ranges.
-/// It iterates through parsed `ObjectRange` items, using `seeker_for_comments` to find a valid range.
-/// If a valid range is found, it extracts the lines from the source using `extract_by_line`.
-/// The `new_previous` vector appears to track starting lines for search, ensuring comments between objects are considered.
-///
-/// # Arguments
-///
-/// * `src` - A `Vec<String>` representing the full source code, where each string is a line.
-/// * `from_line` - The starting line number to begin the search for an object.
-/// * `parsed` - A `Vec<ObjectRange>` representing the parsed Rust items with their line ranges.
-///
-/// # Returns
-///
-/// A `Result<String, ErrorHandling>`:
-/// - `Ok(String)`: The extracted code snippet as a single string, including comments within the range.
-/// - `Err(ErrorHandling::LineOutOfBounds)`: If no valid object range can be found containing or extending from `from_line`.
+    /// Extracts a code snippet from a source, preserving comments, based on a starting line and parsed object ranges.
+    /// It iterates through parsed `ObjectRange` items, using `seeker_for_comments` to find a valid range.
+    /// If a valid range is found, it extracts the lines from the source using `extract_by_line`.
+    /// The `new_previous` vector appears to track starting lines for search, ensuring comments between objects are considered.
+    ///
+    /// # Arguments
+    ///
+    /// * `src` - A `Vec<String>` representing the full source code, where each string is a line.
+    /// * `from_line` - The starting line number to begin the search for an object.
+    /// * `parsed` - A `Vec<ObjectRange>` representing the parsed Rust items with their line ranges.
+    ///
+    /// # Returns
+    ///
+    /// A `Result<String, ErrorHandling>`:
+    /// - `Ok(String)`: The extracted code snippet as a single string, including comments within the range.
+    /// - `Err(ErrorHandling::LineOutOfBounds)`: If no valid object range can be found containing or extending from `from_line`.
     fn export_object_preserving_comments(
         src: Vec<String>,
         from_line: usize,

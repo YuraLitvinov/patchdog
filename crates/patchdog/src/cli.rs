@@ -9,16 +9,16 @@ use rayon::iter::ParallelIterator;
 use regex::Regex;
 use rust_parsing::error::ErrorBinding;
 use rust_parsing::error::ErrorHandling;
+use rust_parsing::error::InvalidIoOperationsSnafu;
 use rust_parsing::file_parsing::REGEX;
 use rust_parsing::file_parsing::{FileExtractor, Files};
 use serde::Deserialize;
 use serde::Serialize;
+use snafu::ResultExt;
 use std::collections::HashMap;
 use std::path::Path;
-use std::{fs, path::PathBuf, env};
+use std::{env, fs, path::PathBuf};
 use tracing::{Level, event};
-use snafu::ResultExt;
-use rust_parsing::error::InvalidIoOperationsSnafu;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None, group(
@@ -52,26 +52,25 @@ pub async fn cli_patch_to_agent() -> Result<(), ErrorBinding> {
     let commands = Mode::parse();
     let patch = binding::patch_data_argument(commands.file_patch)?;
     event!(Level::INFO, "type: {:#?}", commands.type_rust);
-    let exclusions = ai_interactions::return_prompt()?.patchdog_settings.excluded_files;
+    let exclusions = ai_interactions::return_prompt()?
+        .patchdog_settings
+        .excluded_files;
     let dir = env::current_dir()?;
     let excluded_paths = exclusions
         .par_iter()
-        .map(
-        |path|dir.join(Path::new(path))
-        )
+        .map(|path| dir.join(Path::new(path)))
         .collect::<Vec<PathBuf>>();
     let request = changes_from_patch(
-        patch, 
-        commands.type_rust, 
-        commands.name_rust, 
-        &excluded_paths
+        patch,
+        commands.type_rust,
+        commands.name_rust,
+        &excluded_paths,
     )?;
     //Here occurs check for pending changes
     if request.is_empty() {
         event!(Level::INFO, "No requests");
         Ok(())
-    }
-    else { 
+    } else {
         event!(Level::INFO, "Requests length: {}", &request.len());
         let responses_collected = call(request).await?;
         event!(
@@ -139,15 +138,10 @@ pub async fn call(request: Vec<Request>) -> Result<Vec<ResponseForm>, ErrorBindi
 
 pub fn cherrypick_response(response: &str) -> Result<Vec<RawResponse>, ErrorHandling> {
     let re = Regex::new(REGEX)?;
-    let response_cherrypicked = 
-    re.captures_iter(response).filter_map(|cap| {
-        serde_json::from_str::<RawResponse>(
-            cap
-            .get(0)?
-            .as_str()
-        )
-        .ok()
-    }).collect::<Vec<RawResponse>>();
+    let response_cherrypicked = re
+        .captures_iter(response)
+        .filter_map(|cap| serde_json::from_str::<RawResponse>(cap.get(0)?.as_str()).ok())
+        .collect::<Vec<RawResponse>>();
     Ok(response_cherrypicked)
 }
 

@@ -1,21 +1,21 @@
 use crate::error::{ErrorHandling, InvalidIoOperationsSnafu};
+use crate::file_parsing::{FileExtractor, Files};
 use crate::object_range::{Name, ObjectRange};
 use proc_macro2::TokenStream;
 use proc_macro2::{Spacing, TokenTree};
 use quote::ToTokens;
+use rustc_lexer::{TokenKind, tokenize};
 use serde::Serialize;
-use std::ops::Range;
-use rustc_lexer::{tokenize, TokenKind};
-use std::path::{Path, PathBuf};
-use crate::file_parsing::{FileExtractor, Files};
+use snafu::ResultExt;
 use std::fs;
+use std::ops::Range;
+use std::path::{Path, PathBuf};
 use syn::spanned::Spanned;
 use syn::{AngleBracketedGenericArguments, PathArguments, Type, TypePath};
 use syn::{File, ReturnType};
 use syn::{FnArg, parse_str};
 use syn::{ImplItem, Item};
 use tracing::{Level, event};
-use snafu::ResultExt;
 /*
 1. Парсер патчей
 2. Раст парсер
@@ -63,39 +63,37 @@ pub trait RustParser {
 pub struct RustItemParser;
 
 impl RustParser for RustItemParser {
-
-/// Parses a Rust source file from a given path into its Abstract Syntax Tree (AST) and extracts top-level Rust items.
-/// It reads the file content, then uses the `syn` crate to parse it into an AST representation.
-/// The function then visits the items in the AST to identify and collect information about each Rust item, such as functions, structs, or enums, along with their line ranges.
-///
-/// # Arguments
-///
-/// * `src` - A reference to a `Path` pointing to the Rust source file to be parsed.
-///
-/// # Returns
-///
-/// A `Result<Vec<ObjectRange>, ErrorHandling>` containing a vector of `ObjectRange` structs, each representing a parsed Rust item, or an error if file reading or AST parsing fails.
+    /// Parses a Rust source file from a given path into its Abstract Syntax Tree (AST) and extracts top-level Rust items.
+    /// It reads the file content, then uses the `syn` crate to parse it into an AST representation.
+    /// The function then visits the items in the AST to identify and collect information about each Rust item, such as functions, structs, or enums, along with their line ranges.
+    ///
+    /// # Arguments
+    ///
+    /// * `src` - A reference to a `Path` pointing to the Rust source file to be parsed.
+    ///
+    /// # Returns
+    ///
+    /// A `Result<Vec<ObjectRange>, ErrorHandling>` containing a vector of `ObjectRange` structs, each representing a parsed Rust item, or an error if file reading or AST parsing fails.
     fn parse_rust_file(src: &Path) -> Result<Vec<ObjectRange>, ErrorHandling> {
-        let file = fs::read_to_string(src)
-            .context(InvalidIoOperationsSnafu { path: src })?;
+        let file = fs::read_to_string(src).context(InvalidIoOperationsSnafu { path: src })?;
         let ast: File = parse_str(&file)?;
         visit_items(&ast.items)
     }
 
-/// Parses all Rust items, including code structures (functions, structs, enums, etc.) and comments, from a given source string.
-/// It first parses the source into an AST, then extracts items from the AST.
-/// Concurrently, it lexes comments from the raw source string.
-/// Finally, it combines the extracted code items and comments into a single vector of `ObjectRange` and sorts them by their starting line number.
-///
-/// # Arguments
-///
-/// * `src` - A string slice (`&str`) containing the Rust source code.
-///
-/// # Returns
-///
-/// A `Result<Vec<ObjectRange>, ErrorHandling>`:
-/// - `Ok(Vec<ObjectRange>)`: A sorted vector of `ObjectRange` structs, representing all parsed code items and comments.
-/// - `Err(ErrorHandling)`: If parsing the AST or lexing comments fails.
+    /// Parses all Rust items, including code structures (functions, structs, enums, etc.) and comments, from a given source string.
+    /// It first parses the source into an AST, then extracts items from the AST.
+    /// Concurrently, it lexes comments from the raw source string.
+    /// Finally, it combines the extracted code items and comments into a single vector of `ObjectRange` and sorts them by their starting line number.
+    ///
+    /// # Arguments
+    ///
+    /// * `src` - A string slice (`&str`) containing the Rust source code.
+    ///
+    /// # Returns
+    ///
+    /// A `Result<Vec<ObjectRange>, ErrorHandling>`:
+    /// - `Ok(Vec<ObjectRange>)`: A sorted vector of `ObjectRange` structs, representing all parsed code items and comments.
+    /// - `Err(ErrorHandling)`: If parsing the AST or lexing comments fails.
     fn parse_all_rust_items(src: &str) -> Result<Vec<ObjectRange>, ErrorHandling> {
         let ast: File = parse_str(src)?;
         let mut comments = comment_lexer(src)?;
@@ -106,37 +104,37 @@ impl RustParser for RustItemParser {
         Ok(visited)
     }
 
-/// Parses a Rust function's signature from a given source string.
-/// It converts the source string into a Rust AST (`syn::File`) and then specifically extracts the function signature details.
-///
-/// # Arguments
-///
-/// * `src` - A string slice (`&str`) containing the Rust function code.
-///
-/// # Returns
-///
-/// A `Result<FunctionSignature, ErrorHandling>`:
-/// - `Ok(FunctionSignature)`: A struct containing the parsed input parameters and return type information for the function.
-/// - `Err(ErrorHandling)`: If parsing the AST fails or the provided `src` does not represent a valid function.
+    /// Parses a Rust function's signature from a given source string.
+    /// It converts the source string into a Rust AST (`syn::File`) and then specifically extracts the function signature details.
+    ///
+    /// # Arguments
+    ///
+    /// * `src` - A string slice (`&str`) containing the Rust function code.
+    ///
+    /// # Returns
+    ///
+    /// A `Result<FunctionSignature, ErrorHandling>`:
+    /// - `Ok(FunctionSignature)`: A struct containing the parsed input parameters and return type information for the function.
+    /// - `Err(ErrorHandling)`: If parsing the AST fails or the provided `src` does not represent a valid function.
     fn rust_function_parser(src: &str) -> Result<FunctionSignature, ErrorHandling> {
         let ast: File = parse_str(src)?;
         function_parse(&ast.items)
     }
 
-/// Parses a single Rust item (e.g., function, struct, enum) from a given source string.
-/// It converts the source string into a Rust AST (`syn::File`) and extracts the first item it finds.
-/// The function then creates an `ObjectRange` representing the line range and name of this item.
-///
-/// # Arguments
-///
-/// * `src` - A string slice (`&str`) containing the Rust item's code.
-///
-/// # Returns
-///
-/// A `Result<ObjectRange, ErrorHandling>`:
-/// - `Ok(ObjectRange)`: A struct containing the line range (start and end lines) and the name (type and identifier) of the first parsed Rust item.
-/// - `Err(ErrorHandling::LineOutOfBounds)`: If no items are found in the parsed source.
-/// - `Err(ErrorHandling)`: If parsing the AST fails.
+    /// Parses a single Rust item (e.g., function, struct, enum) from a given source string.
+    /// It converts the source string into a Rust AST (`syn::File`) and extracts the first item it finds.
+    /// The function then creates an `ObjectRange` representing the line range and name of this item.
+    ///
+    /// # Arguments
+    ///
+    /// * `src` - A string slice (`&str`) containing the Rust item's code.
+    ///
+    /// # Returns
+    ///
+    /// A `Result<ObjectRange, ErrorHandling>`:
+    /// - `Ok(ObjectRange)`: A struct containing the line range (start and end lines) and the name (type and identifier) of the first parsed Rust item.
+    /// - `Err(ErrorHandling::LineOutOfBounds)`: If no items are found in the parsed source.
+    /// - `Err(ErrorHandling)`: If parsing the AST fails.
     fn rust_item_parser(src: &str) -> Result<ObjectRange, ErrorHandling> {
         let ast: File = parse_str(src)?;
         let binding: Vec<ObjectRange> = visit_items(&ast.items)?;
@@ -155,37 +153,37 @@ impl RustParser for RustItemParser {
         })
     }
 
-/// Parses a Rust source string into its Abstract Syntax Tree (AST) representation.
-/// This function is a wrapper around `syn::parse_str` to simplify AST parsing.
-///
-/// # Arguments
-///
-/// * `src` - A string slice (`&str`) containing the Rust source code.
-///
-/// # Returns
-///
-/// A `Result<syn::File, ErrorHandling>`:
-/// - `Ok(syn::File)`: The parsed AST of the Rust code.
-/// - `Err(ErrorHandling)`: If parsing fails (e.g., due to invalid Rust syntax).
+    /// Parses a Rust source string into its Abstract Syntax Tree (AST) representation.
+    /// This function is a wrapper around `syn::parse_str` to simplify AST parsing.
+    ///
+    /// # Arguments
+    ///
+    /// * `src` - A string slice (`&str`) containing the Rust source code.
+    ///
+    /// # Returns
+    ///
+    /// A `Result<syn::File, ErrorHandling>`:
+    /// - `Ok(syn::File)`: The parsed AST of the Rust code.
+    /// - `Err(ErrorHandling)`: If parsing fails (e.g., due to invalid Rust syntax).
     fn rust_ast(src: &str) -> Result<File, ErrorHandling> {
         let ast: File = parse_str(src)?;
         Ok(ast)
     }
 
-/// Attempts to find the file path for a Rust module given a base path and the module name.
-/// It assumes the module file will be named `{mod_name}.rs` and located in the same directory as the `base_path`'s parent.
-///
-/// # Arguments
-///
-/// * `base_path` - A `PathBuf` representing the path of the file where the module is declared (e.g., `lib.rs`).
-/// * `mod_name` - A `String` representing the name of the module to find (e.g., "data" for `mod data;`).
-///
-/// # Returns
-///
-/// A `Result<Option<PathBuf>, ErrorHandling>`:
-/// - `Ok(Some(PathBuf))`: If the module file is found.
-/// - `Ok(None)`: If the module file does not exist at the expected location.
-/// - `Err(ErrorHandling)`: If an I/O error occurs while checking file existence.
+    /// Attempts to find the file path for a Rust module given a base path and the module name.
+    /// It assumes the module file will be named `{mod_name}.rs` and located in the same directory as the `base_path`'s parent.
+    ///
+    /// # Arguments
+    ///
+    /// * `base_path` - A `PathBuf` representing the path of the file where the module is declared (e.g., `lib.rs`).
+    /// * `mod_name` - A `String` representing the name of the module to find (e.g., "data" for `mod data;`).
+    ///
+    /// # Returns
+    ///
+    /// A `Result<Option<PathBuf>, ErrorHandling>`:
+    /// - `Ok(Some(PathBuf))`: If the module file is found.
+    /// - `Ok(None)`: If the module file does not exist at the expected location.
+    /// - `Err(ErrorHandling)`: If an I/O error occurs while checking file existence.
     fn find_module_file(
         base_path: PathBuf,
         mod_name: String,
@@ -227,7 +225,10 @@ pub fn comment_lexer(source_vector: &str) -> Result<Vec<ObjectRange>, ErrorHandl
                 TokenKind::BlockComment { terminated } => {
                     if terminated {
                         comment_vector.push(ObjectRange {
-                            line_ranges: Range { start: line_number, end: line_number },
+                            line_ranges: Range {
+                                start: line_number,
+                                end: line_number,
+                            },
                             names: Name {
                                 type_name: "CommentBlockSingeLine".to_string(),
                                 name: "Comment".to_string(),
@@ -235,7 +236,10 @@ pub fn comment_lexer(source_vector: &str) -> Result<Vec<ObjectRange>, ErrorHandl
                         });
                     } else {
                         comment_vector.push(ObjectRange {
-                            line_ranges: Range { start: line_number, end: 0 },
+                            line_ranges: Range {
+                                start: line_number,
+                                end: 0,
+                            },
                             names: Name {
                                 type_name: "CommentBlockMultiLine".to_string(),
                                 name: "Comment".to_string(),
@@ -245,7 +249,10 @@ pub fn comment_lexer(source_vector: &str) -> Result<Vec<ObjectRange>, ErrorHandl
                 }
                 TokenKind::Slash => {
                     comment_vector.push(ObjectRange {
-                        line_ranges: Range { start: line_number, end: line_number },
+                        line_ranges: Range {
+                            start: line_number,
+                            end: line_number,
+                        },
                         names: Name {
                             type_name: "CommentBlockMultiLineEnd".to_string(),
                             name: "Refers to index - 1 (CommentBlockMultiLine)".to_string(),
@@ -254,7 +261,10 @@ pub fn comment_lexer(source_vector: &str) -> Result<Vec<ObjectRange>, ErrorHandl
                 }
                 TokenKind::LineComment => {
                     comment_vector.push(ObjectRange {
-                        line_ranges: Range { start: line_number, end: line_number },
+                        line_ranges: Range {
+                            start: line_number,
+                            end: line_number,
+                        },
                         names: Name {
                             type_name: "LineComment".to_string(),
                             name: "Comment".to_string(),
@@ -266,7 +276,10 @@ pub fn comment_lexer(source_vector: &str) -> Result<Vec<ObjectRange>, ErrorHandl
                     starts_with_number: _,
                 } => {
                     comment_vector.push(ObjectRange {
-                        line_ranges: Range { start: line_number, end: line_number },
+                        line_ranges: Range {
+                            start: line_number,
+                            end: line_number,
+                        },
                         names: Name {
                             type_name: "LifetimeIndicator".to_string(),
                             name: "Comment".to_string(),
@@ -281,10 +294,16 @@ pub fn comment_lexer(source_vector: &str) -> Result<Vec<ObjectRange>, ErrorHandl
     let multi_line = "CommentBlockMultiLine";
     let multi_line_end = "CommentBlockMultiLineEnd";
     let mut found_position = 0;
-    if let Some(pos) = comment_vector.iter().position(|obj| obj.names.type_name == multi_line) {
+    if let Some(pos) = comment_vector
+        .iter()
+        .position(|obj| obj.names.type_name == multi_line)
+    {
         found_position = pos;
     }
-    if let Some(pos) = comment_vector.iter().position(|obj| obj.names.type_name == multi_line_end) {
+    if let Some(pos) = comment_vector
+        .iter()
+        .position(|obj| obj.names.type_name == multi_line_end)
+    {
         comment_vector[found_position].line_ranges.end = comment_vector[pos].line_end();
         comment_vector.remove(pos);
     }
@@ -356,20 +375,22 @@ fn fn_input(input_vector_stream: Vec<TokenStream>) -> Result<Vec<FnInputToken>, 
         let tokens: Vec<TokenTree> = input.into_iter().collect();
         for (i, token) in tokens.iter().enumerate() {
             if let TokenTree::Punct(punct) = token
-                && punct.as_char() == ':' && punct.spacing() != Spacing::Joint {
-                    let before = tokens.get(i.wrapping_sub(1));
-                    let after_tokens: Vec<TokenTree> = tokens.iter().skip(i + 1).cloned().collect();
-                    let after_stream: TokenStream = after_tokens.into_iter().collect();
-                    if let Some(before_token) = before {
-                        let rm_space_from_before = remove_whitespace(before_token.to_string());
-                        let rm_space_from_after = remove_whitespace(after_stream.to_string());
-                        input_tokens.push({
-                            FnInputToken {
-                                input_name: rm_space_from_before?,
-                                input_type: rm_space_from_after?,
-                            }
-                        });
-                    }
+                && punct.as_char() == ':'
+                && punct.spacing() != Spacing::Joint
+            {
+                let before = tokens.get(i.wrapping_sub(1));
+                let after_tokens: Vec<TokenTree> = tokens.iter().skip(i + 1).cloned().collect();
+                let after_stream: TokenStream = after_tokens.into_iter().collect();
+                if let Some(before_token) = before {
+                    let rm_space_from_before = remove_whitespace(before_token.to_string());
+                    let rm_space_from_after = remove_whitespace(after_stream.to_string());
+                    input_tokens.push({
+                        FnInputToken {
+                            input_name: rm_space_from_before?,
+                            input_type: rm_space_from_after?,
+                        }
+                    });
+                }
             }
         }
     }
@@ -397,45 +418,43 @@ fn analyze_return_type(ty: &Type) -> Result<FnOutputToken, ErrorHandling> {
     let mut kind = "Other".to_string();
     let mut output_type = ty.to_token_stream().to_string();
     let mut error_type = None;
-    if let Type::Path(TypePath { path, .. }) = ty &&
-        let Some(segment) = path.segments.last() {
-            let ident_str = segment.ident.to_string();
-            match ident_str.as_str() {
-                "Result" => {
-                    kind = "Result".to_string();
+    if let Type::Path(TypePath { path, .. }) = ty
+        && let Some(segment) = path.segments.last()
+    {
+        let ident_str = segment.ident.to_string();
+        match ident_str.as_str() {
+            "Result" => {
+                kind = "Result".to_string();
 
-                    if let PathArguments::AngleBracketed(AngleBracketedGenericArguments {
-                        args,
-                        ..
-                    }) = &segment.arguments
-                    {
-                        let mut args = args.iter();
-                        if let Some(ok_ty) = args.next() {
-                            output_type = remove_whitespace(ok_ty.to_token_stream().to_string())?;
-                        }
-                        if let Some(err_ty) = args.next() {
-                            error_type = Some(err_ty.to_token_stream().to_string());
-                        }
+                if let PathArguments::AngleBracketed(AngleBracketedGenericArguments {
+                    args, ..
+                }) = &segment.arguments
+                {
+                    let mut args = args.iter();
+                    if let Some(ok_ty) = args.next() {
+                        output_type = remove_whitespace(ok_ty.to_token_stream().to_string())?;
+                    }
+                    if let Some(err_ty) = args.next() {
+                        error_type = Some(err_ty.to_token_stream().to_string());
                     }
                 }
-                "Option" => {
-                    kind = "Option".to_string();
+            }
+            "Option" => {
+                kind = "Option".to_string();
 
-                    if let PathArguments::AngleBracketed(AngleBracketedGenericArguments {
-                        args,
-                        ..
-                    }) = &segment.arguments
-                        && let Some(inner_ty) = args.first() {
-                            output_type =
-                                remove_whitespace(inner_ty.to_token_stream().to_string())?;
-                        }
-                }
-                _ => {
-                    kind = "Other".to_string();
-                    output_type = ty.to_token_stream().to_string();
+                if let PathArguments::AngleBracketed(AngleBracketedGenericArguments {
+                    args, ..
+                }) = &segment.arguments
+                    && let Some(inner_ty) = args.first()
+                {
+                    output_type = remove_whitespace(inner_ty.to_token_stream().to_string())?;
                 }
             }
-        
+            _ => {
+                kind = "Other".to_string();
+                output_type = ty.to_token_stream().to_string();
+            }
+        }
     }
     Ok(FnOutputToken {
         kind,
@@ -466,7 +485,10 @@ fn visit_items(items: &[Item]) -> Result<Vec<ObjectRange>, ErrorHandling> {
         match item {
             Item::Struct(s) => {
                 object_line.push(ObjectRange {
-                    line_ranges: Range { start: s.span().start().line, end: s.span().end().line },
+                    line_ranges: Range {
+                        start: s.span().start().line,
+                        end: s.span().end().line,
+                    },
                     names: Name {
                         type_name: "struct".to_string(),
                         name: s.ident.to_string(),
@@ -475,7 +497,10 @@ fn visit_items(items: &[Item]) -> Result<Vec<ObjectRange>, ErrorHandling> {
             }
             Item::Enum(e) => {
                 object_line.push(ObjectRange {
-                    line_ranges: Range { start: e.span().start().line, end: e.span().end().line },
+                    line_ranges: Range {
+                        start: e.span().start().line,
+                        end: e.span().end().line,
+                    },
                     names: Name {
                         type_name: "enum".to_string(),
                         name: e.ident.to_string(),
@@ -484,7 +509,10 @@ fn visit_items(items: &[Item]) -> Result<Vec<ObjectRange>, ErrorHandling> {
             }
             Item::Fn(f) => {
                 object_line.push(ObjectRange {
-                    line_ranges: Range { start: f.span().start().line, end: f.span().end().line },
+                    line_ranges: Range {
+                        start: f.span().start().line,
+                        end: f.span().end().line,
+                    },
                     names: Name {
                         type_name: "fn".to_string(),
                         name: f.sig.ident.to_string(),
@@ -494,9 +522,12 @@ fn visit_items(items: &[Item]) -> Result<Vec<ObjectRange>, ErrorHandling> {
             Item::Mod(m) => match &m.content {
                 Some((_, items)) => {
                     object_line.push(ObjectRange {
-                        line_ranges: Range { start: m.span().start().line, end: m.span().end().line },
+                        line_ranges: Range {
+                            start: m.span().start().line,
+                            end: m.span().end().line,
+                        },
                         names: Name {
-                            type_name: "mod".to_string(),
+                            type_name: "mod_inline".to_string(),
                             name: m.ident.to_string(),
                         },
                     });
@@ -504,7 +535,10 @@ fn visit_items(items: &[Item]) -> Result<Vec<ObjectRange>, ErrorHandling> {
                 }
                 None => {
                     object_line.push(ObjectRange {
-                        line_ranges: Range { start: m.span().start().line, end: m.span().end().line },
+                        line_ranges: Range {
+                            start: m.span().start().line,
+                            end: m.span().end().line,
+                        },
                         names: Name {
                             type_name: "mod".to_string(),
                             name: m.ident.to_string(),
@@ -515,7 +549,10 @@ fn visit_items(items: &[Item]) -> Result<Vec<ObjectRange>, ErrorHandling> {
             Item::Use(u) => {
                 if let syn::UseTree::Path(path) = u.tree.to_owned() {
                     object_line.push(ObjectRange {
-                        line_ranges: Range { start: path.span().start().line, end: path.span().end().line },
+                        line_ranges: Range {
+                            start: path.span().start().line,
+                            end: path.span().end().line,
+                        },
                         names: Name {
                             type_name: "use".to_string(),
                             name: path.ident.to_string(),
@@ -534,7 +571,10 @@ fn visit_items(items: &[Item]) -> Result<Vec<ObjectRange>, ErrorHandling> {
                     "matches struct".to_string()
                 };
                 object_line.push(ObjectRange {
-                    line_ranges: Range { start: i.span().start().line, end: i.span().end().line },
+                    line_ranges: Range {
+                        start: i.span().start().line,
+                        end: i.span().end().line,
+                    },
                     names: Name {
                         type_name: "impl".to_string(),
                         name: trait_name,
@@ -544,7 +584,10 @@ fn visit_items(items: &[Item]) -> Result<Vec<ObjectRange>, ErrorHandling> {
                     match each_block {
                         ImplItem::Fn(f) => {
                             object_line.push(ObjectRange {
-                                line_ranges: Range { start: f.span().start().line, end: f.span().end().line },
+                                line_ranges: Range {
+                                    start: f.span().start().line,
+                                    end: f.span().end().line,
+                                },
                                 names: Name {
                                     type_name: "fn".to_string(),
                                     name: f.sig.ident.to_string(),
@@ -553,7 +596,10 @@ fn visit_items(items: &[Item]) -> Result<Vec<ObjectRange>, ErrorHandling> {
                         }
                         ImplItem::Const(c) => {
                             object_line.push(ObjectRange {
-                                line_ranges: Range { start: c.span().start().line, end: c.span().end().line },
+                                line_ranges: Range {
+                                    start: c.span().start().line,
+                                    end: c.span().end().line,
+                                },
                                 names: Name {
                                     type_name: "const".to_string(),
                                     name: c.ident.to_string(),
@@ -562,7 +608,10 @@ fn visit_items(items: &[Item]) -> Result<Vec<ObjectRange>, ErrorHandling> {
                         }
                         ImplItem::Type(t) => {
                             object_line.push(ObjectRange {
-                                line_ranges: Range { start: t.span().start().line, end: t.span().end().line },
+                                line_ranges: Range {
+                                    start: t.span().start().line,
+                                    end: t.span().end().line,
+                                },
                                 names: Name {
                                     type_name: "type".to_string(),
                                     name: t.ident.to_string(),
@@ -571,7 +620,10 @@ fn visit_items(items: &[Item]) -> Result<Vec<ObjectRange>, ErrorHandling> {
                         }
                         ImplItem::Macro(m) => {
                             object_line.push(ObjectRange {
-                                line_ranges: Range { start: m.span().start().line, end: m.span().end().line },
+                                line_ranges: Range {
+                                    start: m.span().start().line,
+                                    end: m.span().end().line,
+                                },
                                 names: Name {
                                     type_name: "macro".to_string(),
                                     name: format!("{:?}", m.mac.path),
@@ -580,7 +632,10 @@ fn visit_items(items: &[Item]) -> Result<Vec<ObjectRange>, ErrorHandling> {
                         }
                         ImplItem::Verbatim(v) => {
                             object_line.push(ObjectRange {
-                                line_ranges: Range { start: v.span().start().line, end: v.span().end().line },
+                                line_ranges: Range {
+                                    start: v.span().start().line,
+                                    end: v.span().end().line,
+                                },
                                 names: Name {
                                     type_name: "verbatim".to_string(),
                                     name: v.to_string(),
@@ -593,7 +648,10 @@ fn visit_items(items: &[Item]) -> Result<Vec<ObjectRange>, ErrorHandling> {
             }
             Item::Trait(t) => {
                 object_line.push(ObjectRange {
-                    line_ranges: Range { start: t.span().start().line, end: t.span().end().line },
+                    line_ranges: Range {
+                        start: t.span().start().line,
+                        end: t.span().end().line,
+                    },
                     names: Name {
                         type_name: "trait".to_string(),
                         name: t.ident.to_string(),
@@ -602,7 +660,10 @@ fn visit_items(items: &[Item]) -> Result<Vec<ObjectRange>, ErrorHandling> {
             }
             Item::Type(t) => {
                 object_line.push(ObjectRange {
-                    line_ranges: Range { start: t.span().start().line, end: t.span().end().line },
+                    line_ranges: Range {
+                        start: t.span().start().line,
+                        end: t.span().end().line,
+                    },
                     names: Name {
                         type_name: "type".to_string(),
                         name: t.ident.to_string(),
@@ -611,7 +672,10 @@ fn visit_items(items: &[Item]) -> Result<Vec<ObjectRange>, ErrorHandling> {
             }
             Item::Union(u) => {
                 object_line.push(ObjectRange {
-                    line_ranges: Range { start: u.span().start().line, end: u.span().end().line },
+                    line_ranges: Range {
+                        start: u.span().start().line,
+                        end: u.span().end().line,
+                    },
                     names: Name {
                         type_name: "union".to_string(),
                         name: u.ident.to_string(),
@@ -620,7 +684,10 @@ fn visit_items(items: &[Item]) -> Result<Vec<ObjectRange>, ErrorHandling> {
             }
             Item::Const(c) => {
                 object_line.push(ObjectRange {
-                    line_ranges: Range { start: c.span().start().line, end: c.span().end().line },
+                    line_ranges: Range {
+                        start: c.span().start().line,
+                        end: c.span().end().line,
+                    },
                     names: Name {
                         type_name: "const".to_string(),
                         name: c.ident.to_string(),
@@ -629,7 +696,10 @@ fn visit_items(items: &[Item]) -> Result<Vec<ObjectRange>, ErrorHandling> {
             }
             Item::Macro(m) => {
                 object_line.push(ObjectRange {
-                    line_ranges: Range { start: m.span().start().line, end: m.span().end().line },
+                    line_ranges: Range {
+                        start: m.span().start().line,
+                        end: m.span().end().line,
+                    },
                     names: Name {
                         type_name: "macro".to_string(),
                         name: format!("{:?}", m.mac.path),
@@ -638,7 +708,10 @@ fn visit_items(items: &[Item]) -> Result<Vec<ObjectRange>, ErrorHandling> {
             }
             Item::ExternCrate(c) => {
                 object_line.push(ObjectRange {
-                    line_ranges: Range { start: c.span().start().line, end: c.span().end().line },
+                    line_ranges: Range {
+                        start: c.span().start().line,
+                        end: c.span().end().line,
+                    },
                     names: Name {
                         type_name: "extern crate".to_string(),
                         name: c.ident.to_string(),
@@ -647,7 +720,10 @@ fn visit_items(items: &[Item]) -> Result<Vec<ObjectRange>, ErrorHandling> {
             }
             Item::Static(s) => {
                 object_line.push(ObjectRange {
-                    line_ranges: Range { start: s.span().start().line, end: s.span().end().line },
+                    line_ranges: Range {
+                        start: s.span().start().line,
+                        end: s.span().end().line,
+                    },
                     names: Name {
                         type_name: "static".to_string(),
                         name: s.ident.to_string(),

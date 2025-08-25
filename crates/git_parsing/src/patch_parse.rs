@@ -17,16 +17,16 @@ pub enum Git2ErrorHandling {
     PatchExportError,
 }
 impl From<git2::Error> for Git2ErrorHandling {
-/// Implements the `From` trait to convert a `git2::Error` into a `Git2ErrorHandling::Git2Error`.
-/// This provides a standardized way to integrate `git2` errors into the custom error handling system.
-///
-/// # Arguments
-///
-/// * `e` - The `git2::Error` to convert.
-///
-/// # Returns
-///
-/// A `Git2ErrorHandling::Git2Error` variant containing the original `git2::Error`.
+    /// Implements the `From` trait to convert a `git2::Error` into a `Git2ErrorHandling::Git2Error`.
+    /// This provides a standardized way to integrate `git2` errors into the custom error handling system.
+    ///
+    /// # Arguments
+    ///
+    /// * `e` - The `git2::Error` to convert.
+    ///
+    /// # Returns
+    ///
+    /// A `Git2ErrorHandling::Git2Error` variant containing the original `git2::Error`.
     fn from(e: git2::Error) -> Self {
         Git2ErrorHandling::Git2Error { source: e }
     }
