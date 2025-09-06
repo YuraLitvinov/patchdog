@@ -50,6 +50,17 @@ pub struct ResponseForm {
     new_comment: String,
 }
 
+/// Orchestrates the entire process of applying a patch to a codebase, generating AI-based code suggestions, and writing them back to files. This asynchronous function takes a patch file, analyzes the changes, filters them based on exclusion rules, and then generates `Request` objects for an AI agent.
+/// It then calls the AI agent, collects the responses, and writes the suggested new comments or code modifications to the corresponding files. The function includes a call limit to prevent infinite recursion in case of persistent AI failures.
+///
+/// # Arguments
+///
+/// * `analyzer_data` - `AnalyzerData` providing context for code analysis.
+/// * `commands` - `Mode` struct containing command-line arguments, including the patch file path, target Rust types, and names, and debug flag.
+///
+/// # Returns
+///
+/// A `Result<(), ErrorBinding>` indicating the success or failure of the entire patch-to-agent and write-back process.
 pub async fn cli_patch_to_agent(
     analyzer_data: AnalyzerData,
     commands: Mode,
@@ -63,8 +74,9 @@ pub async fn cli_patch_to_agent(
     let dir = env::current_dir()?;
     let excluded_paths = exclusions
         .par_iter()
-        .map(|path| dir.join(Path::new(path)))
+        .map(|path| fs::canonicalize(dir.join(Path::new(path))).unwrap())
         .collect::<Vec<PathBuf>>();
+    println!("Excluded paths: {:#?}", excluded_paths);
     let request = changes_from_patch(
         patch,
         commands.type_rust,
@@ -72,6 +84,7 @@ pub async fn cli_patch_to_agent(
         &excluded_paths,
         analyzer_data,
     )?;
+    println!("{:#?}", request);
     //Here occurs check for pending changes
     if request.is_empty() {
         event!(Level::INFO, "No requests");
@@ -90,6 +103,17 @@ pub async fn cli_patch_to_agent(
     Ok(())
 }
 
+/// Initiates an asynchronous call to an external AI agent with a batch of `Request` objects and handles the agent's responses. This function prepares the requests, sends them, and then processes the received responses, matching them back to the original requests.
+/// It includes a retry mechanism with a `call_limiter` to handle cases where the AI agent might not respond to all requests or returns malformed data, attempting up to 3 retries for unfulfilled requests.
+///
+/// # Arguments
+///
+/// * `request` - A `Vec<Request>` containing the prepared requests to be sent to the AI agent.
+/// * `call_limiter` - A mutable reference to a `usize` that tracks the number of retries, preventing infinite loops.
+///
+/// # Returns
+///
+/// A `Result<Vec<ResponseForm>, ErrorBinding>` containing a vector of `ResponseForm` objects, which link original request data to the AI agent's generated comments, or an `ErrorBinding` if critical errors occur during the process.
 pub async fn call(
     request: Vec<Request>,
     call_limiter: &mut usize,
@@ -136,6 +160,16 @@ pub async fn call(
     }
 }
 
+/// Extracts `RawResponse` objects from a raw string response using a predefined regular expression. This function is designed to robustly parse potentially messy or concatenated JSON responses, isolating each valid JSON object that matches the `REGEX` pattern.
+/// It iterates through all matches found by the regex and attempts to deserialize each captured string into a `RawResponse` struct. This is useful for processing responses from external APIs that might not always return perfectly formed JSON arrays.
+///
+/// # Arguments
+///
+/// * `response` - A string slice (`&str`) containing the raw response text.
+///
+/// # Returns
+///
+/// A `Result<Vec<RawResponse>, ErrorHandling>` containing a vector of successfully parsed `RawResponse` objects, or an `ErrorHandling` if the regex compilation fails.
 pub fn cherrypick_response(response: &str) -> Result<Vec<RawResponse>, ErrorHandling> {
     let re = Regex::new(REGEX)?;
     let response_cherrypicked = re

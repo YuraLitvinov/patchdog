@@ -60,47 +60,18 @@ pub struct ChangeFromPatch {
     pub range: Vec<Range<usize>>,
 }
 
-fn file_belongs_to_dir(file: &Path, dir: &Path) -> std::io::Result<bool> {
-    let file_path = fs::canonicalize(file)?;
-    let dir_path = fs::canonicalize(dir)?;
-    Ok(file_path.starts_with(&dir_path))
-}
-
-/// Checks if a given file is allowed for processing, based on a list of exclusion directories.
-/// It iterates through the provided `exclusions` list and uses `file_belongs_to_dir` to determine if the `file`'s path falls under any of these excluded directories.
-/// This function is crucial for filtering out files that should not be analyzed or modified.
-///
-/// # Arguments
-///
-/// * `file` - A reference to a `Path` representing the file to check.
-/// * `exclusions` - A slice of `PathBuf` representing directories that are excluded.
-///
-/// # Returns
-///
-/// A `std::io::Result<bool>` which is `true` if the file is allowed (not in any excluded directory), and `false` otherwise.
-fn is_file_allowed(file: &Path, exclusions: &[PathBuf]) -> std::io::Result<bool> {
-    for dir in exclusions {
-        if file_belongs_to_dir(file, dir)? {
-            return Ok(false);
+fn is_file_allowed(file: &Path, exclusions: &[PathBuf]) -> Result<bool, ErrorBinding> {
+    let starts = exclusions.iter().all(|path| Path::new(path).starts_with(&file));
+    if starts == false {
+        for path in exclusions.iter() {
+            if Path::new(path) == file {
+                return Ok(false);
+            }
         }
     }
-    Ok(true) // not in any excluded dir
+    Ok(!starts)
 }
 
-/// Processes a collection of `ChangeFromPatch` items to generate structured `Request` objects, typically for an LLM or similar external service.
-/// It filters changes based on file exclusion lists and whether the changed Rust item matches specified types or names, also considering functions explicitly excluded in configuration.
-/// For each relevant change, the function extracts the full function text and gathers its surrounding context, including external dependencies, to form a comprehensive `Request` that can be sent for further analysis or generation.
-///
-/// # Arguments
-///
-/// * `exported_from_file` - A `Vec<ChangeFromPatch>` containing information about code changes.
-/// * `rust_type` - A `Vec<String>` of Rust item types to include.
-/// * `rust_name` - A `Vec<String>` of Rust item names to include.
-/// * `file_exclude` - A slice of `PathBuf` representing files or directories to exclude from processing.
-///
-/// # Returns
-///
-/// A `Result<Vec<Request>, ErrorBinding>` containing the processed requests, or an error if context gathering or parsing fails.
 pub fn changes_from_patch(
     exported_from_file: Vec<ChangeFromPatch>,
     rust_type: Vec<String>,
@@ -198,46 +169,35 @@ pub fn changes_from_patch(
     Ok(singlerequestdata)
 }
 
-/// Retrieves parsed patch data from a specified patch file.
-/// It constructs the absolute path to the patch file and the relative working directory,
-/// then calls `get_patch_data` to process the patch.
+/// Processes a Git patch file to extract structured information about code changes, specifically identifying modified objects and their line ranges. It resolves the provided relative patch path, then delegates to `get_patch_data` to parse the patch and convert its contents into a vector of `ChangeFromPatch` structs.
 ///
 /// # Arguments
-///
-/// * `path_to_patch` - A `PathBuf` indicating the path to the patch file.
+/// * `path_to_patch` - A `PathBuf` representing the path to the Git patch file, relative to the current working directory.
 ///
 /// # Returns
-///
-/// A `Result<Vec<ChangeFromPatch>, ErrorBinding>`:
-/// - `Ok(Vec<ChangeFromPatch>)`: A vector containing details of changes extracted from the patch.
-/// - `Err(ErrorBinding)`: If the current directory cannot be determined or patch data extraction fails.
+/// A `Result<Vec<ChangeFromPatch>, ErrorBinding>` containing a vector of `ChangeFromPatch` structs, each detailing filenames and ranges of changes, or an `ErrorBinding` if any file system or patch parsing error occurs.
 pub fn patch_data_argument(path_to_patch: PathBuf) -> Result<Vec<ChangeFromPatch>, ErrorBinding> {
     let path = env::current_dir()?;
     let patch = get_patch_data(path.join(path_to_patch), path)?;
     Ok(patch)
 }
 
+/// Extracts changed code objects from a patch file, identifying their line ranges and filenames. This function first processes the patch to find all differences and then parses the affected Rust files to map these changes to specific `ObjectRange` instances.
+/// It uses parallel iteration for efficiency, making it suitable for larger patches or codebases. The output provides a structured view of all significant code alterations, making it easier to pinpoint exact changes.
+///
+/// # Arguments
+///
+/// * `path_to_patch` - A `PathBuf` pointing to the patch file.
+/// * `relative_path` - A `PathBuf` indicating the base directory to resolve file paths within the patch.
+///
+/// # Returns
+///
+/// A `Result<Vec<ChangeFromPatch>, ErrorBinding>` containing a vector of `ChangeFromPatch` objects, each detailing changed ranges within a file, or an `ErrorBinding` if parsing or file operations fail.
 /*
 Pushes information from a patch into vector that contains lines
 at where there are unique changed objects reprensented with range<usize>
 and an according path each those ranges that has to be iterated only once
 */
-/// Processes a Git patch to identify specific code changes within Rust files.
-/// It first exports the raw changes from the patch, then iterates through these differences.
-/// For each difference, it parses the corresponding Rust file and identifies actual Rust items (functions, structs, etc.)
-/// whose line ranges overlap with the reported changes in the patch.
-/// The result is a refined list of `ChangeFromPatch` objects containing only relevant Rust item ranges.
-///
-/// # Arguments
-///
-/// * `path_to_patch` - A `PathBuf` indicating the path to the patch file.
-/// * `relative_path` - A `PathBuf` representing the relative base path from which files are referenced.
-///
-/// # Returns
-///
-/// A `Result<Vec<ChangeFromPatch>, ErrorBinding>`:
-/// - `Ok(Vec<ChangeFromPatch>)`: A vector of `ChangeFromPatch` objects, each containing a filename and a vector of `Range<usize>` indicating the line ranges of identified Rust items that were changed by the patch.
-/// - `Err(ErrorBinding)`: If patch export fails or Rust file parsing encounters an error.
 pub fn get_patch_data(
     path_to_patch: PathBuf,
     relative_path: PathBuf,
@@ -267,18 +227,6 @@ pub fn get_patch_data(
     Ok(export_difference)
 }
 
-/// Parses a Git patch to extract detailed information about changes to Rust source files.
-/// For each file identified in the patch, it reads the file's content, parses all Rust items (functions, structs, comments, etc.) within it, and retrieves the specific hunks (changed blocks of code) from the patch.
-/// The collected data is then structured into `FullDiffInfo` objects, providing a comprehensive view of the affected files, their parsed Rust items, and the exact lines changed in the patch.
-///
-/// # Arguments
-///
-/// * `relative_path` - A reference to a `Path` representing the base directory relative to which file paths in the patch are resolved.
-/// * `patch_src` - A byte slice (`&[u8]`) containing the raw Git patch content.
-///
-/// # Returns
-///
-/// A `Result<Vec<FullDiffInfo>, Git2ErrorHandling>` containing detailed information about the changes for each file in the patch, or an error if parsing or file operations fail.
 fn store_objects(
     relative_path: &Path,
     patch_src: &[u8],
@@ -304,18 +252,17 @@ fn store_objects(
     Ok(vec_of_surplus)
 }
 
-/// Processes a Git patch to identify lines of code that have been changed and are *not* part of existing, recognized Rust items.
-/// It reads the patch and gathers `FullDiffInfo` for each changed file, then iterates through each hunk to determine which changed lines fall outside of parsed Rust structures.
-/// The function returns a list of `Difference` structs, indicating files and specific lines within them that represent new or modified code segments not belonging to an existing function, struct, or other parsed item.
+/// Parses a patch file to identify changed lines within Rust code objects and associates them with their respective files. This function reads the patch, extracts diff hunks, and then iterates through relevant Rust files to determine which `ObjectRange` items (e.g., functions, structs) are affected by the changes.
+/// It ultimately returns a structured list of `Difference` objects, each containing a filename and a vector of line numbers that have been modified.
 ///
 /// # Arguments
 ///
-/// * `path_to_patch` - The `PathBuf` to the Git patch file.
-/// * `relative_path` - The `PathBuf` to the root of the repository or project, used to resolve file paths from the patch.
+/// * `path_to_patch` - A `PathBuf` pointing to the patch file to be analyzed.
+/// * `relative_path` - A `PathBuf` representing the base directory for resolving file paths mentioned in the patch.
 ///
 /// # Returns
 ///
-/// A `Result<Vec<Difference>, ErrorBinding>` containing a list of files and their associated new/modified lines, or an error if file operations or parsing fail.
+/// A `Result<Vec<Difference>, ErrorBinding>` containing a vector of `Difference` objects, each indicating the filename and the lines affected by the patch, or an `ErrorBinding` if any file or parsing operation fails.
 fn patch_export_change(
     path_to_patch: PathBuf,
     relative_path: PathBuf,

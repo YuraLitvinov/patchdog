@@ -37,6 +37,10 @@ pub struct AnalyzerData {
     pub krates: Vec<ra_ap_base_db::Crate>,
 }
 
+/// Initializes the Rust Analyzer database and Virtual File System (VFS) for the current project. This function discovers the `Cargo.toml` manifest, loads the workspace, and filters for local crates, returning an `AnalyzerData` struct. This setup is crucial for performing static analysis and code introspection.
+///
+/// # Returns
+/// An `AnalyzerData` struct, containing the initialized `RootDatabase`, `Vfs`, and a vector of `ra_ap_base_db::Crate` instances representing local crates.
 pub fn init_analyzer() -> AnalyzerData {
     let absolute = env::current_dir().unwrap();
     let cargo_config = CargoConfig {
@@ -72,6 +76,15 @@ pub fn init_analyzer() -> AnalyzerData {
     AnalyzerData { db, vfs, krates }
 }
 
+/// Gathers relevant contextual code (functions and structs) from the entire codebase for a specified file and an optional function range. It traverses the `AnalyzerData` to identify local functions and structs, filtering out the target function itself (if `fn_range` is provided) and extracting their source code strings.
+///
+/// # Arguments
+/// * `filepath` - The path to the file for which context is being retrieved.
+/// * `fn_range` - An `Option<&TextRange>` specifying a function's range to be excluded from the contextual results.
+/// * `analyzer_data` - A reference to the `AnalyzerData` containing the Rust Analyzer database, VFS, and crates.
+///
+/// # Returns
+/// A `HashMap<TextRange, String>` where keys are the text ranges of contextual code elements, and values are their corresponding source code strings.
 pub fn contextualizer(
     filepath: &Path,
     fn_range: Option<&TextRange>,
@@ -101,6 +114,17 @@ pub fn contextualizer(
         })
         .collect()
 }
+/// Recursively processes a `ModuleDefId` to extract source code strings for functions and structs relevant to a specified file. It identifies dependencies, filters for local code, and collects the source text of elements that are not the target function itself (if provided). This function is key to building contextual understanding of a code change.
+///
+/// # Arguments
+/// * `module` - The `ModuleDefId` representing the module or item to analyze.
+/// * `db` - A reference to the `RootDatabase` for Rust Analyzer operations.
+/// * `fn_range` - An `Option<&TextRange>` for a specific function range to be excluded from context.
+/// * `vfs` - A reference to the `Vfs` (Virtual File System).
+/// * `filepath` - The `Path` of the file being analyzed.
+///
+/// # Returns
+/// A `HashMap<TextRange, String>` where keys are the text ranges of contextual code elements (functions or structs) and values are their corresponding source code strings.
 fn match_modules(
     module: ModuleDefId,
     db: &RootDatabase,
@@ -160,6 +184,15 @@ fn match_modules(
     context_strings
 }
 
+/// Retrieves the Virtual File System (VFS) path associated with a given `FunctionId`. It queries the `RootDatabase` to look up the function's definition and then uses the extracted `FileId` to obtain the corresponding `VfsPath` from the `Vfs`.
+///
+/// # Arguments
+/// * `fn_id` - The `FunctionId` for which to find the file path.
+/// * `vfs` - A reference to the `Vfs` (Virtual File System).
+/// * `db` - A reference to the `RootDatabase` (Rust Analyzer database).
+///
+/// # Returns
+/// An `Option<&'a VfsPath>` containing a reference to the `VfsPath` if the function's file ID can be successfully resolved, otherwise `None`.
 fn build_path<'a>(fn_id: FunctionId, vfs: &'a Vfs, db: &RootDatabase) -> Option<&'a VfsPath> {
     let lookup = &db.lookup_intern_function(fn_id);
     let as_syn = lookup.id;
@@ -172,6 +205,15 @@ fn build_path<'a>(fn_id: FunctionId, vfs: &'a Vfs, db: &RootDatabase) -> Option<
     }
 }
 
+/// Extracts and returns the raw source code text corresponding to a specific `TextRange` within a given file. It parses the file using the `RootDatabase` and then navigates the syntax tree to locate the syntax node or token covering the specified range, converting its text content into a `String`.
+///
+/// # Arguments
+/// * `file_id` - The `EditionedFileId` of the file to retrieve the text from.
+/// * `range` - The `TextRange` specifying the exact portion of the file's content to extract.
+/// * `db` - A reference to the `RootDatabase` for parsing file content.
+///
+/// # Returns
+/// A `String` containing the source code text found within the specified `TextRange`.
 fn print_body(file_id: EditionedFileId, range: TextRange, db: &RootDatabase) -> String {
     let to_source = db.parse(file_id);
     let func = to_source.syntax_node().covering_element(range);
@@ -181,6 +223,14 @@ fn print_body(file_id: EditionedFileId, range: TextRange, db: &RootDatabase) -> 
     }
 }
 
+/// Resolves a given `FunctionId` to its corresponding `TextRange` in the source code, but only if the function is defined within a local crate. It queries the `RootDatabase` to determine the function's origin and, if local, extracts its precise `TextRange`.
+///
+/// # Arguments
+/// * `db` - A reference to the `RootDatabase` (Rust Analyzer database).
+/// * `fn_id` - The `FunctionId` of the function to be resolved.
+///
+/// # Returns
+/// An `Option<TextRange>` containing the `TextRange` of the function if it is local and resolvable, otherwise `None`.
 fn return_functions(db: &RootDatabase, fn_id: FunctionId) -> Option<TextRange> {
     let lookup = &db.lookup_intern_function(fn_id);
     let as_syn = lookup.id;
@@ -201,6 +251,17 @@ fn return_functions(db: &RootDatabase, fn_id: FunctionId) -> Option<TextRange> {
     }
 }
 
+/// Analyzes a given expression within a function body to identify and collect `FunctionId`s of any referenced functions, including method calls and path expressions. It leverages the Rust Analyzer's inference and resolution capabilities to find the `TextRange` of the resolved function, adding its `FunctionId` to a mutable set.
+///
+/// # Arguments
+/// * `fn_ids` - A mutable `HashSet<FunctionId>` to accumulate discovered function IDs.
+/// * `expression` - A reference to the `Expr` (expression) to be analyzed.
+/// * `db` - A reference to the `RootDatabase` for Rust Analyzer operations.
+/// * `body_id` - The `DefWithBodyId` of the function or constant body containing the expression.
+/// * `idx_expr` - The `Idx<Expr>` of the expression within its body.
+///
+/// # Returns
+/// An `Option<TextRange>` representing the `TextRange` of the resolved function if it is local and found, otherwise `None`.
 fn match_expressions(
     fn_ids: &mut HashSet<FunctionId>,
     expression: &Expr,
@@ -240,6 +301,15 @@ fn match_expressions(
     }
 }
 
+/// Recursively traverses the Abstract Syntax Tree (AST) of a given expression within a function body, collecting all `ExprId`s that represent sub-expressions or calls. This function helps in identifying and tracking all expressions relevant to a function's logic, including those nested in control flow structures like `if`, `loop`, `call`, `method_call`, and `match`.
+///
+/// # Arguments
+/// * `expressions` - A mutable `HashSet<ra_ap_hir_def::hir::ExprId>` to store the IDs of all encountered expressions.
+/// * `expr_id` - The starting `ExprId` for the recursive traversal.
+/// * `body_match` - A reference to the `Body` of the function or constant containing the expressions.
+///
+/// # Returns
+/// This function modifies the `expressions` `HashSet` in place and does not return a value.
 fn seek_dependencies(
     expressions: &mut std::collections::HashSet<ra_ap_hir_def::hir::ExprId>,
     expr_id: ra_ap_hir_def::hir::ExprId,

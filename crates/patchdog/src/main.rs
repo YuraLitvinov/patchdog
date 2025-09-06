@@ -13,18 +13,15 @@ use tracing_subscriber::{Layer, layer::SubscriberExt, util::SubscriberInitExt};
 pub mod analyzer;
 pub mod binding;
 pub mod cli;
-
 #[cfg(test)]
 pub mod tests;
-/// The main entry point for the application, marked with `#[tokio::main]` for asynchronous execution.
-/// It initializes dotenv for environment variables and tracing_subscriber for logging.
-/// The core logic is delegated to `cli_patch_to_agent()`.
+
+/// The main entry point of the application, executed asynchronously. This function parses command-line arguments, sets up tracing for debugging if enabled, initializes the code analyzer, and loads environment variables.
+/// It then delegates the core logic of processing patches and interacting with an AI agent to the `cli_patch_to_agent` function. The `tokio::main` attribute allows it to run asynchronous code.
 ///
 /// # Returns
 ///
-/// An `Ok(())` on successful completion of the `cli_patch_to_agent` function.
-/// An `ErrorBinding` if any error occurs during environment setup or the `cli_patch_to_agent` execution.
-//Accepts relative path from inside folder
+/// A `Result<(), ErrorBinding>` indicating the overall success or failure of the application's execution.
 #[tokio::main]
 async fn main() -> Result<(), ErrorBinding> {
     let commands = crate::cli::Mode::parse();
@@ -37,6 +34,12 @@ async fn main() -> Result<(), ErrorBinding> {
     Ok(())
 }
 
+/// Configures and initializes the application's tracing and logging infrastructure. This function sets up an OpenTelemetry (OTLP) exporter with a Tonic gRPC client for span processing, allowing for distributed tracing.
+/// It also configures the `tracing-subscriber` to handle log filtering based on environment variables (RUST_LOG) or default settings, ensuring that telemetry and logs are properly collected and displayed for debugging and monitoring.
+///
+/// # Returns
+///
+/// An `SdkTracerProvider` instance, which is the root of the OpenTelemetry tracing system, allowing for the creation and management of spans.
 fn setup_tracing() -> SdkTracerProvider {
     // Initialize OTLP exporter using gRPC (Tonic)
     let exporter = opentelemetry_otlp::SpanExporter::builder()
