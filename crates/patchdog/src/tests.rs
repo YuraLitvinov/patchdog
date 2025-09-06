@@ -3,7 +3,7 @@ mod tests {
     use gemini::request_preparation::RawResponse;
     use regex::Regex;
     use rust_parsing::ErrorHandling;
-    use rust_parsing::error::{ErrorBinding, InvalidIoOperationsSnafu};
+    use rust_parsing::error::{InvalidIoOperationsSnafu};
     use rust_parsing::file_parsing::{FileExtractor, Files, REGEX};
     use rust_parsing::object_range::Name;
     use rust_parsing::{
@@ -53,11 +53,8 @@ mod tests {
         for object in parsed {
             let obj_type = object.names.type_name.clone();
             if obj_type == "impl".to_string() {
-                println!("{:?}", object);
             }
         }
-
-        assert_eq!(true, true);
     }
 
     #[test]

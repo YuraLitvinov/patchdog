@@ -367,12 +367,12 @@ fn parse_all_rust_analyzer(
                     for each in items {
                         if let ra_ap_syntax::ast::AssocItem::Fn(f) = each {
                             let name = f.name();
-                            let range = f.syntax().text_range();
+                            let assoc_fn_range = f.syntax().text_range();
                             if let Some(name) = name {
                                 analyzer.insert(
-                                    range,
+                                    assoc_fn_range,
                                     AnalyzerRange {
-                                        range,
+                                        range: assoc_fn_range,
                                         names: Name {
                                             type_name: "fn".to_string(),
                                             name: name.to_string(),
@@ -381,9 +381,9 @@ fn parse_all_rust_analyzer(
                                 );
                             } else {
                                 analyzer.insert(
-                                    range,
+                                    assoc_fn_range,
                                     AnalyzerRange {
-                                        range,
+                                        range: assoc_fn_range,
                                         names: Name {
                                             type_name: "fn".to_string(),
                                             name: "".to_string(),
@@ -397,7 +397,7 @@ fn parse_all_rust_analyzer(
             }
             ra_ap_syntax::ast::Item::Trait(t) => {
                 let name = t.name();
-                let range = t.syntax().text_range();
+                let  range = t.syntax().text_range();
                 if let Some(name) = name {
                     analyzer.insert(
                         range,

@@ -20,6 +20,18 @@ object_type = %object%.object_type()
 line_start = %object%.line_start()
 line_end = %object%.line_end()
 */
+
+impl Default for ObjectRange {
+    fn default() -> Self {
+        Self {
+            line_ranges: 0..0,
+            names: Name {
+                type_name: "".to_string(),
+                name: "".to_string(),
+            },
+        }
+    }
+}
 impl ObjectRange {
 
 /// Returns the name of the code object. This method provides direct access to the `name` field within the `names` property of the `ObjectRange` struct.

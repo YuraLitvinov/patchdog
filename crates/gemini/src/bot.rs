@@ -13,25 +13,11 @@ pub trait RequestResponseConstruction {
 
 pub struct AiRequest;
 
-/// Asynchronously sends a code snippet (`file_content`) to the Google Gemini Large Language Model for processing. It retrieves the Gemini API key from the `API_KEY_GEMINI` environment variable and constructs the prompt and model settings from the application's configuration.
-///
-/// # Arguments
-/// * `file_content` - A string slice containing the code or text to be sent to the Gemini LLM.
-///
-/// # Returns
-/// A `Result<String, ErrorHandling>` containing the text response from the Gemini LLM on success, or an `ErrorHandling` if the API key is missing, configuration cannot be loaded, or the API call fails.
 impl RequestResponseConstruction for AiRequest {
-/// Determines which Large Language Model (LLM) to use for a given `file_content` based on the `llm_model` specified in the application's configuration. It dynamically dispatches the request to either the OpenAI or Google Gemini LLM API.
-///
-/// # Arguments
-/// * `file_content` - A string slice containing the content to be processed by the selected LLM.
-///
-/// # Returns
-/// A `Result<String, ErrorHandling>` containing the response from the chosen LLM on success, or an `ErrorHandling` if the configuration cannot be read, the specified model is unsupported, or the LLM call fails.
+
     async fn switch_llm(file_content: &str) -> Result<String, ErrorHandling> {
         let yaml = return_prompt()?;
         let model = yaml.patchdog_settings.llm_model.as_str();
-        //println!("{:#?}", yaml);
         match model {
             "openai" => AiRequest::call_llm_openai(file_content).await,
             "google" => AiRequest::call_llm_gemini(file_content).await,

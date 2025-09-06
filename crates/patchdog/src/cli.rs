@@ -30,8 +30,6 @@ use tracing::{Level, event};
 pub struct Mode {
     #[arg(long)]
     file_patch: PathBuf,
-    #[arg(long, num_args=1..14, requires = "file_patch", default_value = "fn")]
-    type_rust: Vec<String>,
     #[arg(long, num_args=1..,  requires = "file_patch")]
     name_rust: Vec<String>,
     #[arg(long, default_value = "false")]
@@ -67,26 +65,24 @@ pub async fn cli_patch_to_agent(
 ) -> Result<(), ErrorBinding> {
     //Mode accepts type and name of the object for the sake of debugging. It autodefaults to any fn
     let patch = binding::patch_data_argument(commands.file_patch)?;
-    event!(Level::INFO, "type: {:#?}", commands.type_rust);
-    let exclusions = ai_interactions::return_prompt()?
-        .patchdog_settings
-        .excluded_files;
+    let parameters = ai_interactions::return_prompt()?
+        .patchdog_settings;
+    event!(Level::INFO, "type: {:#?}", parameters.affected_object_types);
     let dir = env::current_dir()?;
-    let excluded_paths = exclusions
+    let excluded_paths = parameters.excluded_files
         .par_iter()
         .map(|path| fs::canonicalize(dir.join(Path::new(path))).unwrap())
         .collect::<Vec<PathBuf>>();
-    println!("Excluded paths: {:#?}", excluded_paths);
     let request = changes_from_patch(
         patch,
-        commands.type_rust,
+        parameters.affected_object_types,
         commands.name_rust,
         &excluded_paths,
         analyzer_data,
     )?;
     println!("{:#?}", request);
     //Here occurs check for pending changes
-    if request.is_empty() {
+    /*if request.is_empty() {
         event!(Level::INFO, "No requests");
     } else {
         event!(Level::INFO, "Requests length: {}", &request.len());
@@ -99,7 +95,7 @@ pub async fn cli_patch_to_agent(
             responses_collected.len()
         );
         write_to_file(responses_collected)?;
-    }
+    }*/
     Ok(())
 }
 

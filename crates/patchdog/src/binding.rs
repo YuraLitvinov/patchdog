@@ -100,21 +100,33 @@ pub fn changes_from_patch(
         .filter_map(|change| {
             //Here we only allow files, that are not in the config.yaml-Patchdog_settings-excluded_files
             if is_file_allowed(&change.filename, file_exclude).ok()? {
-                let vectorized = FileExtractor::string_to_vector(&change.file);
-                let item = &vectorized[change.range.start - 1..change.range.end];
-                let parsed_file = RustItemParser::rust_item_parser(&item.join("\n")).ok()?;
-                let obj_type_to_compare = parsed_file.names.type_name;
-                let obj_name_to_compare = parsed_file.names.name;
-                if rust_type.par_iter().any(|t| &obj_type_to_compare == t)
-                    || rust_name.par_iter().any(|n| &obj_name_to_compare == n)
-                        && return_prompt()
+                let source = fs::read_to_string(&change.filename).ok()?;
+                let parsed_object = RustItemParser::parse_all_rust_items(&source)
+                    .ok()?
+                    .iter()
+                    .filter_map(|each| {
+                        if each.line_ranges == change.range {
+                            return Some(each.to_owned());
+                        }
+                        None
+                    })
+                    .collect::<Vec<ObjectRange>>();
+                let default_object = ObjectRange::default();
+                let obj_type_to_compare = &parsed_object.first().unwrap_or(&default_object).names.type_name;
+                let obj_name_to_compare = &parsed_object.first().unwrap_or(&default_object).names.name;
+                if rust_type.par_iter().any(|t| obj_type_to_compare == t)
+                    || rust_name.par_iter().any(|n| obj_name_to_compare == n)
+                        && !return_prompt()
                             .ok()?
                             .patchdog_settings
                             .excluded_functions
                             .contains(&obj_name_to_compare)
                 {
                     //At this point in parsed_file we are already aware of all the referenced data
-                    let fn_as_string = item.join("\n");
+                    let source = fs::read_to_string(&change.filename).ok()?;
+                    let fn_as_string = FileExtractor::string_to_vector(&source)
+                        [change.range.start - 1..change.range.end]
+                        .join("\n");
                     /*
                     Calling find_context(all methods: bla-bla, function: String) -> context(Vec<String>) {
                         1.
@@ -149,8 +161,8 @@ pub fn changes_from_patch(
                     Some(Request {
                         uuid: uuid::Uuid::new_v4().to_string(),
                         data: SingleFunctionData {
-                            function_text: fn_as_string,
-                            fn_name: obj_name_to_compare,
+                            function_text: fn_as_string.to_string(),
+                            fn_name: obj_name_to_compare.clone(),
                             context,
                             metadata: Metadata {
                                 filepath: change.filename.clone(),
