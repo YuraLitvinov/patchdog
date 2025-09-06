@@ -22,6 +22,10 @@ line_end = %object%.line_end()
 */
 
 impl Default for ObjectRange {
+/// Provides a default constructor for a struct (likely `ObjectRange`), initializing its fields with zero or empty values. Specifically, it sets `line_ranges` to an empty `0..0` range and `names` to a `Name` struct where both `type_name` and `name` are empty strings. This implementation is useful for creating a base or placeholder instance when no specific data is available at the time of instantiation.
+///
+/// # Returns
+/// A new instance of the struct, populated with default values.
     fn default() -> Self {
         Self {
             line_ranges: 0..0,
@@ -34,6 +38,10 @@ impl Default for ObjectRange {
 }
 impl ObjectRange {
 
+/// Retrieves the name of the code object from the `ObjectRange` struct. This method provides direct access to the `name` field nested within the `names` property, offering a convenient way to get the identifier (e.g., function name, struct name) of a parsed Rust code item. It converts the internal name to a `String` for wider usability.
+///
+/// # Returns
+/// A `String` representing the name of the code object.
 /// Returns the name of the code object. This method provides direct access to the `name` field within the `names` property of the `ObjectRange` struct.
 /// It is primarily used to retrieve the identifier (e.g., function name, struct name) associated with a parsed Rust code item.
 ///

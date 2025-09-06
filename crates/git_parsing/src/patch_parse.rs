@@ -19,6 +19,13 @@ pub enum Git2ErrorHandling {
 
 impl From<git2::Error> for Git2ErrorHandling {
 
+/// Implements the `From` trait, providing a conversion mechanism from a `git2::Error` to `Self`, which is a `Git2ErrorHandling` enum. This function wraps the raw `git2::Error` into a `Git2ErrorHandling::Git2Error` variant, standardizing Git-related error handling within the application's custom error type. It allows for seamless integration of external `git2` errors into the application's error management system.
+///
+/// # Arguments
+/// * `e` - The `git2::Error` instance to be converted.
+///
+/// # Returns
+/// A `Git2ErrorHandling::Git2Error` variant containing the original `git2::Error` as its source.
     fn from(e: git2::Error) -> Self {
         Git2ErrorHandling::Git2Error { source: e }
     }

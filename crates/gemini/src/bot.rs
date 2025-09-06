@@ -15,6 +15,13 @@ pub struct AiRequest;
 
 impl RequestResponseConstruction for AiRequest {
 
+/// Asynchronously selects and invokes the appropriate Large Language Model (LLM) service based on the `llm_model` setting defined in the application's configuration. It first retrieves the configuration using `return_prompt()` to determine which model (OpenAI or Google Gemini) to use. The provided `file_content` is then dispatched to the chosen LLM for processing.
+///
+/// # Arguments
+/// * `file_content` - A string slice containing the content to be sent to the LLM.
+///
+/// # Returns
+/// A `Result<String, ErrorHandling>` where `Ok(String)` contains the response from the LLM, or `Err(ErrorHandling)` if the configuration cannot be read or the specified model is unsupported.
     async fn switch_llm(file_content: &str) -> Result<String, ErrorHandling> {
         let yaml = return_prompt()?;
         let model = yaml.patchdog_settings.llm_model.as_str();

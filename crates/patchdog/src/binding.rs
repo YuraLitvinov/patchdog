@@ -72,6 +72,17 @@ fn is_file_allowed(file: &Path, exclusions: &[PathBuf]) -> Result<bool, ErrorBin
     Ok(!starts)
 }
 
+/// Processes a collection of code changes identified from a patch, filters them according to configured exclusion rules, and generates a vector of `Request` objects suitable for an AI agent. For each allowed change, it extracts the relevant Rust code, parses its structure to identify the changed item (e.g., function, struct), and gathers contextual code from the `AnalyzerData`. This ensures that the AI receives both the changed code and its surrounding context.
+///
+/// # Arguments
+/// * `exported_from_file` - A vector of `ChangeFromPatch` structs, detailing individual code modifications.
+/// * `rust_type` - A vector of strings specifying the Rust object types (e.g., "fn", "struct") that are targeted for AI processing.
+/// * `rust_name` - A vector of strings specifying particular Rust object names to include.
+/// * `file_exclude` - A slice of `PathBuf` representing files that should be ignored during processing.
+/// * `analyzer_data` - Comprehensive data provided by `rust-analyzer`, used to extract code context.
+///
+/// # Returns
+/// A `Result<Vec<Request>, ErrorBinding>` containing a vector of `Request` objects, each representing a code change with its context, or an `ErrorBinding` if any file operation or parsing fails.
 pub fn changes_from_patch(
     exported_from_file: Vec<ChangeFromPatch>,
     rust_type: Vec<String>,

@@ -48,6 +48,14 @@ pub struct ResponseForm {
     new_comment: String,
 }
 
+/// Orchestrates the end-to-end process of applying a code patch by leveraging an AI agent to generate code suggestions. This asynchronous function first parses the provided patch file and loads the application's configuration, including LLM settings and file/function exclusion rules. It then filters the detected code changes based on these rules, generates `Request` objects for the AI, and (once uncommented) will call the AI, collect responses, and write the generated suggestions back to the respective files. The function aims to prevent infinite recursion by limiting AI call attempts.
+///
+/// # Arguments
+/// * `analyzer_data` - An `AnalyzerData` instance providing code analysis context.
+/// * `commands` - A `Mode` struct containing command-line arguments, such as the patch file path, target Rust types, and names, and a debug flag.
+///
+/// # Returns
+/// A `Result<(), ErrorBinding>` indicating the overall success or failure of the patch processing and AI interaction workflow.
 /// Orchestrates the entire process of applying a patch to a codebase, generating AI-based code suggestions, and writing them back to files. This asynchronous function takes a patch file, analyzes the changes, filters them based on exclusion rules, and then generates `Request` objects for an AI agent.
 /// It then calls the AI agent, collects the responses, and writes the suggested new comments or code modifications to the corresponding files. The function includes a call limit to prevent infinite recursion in case of persistent AI failures.
 ///

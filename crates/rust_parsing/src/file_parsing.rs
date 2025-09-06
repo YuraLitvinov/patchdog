@@ -28,6 +28,16 @@ pub trait Files {
 
 impl Files for FileExtractor {
 
+/// Inserts a `changed_element` string into a `Vec<String>` representation of a file at a specific 1-based `line_index`, and subsequently writes the entire modified content back to the original file path. This function facilitates programmatic modification of file content by manipulating its line-by-line representation in memory. It handles the necessary file creation and writing operations, ensuring that changes are persisted correctly.
+///
+/// # Arguments
+/// * `path` - A `PathBuf` specifying the path to the file that will be modified.
+/// * `source` - A mutable `Vec<String>` representing the current lines of the file's content.
+/// * `line_index` - The 1-based line number where the `changed_element` should be inserted.
+/// * `changed_element` - The `String` content to be inserted into the file.
+///
+/// # Returns
+/// A `Result<(), ErrorHandling>` indicating success or returning an `ErrorHandling` if any file I/O operations (creating or writing) fail.
 /// Inserts a `changed_element` string into a `Vec<String>` representation of a file at a specific `line_index` and then writes the modified content back to the original file path. This function is designed to apply changes to a file by modifying its in-memory line representation and then persisting these changes.
 /// It handles file creation and writing, ensuring that the updated content is correctly saved. The `line_index` is adjusted to be 1-based for user convenience, but internally adjusted for 0-based vector indexing.
 ///
