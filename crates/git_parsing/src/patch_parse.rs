@@ -154,28 +154,14 @@ fn get_filenames(diff: &Diff<'static>) -> Result<Vec<String>, Git2ErrorHandling>
     Ok(vector_of_filenames)
 }
 
-/// Extracts hunk information from a Git `Diff` object.
-/// It iterates through each delta in the diff, retrieves the patch for that delta, and then processes each hunk within the patch.
-/// For each line in a hunk, it determines the change type (Add, Modify, or continues if not relevant) and records the new line number and filename.
-///
-/// # Arguments
-///
-/// * `diff` - A reference to a `git2::Diff` object.
-/// * `vector_of_filenames` - A `Vec<String>` containing the filenames corresponding to the deltas in the diff.
-///
-/// # Returns
-///
-/// A `Result<Vec<Hunk>, Git2ErrorHandling>`:
-/// - `Ok(Vec<Hunk>)`: A vector of `Hunk` structs, each containing information about a change (change type, line number, filename).
-/// - `Err(Git2ErrorHandling)`: If there are issues creating patches, retrieving hunk or line information, or `PatchExportSnafu` occurs.
 fn git_get_hunks(
     diff: &Diff<'static>,
     vector_of_filenames: Vec<String>,
 ) -> Result<Vec<Hunk>, Git2ErrorHandling> {
     let mut hunk_tuple: Vec<Hunk> = Vec::new();
     //i returns tuple
-    for i in diff.deltas().enumerate() {
-        let patch = Patch::from_diff(diff, i.0)?;
+    for (int, _delta) in diff.deltas().enumerate() {
+        let patch = Patch::from_diff(diff, int)?;
         let patch_ref = patch.as_ref().context(PatchExportSnafu)?;
         for hunk_idx in 0..patch_ref.num_hunks() {
             let (_hunk, _) = patch_ref.hunk(hunk_idx)?;
@@ -190,7 +176,7 @@ fn git_get_hunks(
                 hunk_tuple.push(Hunk {
                     change,
                     line: line_processed,
-                    filename: vector_of_filenames[i.0].to_owned(),
+                    filename: vector_of_filenames[int].to_owned(),
                 });
             }
         }

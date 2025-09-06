@@ -1,6 +1,6 @@
-use crate::error::{ErrorHandling, InvalidIoOperationsSnafu, LineOutOfBoundsSnafu};
+use crate::error::{ErrorHandling, InvalidIoOperationsSnafu};
 use crate::object_range::ObjectRange;
-use snafu::{ResultExt, ensure};
+use snafu::ResultExt;
 use std::{fs::File, io::Write, path::PathBuf};
 pub const REGEX: &str = r#"\{\s*"uuid"\s*:\s*"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",\s*"new_comment"\s*:\s*".*"\s*\}"#;
 pub struct FileExtractor;
@@ -9,11 +9,7 @@ pub trait Files {
         parsed: &[ObjectRange],
         line_number: usize,
     ) -> Result<bool, ErrorHandling>;
-    fn export_object_preserving_comments(
-        src: Vec<String>,
-        from_line: usize,
-        parsed: Vec<ObjectRange>,
-    ) -> Result<String, ErrorHandling>;
+
     fn string_to_vector(source: &str) -> Vec<String>;
 
     fn push_to_vector(
@@ -127,60 +123,4 @@ impl Files for FileExtractor {
         }
         Ok(true)
     }
-
-    /// Extracts a code snippet from a source, preserving comments, based on a starting line and parsed object ranges.
-    /// It iterates through parsed `ObjectRange` items, using `seeker_for_comments` to find a valid range.
-    /// If a valid range is found, it extracts the lines from the source using `extract_by_line`.
-    /// The `new_previous` vector appears to track starting lines for search, ensuring comments between objects are considered.
-    ///
-    /// # Arguments
-    ///
-    /// * `src` - A `Vec<String>` representing the full source code, where each string is a line.
-    /// * `from_line` - The starting line number to begin the search for an object.
-    /// * `parsed` - A `Vec<ObjectRange>` representing the parsed Rust items with their line ranges.
-    ///
-    /// # Returns
-    ///
-    /// A `Result<String, ErrorHandling>`:
-    /// - `Ok(String)`: The extracted code snippet as a single string, including comments within the range.
-    /// - `Err(ErrorHandling::LineOutOfBounds)`: If no valid object range can be found containing or extending from `from_line`.
-    fn export_object_preserving_comments(
-        src: Vec<String>,
-        from_line: usize,
-        parsed: Vec<ObjectRange>,
-    ) -> Result<String, ErrorHandling> {
-        let mut new_previous: Vec<usize> = Vec::new();
-        new_previous.push(1);
-        let mut i = 0;
-        for each in parsed {
-            let found = seeker_for_comments(from_line, new_previous[i], each.line_ranges.end, &src);
-            if found.is_err() {
-                i += 1;
-                let previous_end_line = each.line_ranges.end + 1;
-                new_previous.push(previous_end_line);
-                continue;
-            }
-            let extracted = extract_by_line(&src, &new_previous[i], &each.line_ranges.end);
-            return Ok(extracted);
-        }
-        Err(ErrorHandling::LineOutOfBounds { line_number: 0 })
-    }
-}
-
-fn seeker_for_comments(
-    line_number: usize,
-    line_start: usize,
-    line_end: usize,
-    src: &[String],
-) -> Result<String, ErrorHandling> {
-    ensure!(
-        line_start <= line_number && line_end >= line_number,
-        LineOutOfBoundsSnafu { line_number }
-    );
-    Ok(extract_by_line(src, &line_start, &line_end))
-}
-//Extracts a snippet from a file in regard to the snippet boundaries
-fn extract_by_line(from: &[String], line_start: &usize, line_end: &usize) -> String {
-    let line_start = line_start - 1;
-    from[line_start..*line_end].join("\n")
 }

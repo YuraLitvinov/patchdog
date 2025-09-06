@@ -2,7 +2,6 @@ use gemini_rust::Error;
 use git_parsing::Git2ErrorHandling;
 use snafu::Snafu;
 use std::{env::VarError, num::ParseIntError, path::PathBuf};
-use syn;
 use yaml_rust2::ScanError;
 
 #[derive(Debug, Snafu)]
@@ -44,15 +43,6 @@ pub enum ErrorHandling {
     InvalidReadFileOperation {
         source: std::io::Error,
         file_path: PathBuf,
-    },
-    #[snafu(display("{source:#?} in {str_source:#?}"))]
-    InvalidItemParsing {
-        source: syn::Error,
-        str_source: PathBuf,
-    },
-    #[snafu(display("{source:#?}"))]
-    InvalidRustParse {
-        source: syn::Error,
     },
     #[snafu(display("Couldn't seek object at line: {line_number}"))]
     SeekerFailed {
@@ -162,10 +152,5 @@ impl From<Error> for ErrorHandling {
 impl From<serde_json::Error> for ErrorHandling {
     fn from(e: serde_json::Error) -> Self {
         ErrorHandling::SerdeError { source: e }
-    }
-}
-impl From<syn::Error> for ErrorHandling {
-    fn from(e: syn::Error) -> Self {
-        ErrorHandling::InvalidRustParse { source: e }
     }
 }

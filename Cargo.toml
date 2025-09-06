@@ -11,7 +11,6 @@ members = [
 ]
 
 [workspace.dependencies]
-syn = { version = "2.0.104", features = ["full", "extra-traits"] }
 dotenv = "0.15.0"
 quote = "1.0.40"
 serde = "1.0.219"
@@ -24,7 +23,8 @@ yaml-rust2 = "0.10.3"
 tracing = "0.1.41"
 rayon = "1.10.0"
 tokio = { version = "1.45.1", features = ["macros", "rt-multi-thread"] }
-
+ra_ap_syntax = "0.0.300"
+ra_ap_ide = "0.0.300"
 
 [workspace.lints.clippy]
 all = { level = "deny", priority = -1 }

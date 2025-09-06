@@ -1,3 +1,4 @@
+use crate::analyzer::AnalyzerData;
 use crate::binding::{self, changes_from_patch};
 use clap::ArgGroup;
 use clap::Parser;
@@ -26,13 +27,15 @@ use tracing::{Level, event};
         .args(["file_patch"])
         .required(true)
 ))]
-struct Mode {
+pub struct Mode {
     #[arg(long)]
     file_patch: PathBuf,
     #[arg(long, num_args=1..14, requires = "file_patch", default_value = "fn")]
     type_rust: Vec<String>,
     #[arg(long, num_args=1..,  requires = "file_patch")]
     name_rust: Vec<String>,
+    #[arg(long, default_value = "false")]
+    pub enable_debug: bool,
 }
 #[derive(Debug, PartialEq, Eq, Deserialize, Serialize)]
 struct LinkedResponse {
@@ -47,9 +50,11 @@ pub struct ResponseForm {
     new_comment: String,
 }
 
-pub async fn cli_patch_to_agent() -> Result<(), ErrorBinding> {
+pub async fn cli_patch_to_agent(
+    analyzer_data: AnalyzerData,
+    commands: Mode,
+) -> Result<(), ErrorBinding> {
     //Mode accepts type and name of the object for the sake of debugging. It autodefaults to any fn
-    let commands = Mode::parse();
     let patch = binding::patch_data_argument(commands.file_patch)?;
     event!(Level::INFO, "type: {:#?}", commands.type_rust);
     let exclusions = ai_interactions::return_prompt()?
@@ -65,36 +70,30 @@ pub async fn cli_patch_to_agent() -> Result<(), ErrorBinding> {
         commands.type_rust,
         commands.name_rust,
         &excluded_paths,
+        analyzer_data,
     )?;
     //Here occurs check for pending changes
     if request.is_empty() {
         event!(Level::INFO, "No requests");
-        Ok(())
     } else {
         event!(Level::INFO, "Requests length: {}", &request.len());
-        let responses_collected = call(request).await?;
+        //Limiting possible call count to 3, to prevent infinite recursion, where LLM fails to fulfill the request
+        let mut call_limit = 0;
+        let responses_collected = call(request, &mut call_limit).await?;
         event!(
             Level::INFO,
             "Responses collected: {}",
             responses_collected.len()
         );
         write_to_file(responses_collected)?;
-        Ok(())
     }
+    Ok(())
 }
 
-/// Asynchronously processes a batch of `Request` objects by preparing them for an external agent, sending them, and collecting the corresponding responses.
-///
-/// This function first organizes the incoming requests, then uses `RequestToAgent` to prepare and manage these requests into sendable batches, accounting for capacity and rate limits. After sending these batches, it processes the received responses, matching them back to their original requests to construct `ResponseForm` objects.
-///
-/// If any requests do not receive a valid or matched response, this function recursively retries processing those unhandled requests, ensuring robust handling of partial or failed responses.
-///
-/// # Arguments
-/// * `request` - A `Vec<Request>` containing the individual requests to be processed.
-///
-/// # Returns
-/// * `Result<Vec<ResponseForm>, ErrorBinding>` - On success, returns a `Vec<ResponseForm>` where each `ResponseForm` contains the original request data and the agent's generated comment. Returns an `ErrorBinding` if any step in the request-response cycle encounters an unrecoverable error.
-pub async fn call(request: Vec<Request>) -> Result<Vec<ResponseForm>, ErrorBinding> {
+pub async fn call(
+    request: Vec<Request>,
+    call_limiter: &mut usize,
+) -> Result<Vec<ResponseForm>, ErrorBinding> {
     let mut responses_collected = Vec::new();
     let mut pool_of_requests = HashMap::new();
     request.clone().into_iter().for_each(|each| {
@@ -118,7 +117,7 @@ pub async fn call(request: Vec<Request>) -> Result<Vec<ResponseForm>, ErrorBindi
             }
         }
     }
-    if !pool_of_requests.is_empty() {
+    if !pool_of_requests.is_empty() && *call_limiter < 3 {
         event!(
             Level::WARN,
             "Quantity of bad responses: {}",
@@ -128,8 +127,9 @@ pub async fn call(request: Vec<Request>) -> Result<Vec<ResponseForm>, ErrorBindi
             .into_iter()
             .map(|(k, v)| Request { uuid: k, data: v })
             .collect();
-        let collect_error = Box::pin(call(as_vec)).await?;
+        let collect_error = Box::pin(call(as_vec, call_limiter)).await?;
         responses_collected.extend(collect_error);
+        *call_limiter += 1;
         Ok(responses_collected)
     } else {
         Ok(responses_collected)
