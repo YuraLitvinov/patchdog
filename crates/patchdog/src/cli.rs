@@ -1,3 +1,4 @@
+use crate::analyzer::AnalyzerData;
 use crate::binding::{self, changes_from_patch};
 use clap::ArgGroup;
 use clap::Parser;
@@ -9,16 +10,16 @@ use rayon::iter::ParallelIterator;
 use regex::Regex;
 use rust_parsing::error::ErrorBinding;
 use rust_parsing::error::ErrorHandling;
+use rust_parsing::error::InvalidIoOperationsSnafu;
 use rust_parsing::file_parsing::REGEX;
 use rust_parsing::file_parsing::{FileExtractor, Files};
 use serde::Deserialize;
 use serde::Serialize;
+use snafu::ResultExt;
 use std::collections::HashMap;
 use std::path::Path;
-use std::{fs, path::PathBuf, env};
+use std::{env, fs, path::PathBuf};
 use tracing::{Level, event};
-use snafu::ResultExt;
-use rust_parsing::error::InvalidIoOperationsSnafu;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None, group(
@@ -26,13 +27,15 @@ use rust_parsing::error::InvalidIoOperationsSnafu;
         .args(["file_patch"])
         .required(true)
 ))]
-struct Mode {
+pub struct Mode {
     #[arg(long)]
     file_patch: PathBuf,
     #[arg(long, num_args=1..14, requires = "file_patch", default_value = "fn")]
     type_rust: Vec<String>,
     #[arg(long, num_args=1..,  requires = "file_patch")]
     name_rust: Vec<String>,
+    #[arg(long, default_value = "false")]
+    pub enable_debug: bool,
 }
 #[derive(Debug, PartialEq, Eq, Deserialize, Serialize)]
 struct LinkedResponse {
@@ -47,55 +50,74 @@ pub struct ResponseForm {
     new_comment: String,
 }
 
-pub async fn cli_patch_to_agent() -> Result<(), ErrorBinding> {
+/// Orchestrates the entire process of applying a patch to a codebase, generating AI-based code suggestions, and writing them back to files. This asynchronous function takes a patch file, analyzes the changes, filters them based on exclusion rules, and then generates `Request` objects for an AI agent.
+/// It then calls the AI agent, collects the responses, and writes the suggested new comments or code modifications to the corresponding files. The function includes a call limit to prevent infinite recursion in case of persistent AI failures.
+///
+/// # Arguments
+///
+/// * `analyzer_data` - `AnalyzerData` providing context for code analysis.
+/// * `commands` - `Mode` struct containing command-line arguments, including the patch file path, target Rust types, and names, and debug flag.
+///
+/// # Returns
+///
+/// A `Result<(), ErrorBinding>` indicating the success or failure of the entire patch-to-agent and write-back process.
+pub async fn cli_patch_to_agent(
+    analyzer_data: AnalyzerData,
+    commands: Mode,
+) -> Result<(), ErrorBinding> {
     //Mode accepts type and name of the object for the sake of debugging. It autodefaults to any fn
-    let commands = Mode::parse();
     let patch = binding::patch_data_argument(commands.file_patch)?;
     event!(Level::INFO, "type: {:#?}", commands.type_rust);
-    let exclusions = ai_interactions::return_prompt()?.patchdog_settings.excluded_files;
+    let exclusions = ai_interactions::return_prompt()?
+        .patchdog_settings
+        .excluded_files;
     let dir = env::current_dir()?;
     let excluded_paths = exclusions
         .par_iter()
-        .map(
-        |path|dir.join(Path::new(path))
-        )
+        .map(|path| fs::canonicalize(dir.join(Path::new(path))).unwrap())
         .collect::<Vec<PathBuf>>();
+    println!("Excluded paths: {:#?}", excluded_paths);
     let request = changes_from_patch(
-        patch, 
-        commands.type_rust, 
-        commands.name_rust, 
-        &excluded_paths
+        patch,
+        commands.type_rust,
+        commands.name_rust,
+        &excluded_paths,
+        analyzer_data,
     )?;
+    println!("{:#?}", request);
     //Here occurs check for pending changes
     if request.is_empty() {
         event!(Level::INFO, "No requests");
-        Ok(())
-    }
-    else { 
+    } else {
         event!(Level::INFO, "Requests length: {}", &request.len());
-        let responses_collected = call(request).await?;
+        //Limiting possible call count to 3, to prevent infinite recursion, where LLM fails to fulfill the request
+        let mut call_limit = 0;
+        let responses_collected = call(request, &mut call_limit).await?;
         event!(
             Level::INFO,
             "Responses collected: {}",
             responses_collected.len()
         );
         write_to_file(responses_collected)?;
-        Ok(())
     }
+    Ok(())
 }
 
-/// Asynchronously processes a batch of `Request` objects by preparing them for an external agent, sending them, and collecting the corresponding responses.
-///
-/// This function first organizes the incoming requests, then uses `RequestToAgent` to prepare and manage these requests into sendable batches, accounting for capacity and rate limits. After sending these batches, it processes the received responses, matching them back to their original requests to construct `ResponseForm` objects.
-///
-/// If any requests do not receive a valid or matched response, this function recursively retries processing those unhandled requests, ensuring robust handling of partial or failed responses.
+/// Initiates an asynchronous call to an external AI agent with a batch of `Request` objects and handles the agent's responses. This function prepares the requests, sends them, and then processes the received responses, matching them back to the original requests.
+/// It includes a retry mechanism with a `call_limiter` to handle cases where the AI agent might not respond to all requests or returns malformed data, attempting up to 3 retries for unfulfilled requests.
 ///
 /// # Arguments
-/// * `request` - A `Vec<Request>` containing the individual requests to be processed.
+///
+/// * `request` - A `Vec<Request>` containing the prepared requests to be sent to the AI agent.
+/// * `call_limiter` - A mutable reference to a `usize` that tracks the number of retries, preventing infinite loops.
 ///
 /// # Returns
-/// * `Result<Vec<ResponseForm>, ErrorBinding>` - On success, returns a `Vec<ResponseForm>` where each `ResponseForm` contains the original request data and the agent's generated comment. Returns an `ErrorBinding` if any step in the request-response cycle encounters an unrecoverable error.
-pub async fn call(request: Vec<Request>) -> Result<Vec<ResponseForm>, ErrorBinding> {
+///
+/// A `Result<Vec<ResponseForm>, ErrorBinding>` containing a vector of `ResponseForm` objects, which link original request data to the AI agent's generated comments, or an `ErrorBinding` if critical errors occur during the process.
+pub async fn call(
+    request: Vec<Request>,
+    call_limiter: &mut usize,
+) -> Result<Vec<ResponseForm>, ErrorBinding> {
     let mut responses_collected = Vec::new();
     let mut pool_of_requests = HashMap::new();
     request.clone().into_iter().for_each(|each| {
@@ -119,7 +141,7 @@ pub async fn call(request: Vec<Request>) -> Result<Vec<ResponseForm>, ErrorBindi
             }
         }
     }
-    if !pool_of_requests.is_empty() {
+    if !pool_of_requests.is_empty() && *call_limiter < 3 {
         event!(
             Level::WARN,
             "Quantity of bad responses: {}",
@@ -129,25 +151,31 @@ pub async fn call(request: Vec<Request>) -> Result<Vec<ResponseForm>, ErrorBindi
             .into_iter()
             .map(|(k, v)| Request { uuid: k, data: v })
             .collect();
-        let collect_error = Box::pin(call(as_vec)).await?;
+        let collect_error = Box::pin(call(as_vec, call_limiter)).await?;
         responses_collected.extend(collect_error);
+        *call_limiter += 1;
         Ok(responses_collected)
     } else {
         Ok(responses_collected)
     }
 }
 
+/// Extracts `RawResponse` objects from a raw string response using a predefined regular expression. This function is designed to robustly parse potentially messy or concatenated JSON responses, isolating each valid JSON object that matches the `REGEX` pattern.
+/// It iterates through all matches found by the regex and attempts to deserialize each captured string into a `RawResponse` struct. This is useful for processing responses from external APIs that might not always return perfectly formed JSON arrays.
+///
+/// # Arguments
+///
+/// * `response` - A string slice (`&str`) containing the raw response text.
+///
+/// # Returns
+///
+/// A `Result<Vec<RawResponse>, ErrorHandling>` containing a vector of successfully parsed `RawResponse` objects, or an `ErrorHandling` if the regex compilation fails.
 pub fn cherrypick_response(response: &str) -> Result<Vec<RawResponse>, ErrorHandling> {
     let re = Regex::new(REGEX)?;
-    let response_cherrypicked = 
-    re.captures_iter(response).filter_map(|cap| {
-        serde_json::from_str::<RawResponse>(
-            cap
-            .get(0)?
-            .as_str()
-        )
-        .ok()
-    }).collect::<Vec<RawResponse>>();
+    let response_cherrypicked = re
+        .captures_iter(response)
+        .filter_map(|cap| serde_json::from_str::<RawResponse>(cap.get(0)?.as_str()).ok())
+        .collect::<Vec<RawResponse>>();
     Ok(response_cherrypicked)
 }
 

@@ -1,24 +1,23 @@
 use ai_interactions::return_prompt;
 use clap::error::Result;
 use gemini::request_preparation::{Context, Metadata, Request, SingleFunctionData};
-use git_parsing::{get_easy_hunk, match_patch_with_parse, Git2ErrorHandling, Hunk};
+use git_parsing::{Git2ErrorHandling, Hunk, get_easy_hunk, match_patch_with_parse};
 use git2::Diff;
 use rayon::prelude::*;
-use rust_parsing::{self, ErrorHandling};
 use rust_parsing::ObjectRange;
 use rust_parsing::error::{ErrorBinding, InvalidIoOperationsSnafu};
 use rust_parsing::file_parsing::{FileExtractor, Files};
 use rust_parsing::rust_parser::{RustItemParser, RustParser};
+use rust_parsing::{self};
 use serde::{Deserialize, Serialize};
 use snafu::ResultExt;
-use syn::{UseTree};
-use syn::Item;
-use std::collections::HashMap;
 use std::{
     env, fs,
     ops::Range,
     path::{Path, PathBuf},
 };
+
+use crate::analyzer::{AnalyzerData, contextualizer};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct UseItem {
@@ -30,7 +29,7 @@ pub struct UseItem {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PathObject {
     pub filename: PathBuf,
-    pub object: ObjectRange
+    pub object: ObjectRange,
 }
 
 pub struct FullDiffInfo {
@@ -50,9 +49,9 @@ pub struct LocalChange {
 }
 #[derive(Debug, Clone)]
 pub struct LocalContext {
-    pub context_type: String, 
-    pub context_name: String,  
-    pub context_path: String,  
+    pub context_type: String,
+    pub context_name: String,
+    pub context_path: String,
 }
 
 #[derive(Debug)]
@@ -61,74 +60,43 @@ pub struct ChangeFromPatch {
     pub range: Vec<Range<usize>>,
 }
 
-
-
-
-fn file_belongs_to_dir(file: &Path, dir: &Path) -> std::io::Result<bool> {
-    let file_path = fs::canonicalize(file)?;
-    let dir_path = fs::canonicalize(dir)?;
-    Ok(file_path.starts_with(&dir_path))
-}
-
-/// Checks if a given file is allowed for processing, based on a list of exclusion directories.
-/// It iterates through the provided `exclusions` list and uses `file_belongs_to_dir` to determine if the `file`'s path falls under any of these excluded directories.
-/// This function is crucial for filtering out files that should not be analyzed or modified.
-///
-/// # Arguments
-///
-/// * `file` - A reference to a `Path` representing the file to check.
-/// * `exclusions` - A slice of `PathBuf` representing directories that are excluded.
-///
-/// # Returns
-///
-/// A `std::io::Result<bool>` which is `true` if the file is allowed (not in any excluded directory), and `false` otherwise.
-fn is_file_allowed(file: &Path, exclusions: &[PathBuf]) -> std::io::Result<bool> {
-    for dir in exclusions {
-        if file_belongs_to_dir(file, dir)? {
-            return Ok(false);
+fn is_file_allowed(file: &Path, exclusions: &[PathBuf]) -> Result<bool, ErrorBinding> {
+    let starts = exclusions.iter().all(|path| Path::new(path).starts_with(&file));
+    if starts == false {
+        for path in exclusions.iter() {
+            if Path::new(path) == file {
+                return Ok(false);
+            }
         }
     }
-    Ok(true) // not in any excluded dir
+    Ok(!starts)
 }
 
-/// Processes a collection of `ChangeFromPatch` items to generate structured `Request` objects, typically for an LLM or similar external service.
-/// It filters changes based on file exclusion lists and whether the changed Rust item matches specified types or names, also considering functions explicitly excluded in configuration.
-/// For each relevant change, the function extracts the full function text and gathers its surrounding context, including external dependencies, to form a comprehensive `Request` that can be sent for further analysis or generation.
-///
-/// # Arguments
-///
-/// * `exported_from_file` - A `Vec<ChangeFromPatch>` containing information about code changes.
-/// * `rust_type` - A `Vec<String>` of Rust item types to include.
-/// * `rust_name` - A `Vec<String>` of Rust item names to include.
-/// * `file_exclude` - A slice of `PathBuf` representing files or directories to exclude from processing.
-///
-/// # Returns
-///
-/// A `Result<Vec<Request>, ErrorBinding>` containing the processed requests, or an error if context gathering or parsing fails.
 pub fn changes_from_patch(
     exported_from_file: Vec<ChangeFromPatch>,
     rust_type: Vec<String>,
     rust_name: Vec<String>,
-    file_exclude: &[PathBuf]
+    file_exclude: &[PathBuf],
+    analyzer_data: AnalyzerData,
 ) -> Result<Vec<Request>, ErrorBinding> {
-    //Collect whole project once, instead of every time for each in function let objects = HashMap<(key, value)>
-    //key - fn name
-    //value - PathObject
-    //Context - FunctionSignature: input args and return types with comment
-    //Context - structs as String (as is)
-    //Collecting tasks separately to avoid filesystem overhead
     let tasks: Vec<LocalChange> = exported_from_file
         .par_iter()
         .flat_map(|each| {
-            each.range.par_iter().filter_map(move |obj| Some(LocalChange {
-                filename: each.filename.clone(),
-                range: obj.clone(),
-                file: fs::read_to_string(&each.filename.clone()).context(InvalidIoOperationsSnafu { path: each.filename.clone() }).ok()?,
-            }))
+            each.range.par_iter().filter_map(move |obj| {
+                Some(LocalChange {
+                    filename: each.filename.clone(),
+                    range: obj.clone(),
+                    file: fs::read_to_string(&each.filename)
+                        .context(InvalidIoOperationsSnafu {
+                            path: each.filename.clone(),
+                        })
+                        .ok()?,
+                })
+            })
         })
         .collect();
     let singlerequestdata: Vec<Request> = tasks
-        .par_iter()
+        .iter()
         .filter_map(|change| {
             //Here we only allow files, that are not in the config.yaml-Patchdog_settings-excluded_files
             if is_file_allowed(&change.filename, file_exclude).ok()? {
@@ -139,17 +107,45 @@ pub fn changes_from_patch(
                 let obj_name_to_compare = parsed_file.names.name;
                 if rust_type.par_iter().any(|t| &obj_type_to_compare == t)
                     || rust_name.par_iter().any(|n| &obj_name_to_compare == n)
-                && return_prompt().ok()?.patchdog_settings.excluded_functions.contains(&obj_name_to_compare) {   
-                    //At this point in parsed_file we are already aware of all the referenced data    
+                        && return_prompt()
+                            .ok()?
+                            .patchdog_settings
+                            .excluded_functions
+                            .contains(&obj_name_to_compare)
+                {
+                    //At this point in parsed_file we are already aware of all the referenced data
                     let fn_as_string = item.join("\n");
                     /*
                     Calling find_context(all methods: bla-bla, function: String) -> context(Vec<String>) {
-                        1. 
+                        1.
                         2. Find matches in code
                         3. Return matching structures
                     }
-                    */       
-                    let context = find_context(change.filename.to_owned(), &obj_name_to_compare, &fn_as_string).ok()?;
+                    */
+                    let k = fs::read_to_string(&change.filename).ok()?;
+                    let parse_analyzer = &RustItemParser::parse_result_items(&k).ok()?;
+                    let mut lineranges = vec![];
+                    for each in parse_analyzer {
+                        let changed_syn = change.range.start..change.range.end;
+                        let linerange =
+                            RustItemParser::textrange_into_linerange(each.0.to_owned(), &k);
+                        if linerange == changed_syn {
+                            lineranges.push(each.0);
+                        }
+                    }
+                    let analyzer_context = contextualizer(
+                        &change.filename,
+                        lineranges.first().copied(),
+                        &analyzer_data,
+                    )
+                    .par_iter()
+                    .map(|(_, value)| value.to_string())
+                    .collect::<Vec<String>>();
+                    let context = Context {
+                        class_name: "".to_string(),
+                        external_dependencies: analyzer_context,
+                        old_comment: vec![],
+                    };
                     Some(Request {
                         uuid: uuid::Uuid::new_v4().to_string(),
                         data: SingleFunctionData {
@@ -164,9 +160,8 @@ pub fn changes_from_patch(
                     })
                 } else {
                     None
-                }            
-            }
-            else { 
+                }
+            } else {
                 None
             }
         })
@@ -174,138 +169,35 @@ pub fn changes_from_patch(
     Ok(singlerequestdata)
 }
 
-//Seeking context inside same file, to match probable structures
-//Checking uses, to limit amount of crates to be parsed
-//Instead of parsing whole project - we parse few of the crates 
-/// Gathers comprehensive contextual information for a given Rust function by analyzing its containing file and related imports.
-/// It identifies `use` statements to map imported modules and items to their corresponding file paths within the project.
-/// The function then extracts the source code for these relevant external dependencies and returns them as part of the `Context` struct, alongside other metadata.
+/// Processes a Git patch file to extract structured information about code changes, specifically identifying modified objects and their line ranges. It resolves the provided relative patch path, then delegates to `get_patch_data` to parse the patch and convert its contents into a vector of `ChangeFromPatch` structs.
 ///
 /// # Arguments
-///
-/// * `change` - The `PathBuf` to the file containing the function.
-/// * `fn_name` - The name of the function for which to find context.
-/// * `function_text` - The full source code of the function.
+/// * `path_to_patch` - A `PathBuf` representing the path to the Git patch file, relative to the current working directory.
 ///
 /// # Returns
-///
-/// A `Result<Context, ErrorHandling>` containing the collected context (external dependencies, etc.) or an error if file operations or parsing fail.
-pub fn find_context (change: PathBuf, fn_name: &str, function_text: &str) -> Result<Context, ErrorHandling> {
-    let mut context = vec![];
-    //Crate level-context seeking
-    let file = fs::read_to_string(&change).context(InvalidIoOperationsSnafu { path: &change })?;
-    let parsed = syn::parse_file(&file)?;
-    //Here we try to find the paths used in the certain file, if they are within the project, then,
-    //We can reach them and get the context from there
-    //Hashmaps doesn't allow matching certain crate more than once
-    //Now we want to find all use statements, to make scope of search smaller. 
-    let all_uses = parse_use(parsed.items);
-    //Here in map_rust_files we locate all the crates used within the file where function is located
-    let map_rust_files = collect_paths(all_uses.clone(), change.clone())?;
-    let use_map = all_uses.par_iter().map(|single_use| 
-        (single_use.object.to_owned(), single_use.to_owned()) 
-    ).collect::<HashMap<String, UseItem>>();
-    let mut paths = vec![];
-    paths.push(change.to_owned());
-    for each in &map_rust_files {
-        find_rust_files(each.0.to_path_buf(), &mut paths);
-    }
-    let assorted_paths = paths.into_iter().filter_map(|path| 
-        Some((path.file_stem()?.to_str()?.to_string(), path))
-    ).collect::<HashMap<String, PathBuf>>();
-    for path in assorted_paths.clone() {
-        let file = fs::read_to_string(&path.1).context(InvalidIoOperationsSnafu { path: &path.1 })?;
-        let parsed = RustItemParser::parse_all_rust_items(&file)?;
-        for parse in parsed {
-            if use_map.contains_key(&parse.names.name) || use_map.contains_key("self") || use_map.contains_key("*") {
-                context.push(PathObject { filename: path.1.to_owned(), object: parse });
-            }
-        }        
-    }
-
-    //Here we want to match the function with all the imports
-    let parsed_function = syn::parse_file(function_text)?;
-    let tokens = grep_objects(parsed_function.items);
-    let map_function = tokens.par_iter().filter_map(|con| 
-        if use_map.contains_key(&con.context_name) || (con.context_name == con.context_path) {
-            Some((con.context_path.to_owned(), con.to_owned()))
-        }else {
-            None
-        }
-    ).collect::<HashMap<String, LocalContext>>();
-    let map_filedata = match_context(context.clone());
-    let context = map_filedata.clone()
-        .into_iter()
-        .filter_map(|(key, value_function)| {
-            if map_function.contains_key(&key) {
-                if fn_name != key {
-                    Some(value_function.to_owned())
-                }
-                else {
-                    None
-                }
-            } else {
-                None
-            }
-        })
-        .collect::<Vec<PathObject>>();
-    let dependencies = context
-    .into_par_iter()
-    .filter_map(|dep| {
-        let a = fs::read_to_string(&dep.filename).context(InvalidIoOperationsSnafu { path: dep.filename }).ok()?;
-        let to_vec = FileExtractor::string_to_vector(&a)
-            [dep.object.line_start()-1..dep.object.line_end()]
-            .join("\n");
-        Some(to_vec)
-    }).collect::<Vec<String>>();
-    Ok(Context {
-        class_name: "".to_string(),
-        external_dependencies: dependencies,
-        old_comment: vec!["".to_string()],
-    })
-}
-
-
-/// Retrieves parsed patch data from a specified patch file.
-/// It constructs the absolute path to the patch file and the relative working directory,
-/// then calls `get_patch_data` to process the patch.
-///
-/// # Arguments
-///
-/// * `path_to_patch` - A `PathBuf` indicating the path to the patch file.
-///
-/// # Returns
-///
-/// A `Result<Vec<ChangeFromPatch>, ErrorBinding>`:
-/// - `Ok(Vec<ChangeFromPatch>)`: A vector containing details of changes extracted from the patch.
-/// - `Err(ErrorBinding)`: If the current directory cannot be determined or patch data extraction fails.
+/// A `Result<Vec<ChangeFromPatch>, ErrorBinding>` containing a vector of `ChangeFromPatch` structs, each detailing filenames and ranges of changes, or an `ErrorBinding` if any file system or patch parsing error occurs.
 pub fn patch_data_argument(path_to_patch: PathBuf) -> Result<Vec<ChangeFromPatch>, ErrorBinding> {
     let path = env::current_dir()?;
     let patch = get_patch_data(path.join(path_to_patch), path)?;
     Ok(patch)
 }
 
+/// Extracts changed code objects from a patch file, identifying their line ranges and filenames. This function first processes the patch to find all differences and then parses the affected Rust files to map these changes to specific `ObjectRange` instances.
+/// It uses parallel iteration for efficiency, making it suitable for larger patches or codebases. The output provides a structured view of all significant code alterations, making it easier to pinpoint exact changes.
+///
+/// # Arguments
+///
+/// * `path_to_patch` - A `PathBuf` pointing to the patch file.
+/// * `relative_path` - A `PathBuf` indicating the base directory to resolve file paths within the patch.
+///
+/// # Returns
+///
+/// A `Result<Vec<ChangeFromPatch>, ErrorBinding>` containing a vector of `ChangeFromPatch` objects, each detailing changed ranges within a file, or an `ErrorBinding` if parsing or file operations fail.
 /*
 Pushes information from a patch into vector that contains lines
 at where there are unique changed objects reprensented with range<usize>
 and an according path each those ranges that has to be iterated only once
 */
-/// Processes a Git patch to identify specific code changes within Rust files.
-/// It first exports the raw changes from the patch, then iterates through these differences.
-/// For each difference, it parses the corresponding Rust file and identifies actual Rust items (functions, structs, etc.)
-/// whose line ranges overlap with the reported changes in the patch.
-/// The result is a refined list of `ChangeFromPatch` objects containing only relevant Rust item ranges.
-///
-/// # Arguments
-///
-/// * `path_to_patch` - A `PathBuf` indicating the path to the patch file.
-/// * `relative_path` - A `PathBuf` representing the relative base path from which files are referenced.
-///
-/// # Returns
-///
-/// A `Result<Vec<ChangeFromPatch>, ErrorBinding>`:
-/// - `Ok(Vec<ChangeFromPatch>)`: A vector of `ChangeFromPatch` objects, each containing a filename and a vector of `Range<usize>` indicating the line ranges of identified Rust items that were changed by the patch.
-/// - `Err(ErrorBinding)`: If patch export fails or Rust file parsing encounters an error.
 pub fn get_patch_data(
     path_to_patch: PathBuf,
     relative_path: PathBuf,
@@ -335,122 +227,6 @@ pub fn get_patch_data(
     Ok(export_difference)
 }
 
-fn grep_objects(tokens: Vec<syn::Item>) -> Vec<LocalContext> {
-    let mut objects: Vec<LocalContext> = Vec::new();
-    for token in tokens {        
-        if let syn::Item::Fn(f) = token { 
-            read_block(*f.block, &mut objects, "".to_string()); 
-        }
-    }
-    objects
-}
-
-// Returns hashmap over uses within the files
-fn match_context(context: Vec<PathObject>) -> HashMap<String, PathObject> {
-    context.par_iter().map(|context| 
-        (context.object.names.name.clone(), PathObject { filename: context.filename.to_owned(), object: context.object.to_owned()})
-    ) .collect::<HashMap<String, PathObject>>()
-}
-
-fn collect_paths(all_uses: Vec<UseItem>, filename: PathBuf) -> Result<HashMap<PathBuf, String>, ErrorHandling> { 
-        let dir = env::current_dir()?;
-        let map_rust_files: HashMap<PathBuf, String> = all_uses.clone().into_iter().filter_map(|each| {
-        let name = each.ident;
-        if name == "crate" {
-            let mut path = filename.clone();
-            path.pop();
-            return Some((path, name.clone()))
-        }
-        let read_dir = dir.read_dir().ok()?;
-        let entries = read_dir.into_iter().filter_map(|entry| 
-            if entry.as_ref().ok()?.path().join(&name).exists() {
-                Some((entry.ok()?.path().join(&name), name.clone()))
-            }
-            else {
-                None
-            }
-        ).collect::<HashMap<PathBuf, String>>();
-        if let Some(each) = entries.into_iter().next() {
-            return Some(each);
-        }
-        None
-    }).collect();
-    Ok(map_rust_files)
-}
-
-fn find_rust_files(dir: PathBuf, rust_files: &mut Vec<PathBuf>) {
-    if let Ok(entries) = fs::read_dir(dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir() {
-                find_rust_files(path, rust_files); // Recurse into subdirectory
-            } else if let Some(ext) = path.extension() && ext == "rs" {
-                rust_files.push(path);
-            }
-        }
-    }
-}
-
-pub fn parse_use(tokens: Vec<Item>) -> Vec<UseItem> {
-    let mut items = Vec::new();
-
-    for token in tokens {
-        if let Item::Use(u) = token {
-            flatten_tree(&u.tree, "".to_string(), "".to_string(), &mut items);
-        }
-    }
-
-    items
-}
-
-fn flatten_tree(tree: &UseTree, ident: String, module: String, acc: &mut Vec<UseItem>) {
-    match tree {
-        UseTree::Path(path) => {
-            let new_ident = if ident.is_empty() { path.ident.to_string() } else { ident.clone() };
-            let new_module = if module.is_empty() { path.ident.to_string() } else { format!("{}", path.ident) };
-            flatten_tree(&path.tree, new_ident, new_module, acc);
-        }
-        UseTree::Name(name) => {
-            acc.push(UseItem {
-                ident: ident.clone(),
-                module: module.clone(),
-                object: name.ident.to_string(),
-            });
-        }
-        UseTree::Rename(rename) => {
-            acc.push(UseItem {
-                ident: ident.clone(),
-                module: module.clone(),
-                object: rename.ident.to_string(),
-            });
-        }
-        UseTree::Group(group) => {
-            for item in &group.items {
-                flatten_tree(item, ident.clone(), module.clone(), acc);
-            }
-        }
-        UseTree::Glob(_) => {
-            acc.push(UseItem {
-                ident: ident.clone(),
-                module: module.clone(),
-                object: "*".to_string(),
-            });
-        }
-    }
-}
-
-/// Parses a Git patch to extract detailed information about changes to Rust source files.
-/// For each file identified in the patch, it reads the file's content, parses all Rust items (functions, structs, comments, etc.) within it, and retrieves the specific hunks (changed blocks of code) from the patch.
-/// The collected data is then structured into `FullDiffInfo` objects, providing a comprehensive view of the affected files, their parsed Rust items, and the exact lines changed in the patch.
-///
-/// # Arguments
-///
-/// * `relative_path` - A reference to a `Path` representing the base directory relative to which file paths in the patch are resolved.
-/// * `patch_src` - A byte slice (`&[u8]`) containing the raw Git patch content.
-///
-/// # Returns
-///
-/// A `Result<Vec<FullDiffInfo>, Git2ErrorHandling>` containing detailed information about the changes for each file in the patch, or an error if parsing or file operations fail.
 fn store_objects(
     relative_path: &Path,
     patch_src: &[u8],
@@ -462,7 +238,9 @@ fn store_objects(
         .filter_map(|change| {
             let list_of_unique_files = get_easy_hunk(&diff, &change.filename()).ok()?;
             let path = relative_path.join(change.filename());
-            let file = fs::read_to_string(&path).context(InvalidIoOperationsSnafu { path }).ok()?;
+            let file = fs::read_to_string(&path)
+                .context(InvalidIoOperationsSnafu { path })
+                .ok()?;
             let parsed = RustItemParser::parse_all_rust_items(&file).ok()?;
             Some(FullDiffInfo {
                 name: change.filename(),
@@ -474,18 +252,17 @@ fn store_objects(
     Ok(vec_of_surplus)
 }
 
-/// Processes a Git patch to identify lines of code that have been changed and are *not* part of existing, recognized Rust items.
-/// It reads the patch and gathers `FullDiffInfo` for each changed file, then iterates through each hunk to determine which changed lines fall outside of parsed Rust structures.
-/// The function returns a list of `Difference` structs, indicating files and specific lines within them that represent new or modified code segments not belonging to an existing function, struct, or other parsed item.
+/// Parses a patch file to identify changed lines within Rust code objects and associates them with their respective files. This function reads the patch, extracts diff hunks, and then iterates through relevant Rust files to determine which `ObjectRange` items (e.g., functions, structs) are affected by the changes.
+/// It ultimately returns a structured list of `Difference` objects, each containing a filename and a vector of line numbers that have been modified.
 ///
 /// # Arguments
 ///
-/// * `path_to_patch` - The `PathBuf` to the Git patch file.
-/// * `relative_path` - The `PathBuf` to the root of the repository or project, used to resolve file paths from the patch.
+/// * `path_to_patch` - A `PathBuf` pointing to the patch file to be analyzed.
+/// * `relative_path` - A `PathBuf` representing the base directory for resolving file paths mentioned in the patch.
 ///
 /// # Returns
 ///
-/// A `Result<Vec<Difference>, ErrorBinding>` containing a list of files and their associated new/modified lines, or an error if file operations or parsing fail.
+/// A `Result<Vec<Difference>, ErrorBinding>` containing a vector of `Difference` objects, each indicating the filename and the lines affected by the patch, or an `ErrorBinding` if any file or parsing operation fails.
 fn patch_export_change(
     path_to_patch: PathBuf,
     relative_path: PathBuf,
@@ -496,8 +273,19 @@ fn patch_export_change(
     let each_diff = store_objects(&relative_path, &patch_text)?;
     for diff_hunk in &each_diff {
         let path_to_file = relative_path.to_owned().join(&diff_hunk.name);
-        let file = fs::read_to_string(&path_to_file).context(InvalidIoOperationsSnafu { path: &path_to_file })?;
-        let parsed = RustItemParser::parse_all_rust_items(&file)?;
+        let file = fs::read_to_string(&path_to_file).context(InvalidIoOperationsSnafu {
+            path: &path_to_file,
+        })?;
+        let parsed = RustItemParser::parse_result_items(&file)?
+            .par_iter()
+            .map(|val| {
+                let range = RustItemParser::textrange_into_linerange(*val.0, &file);
+                ObjectRange {
+                    line_ranges: range,
+                    names: val.1.names.clone(),
+                }
+            })
+            .collect::<Vec<ObjectRange>>();
         for each in &diff_hunk.hunk {
             let parsed_in_diff = &parsed;
             if FileExtractor::check_for_valid_object(parsed_in_diff, each.get_line())? {
@@ -512,146 +300,4 @@ fn patch_export_change(
         change_in_line.clear();
     }
     Ok(line_and_file)
-}
-
-fn read_block(block: syn::Block, objects: &mut Vec<LocalContext>, parent_path: String) {
-    for stmt in block.stmts {
-        match stmt {
-            syn::Stmt::Expr(e,_) => {
-                match_expr(e, objects, parent_path.clone());
-            },
-            syn::Stmt::Local(local) => {
-                handle_pat(local.pat, objects, parent_path.clone());
-                if let Some(init_expr) = local.init {
-                    match_expr(*init_expr.expr, objects, parent_path.clone());
-                }
-            }
-            _ => {}
-        }
-    }
-}
-
-fn match_expr(expr: syn::Expr, objects: &mut Vec<LocalContext>, parent_path: String) {
-    match expr {
-        syn::Expr::Assign(assign) => {
-            match_expr(*assign.left, objects, parent_path.clone());
-            match_expr(*assign.right, objects, parent_path);
-        },
-        syn::Expr::Block(block) => read_block(block.block, objects, parent_path),
-        syn::Expr::Call(call) => {
-            match_expr(*call.func, objects, parent_path.clone());
-            for arg in call.args {
-                match_expr(arg, objects, parent_path.clone());
-            }
-        }
-        syn::Expr::Closure(closure) => match_expr(*closure.body, objects, parent_path),
-        syn::Expr::ForLoop(for_loop) => {
-            handle_pat(*for_loop.pat, objects, parent_path.clone());
-            match_expr(*for_loop.expr, objects, parent_path.clone());
-            read_block(for_loop.body, objects, parent_path);
-        }
-        syn::Expr::If(if_expr) => {
-            match_expr(*if_expr.cond, objects, parent_path.clone());
-            read_block(if_expr.then_branch, objects, parent_path.clone());
-
-            if let Some((_, else_expr)) = if_expr.else_branch {
-                match_expr(*else_expr, objects, parent_path);
-            }
-        }
-        syn::Expr::Let(let_expr) => {
-            match_expr(*let_expr.expr, objects, parent_path.clone());
-            handle_pat(*let_expr.pat, objects, parent_path);
-        }
-        syn::Expr::Loop(loop_expr) => read_block(loop_expr.body, objects, parent_path),
-        syn::Expr::MethodCall(method_call) => handle_method_call(method_call, objects, parent_path),
-        syn::Expr::Struct(strukt) => handle_struct(strukt, objects, parent_path),
-        syn::Expr::Path(path_expr) => handle_path(path_expr, objects, parent_path),
-        syn::Expr::Try(try_expr) => match_expr(*try_expr.expr, objects, parent_path),
-        syn::Expr::TryBlock(try_block) => read_block(try_block.block, objects, parent_path),
-        syn::Expr::Unsafe(unsafe_expr) => read_block(unsafe_expr.block, objects, parent_path),
-        syn::Expr::While(while_expr) => {
-            match_expr(*while_expr.cond, objects, parent_path.clone());
-            read_block(while_expr.body, objects, parent_path);
-        }
-        _ => {}
-    }
-}
-
-fn handle_pat(pat: syn::Pat, _objects: &mut Vec<LocalContext>, _parent_path: String) {
-    if let syn::Pat::Struct(ps) = pat {
-        for field in ps.fields {
-            handle_pat(*field.pat, _objects, _parent_path.clone());
-        }
-    }
-}
-
-fn handle_method_call(method_call: syn::ExprMethodCall, objects: &mut Vec<LocalContext>, parent_path: String) {
-    let full_path = if parent_path.is_empty() {
-        method_call.method.to_string()
-    } else {
-        format!("{}::{}", parent_path, method_call.method)
-    };
-
-    match_expr(*method_call.receiver, objects, parent_path.clone());
-
-    for arg in method_call.args {
-        match_expr(arg, objects, parent_path.clone());
-    }
-
-    objects.push(LocalContext {
-        context_type: "fn".to_string(),
-        context_name: method_call.method.to_string(),
-        context_path: full_path,
-    });
-}
-
-fn handle_struct(strukt: syn::ExprStruct, objects: &mut Vec<LocalContext>, parent_path: String) {
-    let ident = strukt
-        .path
-        .get_ident()
-        .into_iter()
-        .map(|i| i.to_string())
-        .collect::<String>();
-    let full_path = if parent_path.is_empty() { 
-        ident.clone() 
-    } else { 
-        format!("{}::{}", parent_path, ident) 
-    };
-    objects.push(LocalContext {
-        context_type: "struct".to_string(),
-        context_name: ident,
-        context_path: full_path,
-    });
-}
-
-fn handle_path(
-    path_expr: syn::ExprPath,
-    objects: &mut Vec<LocalContext>,
-    _parent_path: String,
-) {
-    let segments: Vec<String> = path_expr
-        .path
-        .segments
-        .iter()
-        .map(|s| s.ident.to_string())
-        .collect();
-
-    if segments.is_empty() {
-        return;
-    }
-
-    let (_, last_name) = if segments.len() > 1 {
-        (
-            segments[..segments.len() - 1].join("::"),
-            segments.last().unwrap().to_string(),     
-        )
-    } else {
-        (String::new(), segments.first().unwrap().clone())
-    };
-
-    objects.push(LocalContext {
-        context_type: "path".to_string(),
-        context_name: segments.first().unwrap().to_owned(),      
-        context_path: last_name,     
-    });
 }

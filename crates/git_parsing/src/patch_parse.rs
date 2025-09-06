@@ -16,17 +16,22 @@ pub enum Git2ErrorHandling {
     },
     PatchExportError,
 }
-impl From<git2::Error> for Git2ErrorHandling {
-/// Implements the `From` trait to convert a `git2::Error` into a `Git2ErrorHandling::Git2Error`.
-/// This provides a standardized way to integrate `git2` errors into the custom error handling system.
+/// Implements the `From<git2::Error>` trait for `Git2ErrorHandling`, allowing direct and idiomatic conversion from `git2::Error` into the custom error type. This function specifically wraps a `git2::Error` within the `Git2ErrorHandling::Git2Error` variant, ensuring uniform error reporting for Git-related operations.
 ///
 /// # Arguments
-///
-/// * `e` - The `git2::Error` to convert.
+/// * `e` - The `git2::Error` instance to be converted.
 ///
 /// # Returns
+/// A `Git2ErrorHandling` enum variant encapsulating the `git2::Error`.
+impl From<git2::Error> for Git2ErrorHandling {
+
+/// Implements the `From<git2::Error>` trait for `Git2ErrorHandling`, allowing seamless conversion of `git2::Error` instances into the custom `Git2ErrorHandling` error type. This promotes consistent error handling for operations involving the `git2` crate by encapsulating the raw `git2::Error`.
 ///
-/// A `Git2ErrorHandling::Git2Error` variant containing the original `git2::Error`.
+/// # Arguments
+/// * `e` - The `git2::Error` to be converted.
+///
+/// # Returns
+/// A `Git2ErrorHandling::Git2Error` variant, wrapping the original `git2::Error`.
     fn from(e: git2::Error) -> Self {
         Git2ErrorHandling::Git2Error { source: e }
     }
@@ -129,18 +134,6 @@ pub fn get_easy_hunk(
     Ok(vec_of_hunks)
 }
 
-/// Extracts the new file paths from a Git `Diff` object.
-/// It iterates through the deltas (changes) in the diff and collects the new file path for each delta.
-///
-/// # Arguments
-///
-/// * `diff` - A reference to a `git2::Diff` object.
-///
-/// # Returns
-///
-/// A `Result<Vec<String>, Git2ErrorHandling>`:
-/// - `Ok(Vec<String>)`: A vector of strings, where each string is the path of a new file or a modified file's new path in the diff.
-/// - `Err(Git2ErrorHandling)`: If there is an issue accessing file paths within the diff deltas.
 fn get_filenames(diff: &Diff<'static>) -> Result<Vec<String>, Git2ErrorHandling> {
     let mut vector_of_filenames: Vec<String> = Vec::new();
     for delta in diff.deltas() {
@@ -154,28 +147,22 @@ fn get_filenames(diff: &Diff<'static>) -> Result<Vec<String>, Git2ErrorHandling>
     Ok(vector_of_filenames)
 }
 
-/// Extracts hunk information from a Git `Diff` object.
-/// It iterates through each delta in the diff, retrieves the patch for that delta, and then processes each hunk within the patch.
-/// For each line in a hunk, it determines the change type (Add, Modify, or continues if not relevant) and records the new line number and filename.
+/// Extracts and processes individual hunks (code changes) from a Git diff object. It iterates through the deltas, creates a patch for each, and then examines every line within each hunk to identify additions or modifications. This data is then structured into `Hunk` objects.
 ///
 /// # Arguments
-///
-/// * `diff` - A reference to a `git2::Diff` object.
-/// * `vector_of_filenames` - A `Vec<String>` containing the filenames corresponding to the deltas in the diff.
+/// * `diff` - A reference to the `git2::Diff` object representing the Git changes.
+/// * `vector_of_filenames` - A `Vec<String>` providing the filenames corresponding to the deltas, used to associate hunks with their respective files.
 ///
 /// # Returns
-///
-/// A `Result<Vec<Hunk>, Git2ErrorHandling>`:
-/// - `Ok(Vec<Hunk>)`: A vector of `Hunk` structs, each containing information about a change (change type, line number, filename).
-/// - `Err(Git2ErrorHandling)`: If there are issues creating patches, retrieving hunk or line information, or `PatchExportSnafu` occurs.
+/// A `Result<Vec<Hunk>, Git2ErrorHandling>` containing a vector of `Hunk` structs on success, detailing the change type, line number, and filename for each modification, or a `Git2ErrorHandling` if parsing the diff or patch fails.
 fn git_get_hunks(
     diff: &Diff<'static>,
     vector_of_filenames: Vec<String>,
 ) -> Result<Vec<Hunk>, Git2ErrorHandling> {
     let mut hunk_tuple: Vec<Hunk> = Vec::new();
     //i returns tuple
-    for i in diff.deltas().enumerate() {
-        let patch = Patch::from_diff(diff, i.0)?;
+    for (int, _delta) in diff.deltas().enumerate() {
+        let patch = Patch::from_diff(diff, int)?;
         let patch_ref = patch.as_ref().context(PatchExportSnafu)?;
         for hunk_idx in 0..patch_ref.num_hunks() {
             let (_hunk, _) = patch_ref.hunk(hunk_idx)?;
@@ -190,7 +177,7 @@ fn git_get_hunks(
                 hunk_tuple.push(Hunk {
                     change,
                     line: line_processed,
-                    filename: vector_of_filenames[i.0].to_owned(),
+                    filename: vector_of_filenames[int].to_owned(),
                 });
             }
         }
@@ -198,6 +185,14 @@ fn git_get_hunks(
     Ok(hunk_tuple)
 }
 
+/// Identifies and returns a list of unique Rust (`.rs`) file paths that have been modified within a given Git patch. It extracts filenames and hunks from the diff, filters for unique files, and then verifies that each unique file has a `.rs` extension before constructing its full path relative to a specified base directory.
+///
+/// # Arguments
+/// * `patch_src` - A reference to the `git2::Diff` object representing the Git patch.
+/// * `relative_path` - A reference to a `Path` indicating the base directory for resolving file paths.
+///
+/// # Returns
+/// A `Result<Vec<PathBuf>, Git2ErrorHandling>` containing a vector of unique `PathBuf`s for modified `.rs` files, or a `Git2ErrorHandling` if fetching filenames or hunks fails.
 /// Reads unique Rust file paths from a Git patch, ensuring that only `.rs` files are considered.
 /// It first obtains all filenames and hunks from the patch, then filters for unique filenames.
 /// For each unique file, it checks if it has a `.rs` extension and constructs its full path relative to `relative_path`.

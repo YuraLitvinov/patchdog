@@ -2,7 +2,6 @@ use gemini_rust::Error;
 use git_parsing::Git2ErrorHandling;
 use snafu::Snafu;
 use std::{env::VarError, num::ParseIntError, path::PathBuf};
-use syn;
 use yaml_rust2::ScanError;
 
 #[derive(Debug, Snafu)]
@@ -45,15 +44,6 @@ pub enum ErrorHandling {
         source: std::io::Error,
         file_path: PathBuf,
     },
-    #[snafu(display("{source:#?} in {str_source:#?}"))]
-    InvalidItemParsing {
-        source: syn::Error,
-        str_source: PathBuf,
-    },
-    #[snafu(display("{source:#?}"))]
-    InvalidRustParse {
-        source: syn::Error,
-    },
     #[snafu(display("Couldn't seek object at line: {line_number}"))]
     SeekerFailed {
         line_number: usize,
@@ -89,11 +79,11 @@ pub enum ErrorHandling {
         source: regex::Error,
     },
     ConvertAnyhow {
-        source: anyhow::Error
+        source: anyhow::Error,
     },
     InvalidRead {
-        source: std::io::Error
-    }
+        source: std::io::Error,
+    },
 }
 
 #[derive(Debug)]
@@ -103,11 +93,9 @@ pub enum ErrorBinding {
 }
 
 impl From<Git2ErrorHandling> for ErrorBinding {
-
     fn from(git: Git2ErrorHandling) -> Self {
         ErrorBinding::GitParsing(git)
     }
-
 }
 
 impl From<std::io::Error> for ErrorHandling {
@@ -116,7 +104,6 @@ impl From<std::io::Error> for ErrorHandling {
     }
 }
 
-
 impl From<std::io::Error> for ErrorBinding {
     fn from(e: std::io::Error) -> Self {
         ErrorBinding::RustParsing(ErrorHandling::InvalidRead { source: e })
@@ -124,59 +111,46 @@ impl From<std::io::Error> for ErrorBinding {
 }
 
 impl From<ErrorHandling> for ErrorBinding {
-
     fn from(rust: ErrorHandling) -> Self {
         ErrorBinding::RustParsing(rust)
     }
 }
 
 impl From<regex::Error> for ErrorHandling {
-    fn from (e: regex::Error) -> Self {
+    fn from(e: regex::Error) -> Self {
         let e: ErrorHandling = e.into();
         e
     }
 }
 
 impl From<ScanError> for ErrorHandling {
-
     fn from(e: ScanError) -> Self {
         ErrorHandling::YamlError { source: e }
     }
 }
 impl From<VarError> for ErrorHandling {
-
     fn from(e: VarError) -> Self {
         ErrorHandling::StdVarError { source: e }
     }
 }
 
 impl From<ParseIntError> for ErrorHandling {
-
     fn from(e: ParseIntError) -> Self {
         ErrorHandling::ParseErr { source: e }
     }
 }
 impl From<anyhow::Error> for ErrorHandling {
     fn from(e: anyhow::Error) -> Self {
-        ErrorHandling::ConvertAnyhow {source: e }
-        
+        ErrorHandling::ConvertAnyhow { source: e }
     }
 }
 impl From<Error> for ErrorHandling {
-
     fn from(e: Error) -> Self {
         ErrorHandling::GeminiRustError { source: e }
     }
 }
 impl From<serde_json::Error> for ErrorHandling {
-
     fn from(e: serde_json::Error) -> Self {
         ErrorHandling::SerdeError { source: e }
-    }
-}
-impl From<syn::Error> for ErrorHandling {
-
-    fn from(e: syn::Error) -> Self {
-        ErrorHandling::InvalidRustParse { source: e }
     }
 }

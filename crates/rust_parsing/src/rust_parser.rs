@@ -1,21 +1,17 @@
 use crate::error::{ErrorHandling, InvalidIoOperationsSnafu};
-use crate::object_range::{Name, ObjectRange};
-use proc_macro2::TokenStream;
-use proc_macro2::{Spacing, TokenTree};
-use quote::ToTokens;
-use serde::Serialize;
-use std::ops::Range;
-use rustc_lexer::{tokenize, TokenKind};
-use std::path::{Path, PathBuf};
 use crate::file_parsing::{FileExtractor, Files};
-use std::fs;
-use syn::spanned::Spanned;
-use syn::{AngleBracketedGenericArguments, PathArguments, Type, TypePath};
-use syn::{File, ReturnType};
-use syn::{FnArg, parse_str};
-use syn::{ImplItem, Item};
-use tracing::{Level, event};
+use crate::object_range::{Name, ObjectRange};
+use ra_ap_ide::TextRange;
+use ra_ap_syntax::ast::{HasModuleItem, HasName};
+use ra_ap_syntax::{AstNode, ToSmolStr};
+use rayon::prelude::*;
+use rustc_lexer::{TokenKind, tokenize};
+use serde::Serialize;
 use snafu::ResultExt;
+use std::collections::HashMap;
+use std::fs;
+use std::ops::Range;
+use std::path::{Path};
 /*
 1. Парсер патчей
 2. Раст парсер
@@ -47,100 +43,143 @@ struct FnOutputToken {
     output_type: String,
     error_type: Option<String>,
 }
-
+#[derive(Debug, PartialEq, Hash, Eq, Clone)]
+pub struct AnalyzerRange {
+    pub range: TextRange,
+    pub names: Name,
+}
 pub trait RustParser {
     fn parse_all_rust_items(src: &str) -> Result<Vec<ObjectRange>, ErrorHandling>;
-    fn find_module_file(
-        base_path: PathBuf,
-        mod_name: String,
-    ) -> Result<Option<PathBuf>, ErrorHandling>;
-    fn rust_function_parser(src: &str) -> Result<FunctionSignature, ErrorHandling>;
     fn parse_rust_file(src: &Path) -> Result<Vec<ObjectRange>, ErrorHandling>;
-    fn rust_ast(src: &str) -> Result<File, ErrorHandling>;
     fn rust_item_parser(src: &str) -> Result<ObjectRange, ErrorHandling>;
+    fn textrange_into_linerange(range: TextRange, src: &str) -> Range<usize>;
+    fn parse_result_items(src: &str) -> Result<HashMap<TextRange, AnalyzerRange>, ErrorHandling>;
 }
 
 pub struct RustItemParser;
 
 impl RustParser for RustItemParser {
 
-/// Parses a Rust source file from a given path into its Abstract Syntax Tree (AST) and extracts top-level Rust items.
-/// It reads the file content, then uses the `syn` crate to parse it into an AST representation.
-/// The function then visits the items in the AST to identify and collect information about each Rust item, such as functions, structs, or enums, along with their line ranges.
+/// Parses a Rust source file from a given path and extracts a vector of `ObjectRange` items, each representing a distinct code object (e.g., function, struct) and its line range. This function first reads the file content, then uses a Rust item parser to identify and extract the structural elements.
+/// It then maps the byte-based text ranges provided by the parser to line-based ranges, making them more human-readable and suitable for operations involving line numbers. This is a core function for understanding the structure of a Rust file.
 ///
 /// # Arguments
 ///
-/// * `src` - A reference to a `Path` pointing to the Rust source file to be parsed.
+/// * `src` - A reference to a `Path` pointing to the Rust source file.
 ///
 /// # Returns
 ///
-/// A `Result<Vec<ObjectRange>, ErrorHandling>` containing a vector of `ObjectRange` structs, each representing a parsed Rust item, or an error if file reading or AST parsing fails.
+/// A `Result<Vec<ObjectRange>, ErrorHandling>` containing a vector of `ObjectRange` objects representing the parsed code items, or an `ErrorHandling` if file reading or parsing fails.
     fn parse_rust_file(src: &Path) -> Result<Vec<ObjectRange>, ErrorHandling> {
-        let file = fs::read_to_string(src)
-            .context(InvalidIoOperationsSnafu { path: src })?;
-        let ast: File = parse_str(&file)?;
-        visit_items(&ast.items)
+        let file = fs::read_to_string(src).context(InvalidIoOperationsSnafu { path: src })?;
+        let visited = Self::parse_result_items(&file)?
+            .par_iter()
+            .map(|val| {
+                let line_ranges = Self::textrange_into_linerange(*val.0, &file);
+                ObjectRange {
+                    line_ranges,
+                    names: val.1.names.clone(),
+                }
+            })
+            .collect::<Vec<ObjectRange>>();
+        Ok(visited)
     }
 
-/// Parses all Rust items, including code structures (functions, structs, enums, etc.) and comments, from a given source string.
-/// It first parses the source into an AST, then extracts items from the AST.
-/// Concurrently, it lexes comments from the raw source string.
-/// Finally, it combines the extracted code items and comments into a single vector of `ObjectRange` and sorts them by their starting line number.
+/// Parses a Rust source string to identify all significant Rust items and comments within it.
+/// It first extracts comments using `comment_lexer` and then parses other structural items (functions, structs, etc.) using `parse_result_items`.
+/// The function then merges these two sets of identified ranges, converts byte-based ranges to line-based ranges, and sorts the final list by their starting line numbers, providing a comprehensive overview of the code structure.
 ///
 /// # Arguments
 ///
-/// * `src` - A string slice (`&str`) containing the Rust source code.
+/// * `src` - A string slice representing the Rust source code.
 ///
 /// # Returns
 ///
-/// A `Result<Vec<ObjectRange>, ErrorHandling>`:
-/// - `Ok(Vec<ObjectRange>)`: A sorted vector of `ObjectRange` structs, representing all parsed code items and comments.
-/// - `Err(ErrorHandling)`: If parsing the AST or lexing comments fails.
+/// A `Result` which is `Ok(Vec<ObjectRange>)` on success, containing a sorted vector of `ObjectRange` structs for all identified items and comments, or an `ErrorHandling` enum if an error occurs during parsing.
     fn parse_all_rust_items(src: &str) -> Result<Vec<ObjectRange>, ErrorHandling> {
-        let ast: File = parse_str(src)?;
         let mut comments = comment_lexer(src)?;
-        let mut visited = visit_items(&ast.items)?;
+        let mut visited = Self::parse_result_items(src)?
+            .par_iter()
+            .map(|val| {
+                let line_ranges = Self::textrange_into_linerange(*val.0, src);
+                ObjectRange {
+                    line_ranges,
+                    names: val.1.names.clone(),
+                }
+            })
+            .collect::<Vec<ObjectRange>>();
         visited.append(&mut comments);
         visited.sort_by(|a, b| a.line_ranges.start.cmp(&b.line_ranges.start));
 
         Ok(visited)
     }
-
-/// Parses a Rust function's signature from a given source string.
-/// It converts the source string into a Rust AST (`syn::File`) and then specifically extracts the function signature details.
+/// Converts a byte-offset based `TextRange` into a human-readable, 1-based line number `Range<usize>`.
+/// This utility function computes the start and end line numbers by first determining the line start offsets in the source string.
+/// It then translates the byte offsets of the `TextRange` into their corresponding line numbers, ensuring the output is always 1-based for user-friendliness.
 ///
 /// # Arguments
 ///
-/// * `src` - A string slice (`&str`) containing the Rust function code.
+/// * `range` - The `TextRange` to convert, specifying a section of text by byte offsets.
+/// * `src` - The complete source code string, used to compute line starts.
 ///
 /// # Returns
 ///
-/// A `Result<FunctionSignature, ErrorHandling>`:
-/// - `Ok(FunctionSignature)`: A struct containing the parsed input parameters and return type information for the function.
-/// - `Err(ErrorHandling)`: If parsing the AST fails or the provided `src` does not represent a valid function.
-    fn rust_function_parser(src: &str) -> Result<FunctionSignature, ErrorHandling> {
-        let ast: File = parse_str(src)?;
-        function_parse(&ast.items)
+/// A `Range<usize>` where `start` and `end` are 1-based line numbers.
+    fn textrange_into_linerange(range: TextRange, src: &str) -> Range<usize> {
+        let line_starts = compute_line_starts(src);
+
+        let start = offset_to_line(range.start().into(), &line_starts);
+        let end = offset_to_line(range.end().into(), &line_starts);
+
+        // Always return consistent 1-based line numbers
+        Range {
+            start: start + 1,
+            end: end + 1,
+        }
     }
 
-/// Parses a single Rust item (e.g., function, struct, enum) from a given source string.
-/// It converts the source string into a Rust AST (`syn::File`) and extracts the first item it finds.
-/// The function then creates an `ObjectRange` representing the line range and name of this item.
+/// Parses the given Rust source code string to identify and categorize all top-level Rust items using the `rust-analyzer` AST.
+/// It leverages `ra_ap_syntax::SourceFile::parse` to construct the syntax tree and then extracts all items, delegating the detailed analysis to `parse_all_rust_analyzer`.
+/// The function provides a foundational step for understanding the structural elements of a Rust file.
 ///
 /// # Arguments
 ///
-/// * `src` - A string slice (`&str`) containing the Rust item's code.
+/// * `src` - A string slice representing the Rust source code.
 ///
 /// # Returns
 ///
-/// A `Result<ObjectRange, ErrorHandling>`:
-/// - `Ok(ObjectRange)`: A struct containing the line range (start and end lines) and the name (type and identifier) of the first parsed Rust item.
-/// - `Err(ErrorHandling::LineOutOfBounds)`: If no items are found in the parsed source.
-/// - `Err(ErrorHandling)`: If parsing the AST fails.
+/// A `Result` which is `Ok(HashMap<TextRange, AnalyzerRange>)` on success, containing a map of text ranges to `AnalyzerRange` structs for each identified top-level item, or an `ErrorHandling` enum if an error occurs during parsing.
+    fn parse_result_items(src: &str) -> Result<HashMap<TextRange, AnalyzerRange>, ErrorHandling> {
+        let parse = ra_ap_syntax::SourceFile::parse(src, ra_ap_ide::Edition::Edition2024);
+        let items = parse
+            .tree()
+            .items()
+            .collect::<Vec<ra_ap_syntax::ast::Item>>();
+        parse_all_rust_analyzer(items)
+    }
+
+/// Parses a string slice representing Rust code and extracts a single `ObjectRange` corresponding to the primary code item found. This function is specifically designed to parse a snippet of Rust code (e.g., a single function or struct definition) and return its line range, type name, and identifier.
+/// It leverages internal parsing utilities to first find all code objects and then focuses on the first one identified. This is particularly useful for analyzing isolated code blocks or changes.
+///
+/// # Arguments
+///
+/// * `src` - A string slice (`&str`) containing the Rust code to be parsed.
+///
+/// # Returns
+///
+/// A `Result<ObjectRange, ErrorHandling>` containing the `ObjectRange` of the first identified code item, or an `ErrorHandling` if no valid code object is found or parsing fails.
     fn rust_item_parser(src: &str) -> Result<ObjectRange, ErrorHandling> {
-        let ast: File = parse_str(src)?;
-        let binding: Vec<ObjectRange> = visit_items(&ast.items)?;
-        let visited: &ObjectRange = binding
+        let analyzer: Vec<ObjectRange> = Self::parse_result_items(src)?
+            .par_iter()
+            .map(|val| {
+                let line_ranges = Self::textrange_into_linerange(*val.0, src);
+                ObjectRange {
+                    line_ranges,
+                    names: val.1.names.clone(),
+                }
+            })
+            .collect::<Vec<ObjectRange>>();
+        let visited: &ObjectRange = analyzer
             .first()
             .ok_or(ErrorHandling::LineOutOfBounds { line_number: 0 })?;
         Ok(ObjectRange {
@@ -155,67 +194,404 @@ impl RustParser for RustItemParser {
         })
     }
 
-/// Parses a Rust source string into its Abstract Syntax Tree (AST) representation.
-/// This function is a wrapper around `syn::parse_str` to simplify AST parsing.
-///
-/// # Arguments
-///
-/// * `src` - A string slice (`&str`) containing the Rust source code.
-///
-/// # Returns
-///
-/// A `Result<syn::File, ErrorHandling>`:
-/// - `Ok(syn::File)`: The parsed AST of the Rust code.
-/// - `Err(ErrorHandling)`: If parsing fails (e.g., due to invalid Rust syntax).
-    fn rust_ast(src: &str) -> Result<File, ErrorHandling> {
-        let ast: File = parse_str(src)?;
-        Ok(ast)
-    }
 
-/// Attempts to find the file path for a Rust module given a base path and the module name.
-/// It assumes the module file will be named `{mod_name}.rs` and located in the same directory as the `base_path`'s parent.
+}
+
+/// Computes a vector of byte offsets for the start of each line in a given string slice. This function is a fundamental utility for converting between byte-based `TextRange` (used by syntax parsers) and human-readable line-based ranges.
+/// It iterates through the input string, identifying newline characters to mark the beginning of subsequent lines. This is crucial for accurately mapping parsed syntax tree elements to their corresponding line numbers in a source file.
 ///
 /// # Arguments
 ///
-/// * `base_path` - A `PathBuf` representing the path of the file where the module is declared (e.g., `lib.rs`).
-/// * `mod_name` - A `String` representing the name of the module to find (e.g., "data" for `mod data;`).
+/// * `src` - A string slice (`&str`) representing the source code.
 ///
 /// # Returns
 ///
-/// A `Result<Option<PathBuf>, ErrorHandling>`:
-/// - `Ok(Some(PathBuf))`: If the module file is found.
-/// - `Ok(None)`: If the module file does not exist at the expected location.
-/// - `Err(ErrorHandling)`: If an I/O error occurs while checking file existence.
-    fn find_module_file(
-        base_path: PathBuf,
-        mod_name: String,
-    ) -> Result<Option<PathBuf>, ErrorHandling> {
-        let mut path = base_path;
-        path.pop();
-        let paths = [path.join(format!("{mod_name}.rs"))];
-        for path in paths {
-            if path.exists() {
-                return Ok(Some(path));
-            }
+/// A `Vec<usize>` where each element is the byte offset of the start of a line.
+fn compute_line_starts(src: &str) -> Vec<usize> {
+    let mut starts = vec![0];
+    for (i, b) in src.bytes().enumerate() {
+        if b == b'\n' {
+            starts.push(i + 1);
         }
-        Ok(None)
+    }
+    starts
+}
+
+/// Determines the 0-based line number corresponding to a given byte offset within a source text.
+/// This helper function efficiently uses a pre-computed sorted list of line start offsets to find the correct line.
+/// It performs a binary search to locate the line that the specified offset falls into.
+///
+/// # Arguments
+///
+/// * `offset` - The byte offset within the source text for which to find the line number.
+/// * `line_starts` - A slice of `usize` values, where each value is the byte offset of the start of a line.
+///
+/// # Returns
+///
+/// A `usize` representing the 0-based line number corresponding to the given offset.
+fn offset_to_line(offset: usize, line_starts: &[usize]) -> usize {
+    match line_starts.binary_search(&offset) {
+        Ok(line) => line,
+        Err(next_line) => next_line - 1,
     }
 }
 
-/// Lexes a Rust source string to identify and extract information about comments.
-/// It tokenizes each line of the source and categorizes comments into single-line block, multi-line block (start and end),
-/// and single-line comments. It also identifies 'LifetimeIndicator' tokens.
-/// Special handling is included to correctly associate the start and end lines of multi-line block comments.
+/// Processes a vector of `rust-analyzer` AST items to extract their `TextRange` and identify their type and name.
+/// It creates a `HashMap` where keys are `TextRange` and values are `AnalyzerRange` structs, categorizing each item like functions, structs, enums, impls, traits, and modules.
+/// The function recursively descends into modules and `impl` blocks to find nested items, building a complete map of all recognized Rust constructs.
 ///
 /// # Arguments
 ///
-/// * `source_vector` - A string slice (`&str`) containing the Rust source code.
+/// * `items` - A `Vec<ra_ap_syntax::ast::Item>` representing the parsed AST items from `rust-analyzer`.
 ///
 /// # Returns
 ///
-/// A `Result<Vec<ObjectRange>, ErrorHandling>`:
-/// - `Ok(Vec<ObjectRange>)`: A vector of `ObjectRange` structs, where each represents a detected comment or lifetime indicator with its line range and type.
-/// - `Err(ErrorHandling)`: If string processing fails (e.g., `FileExtractor::string_to_vector` or `tokenize`).
+/// A `Result` which is `Ok(HashMap<TextRange, AnalyzerRange>)` on success, containing a map of text ranges to `AnalyzerRange` structs for each identified item, or an `ErrorHandling` enum if an error occurs during processing.
+fn parse_all_rust_analyzer(
+    items: Vec<ra_ap_syntax::ast::Item>,
+) -> Result<HashMap<TextRange, AnalyzerRange>, ErrorHandling> {
+    let mut analyzer: HashMap<TextRange, AnalyzerRange> = HashMap::new();
+    for each in items {
+        match each {
+            ra_ap_syntax::ast::Item::Fn(f) => {
+                let name = f.name();
+                let range = f.syntax().text_range();
+                if let Some(name) = name {
+                    analyzer.insert(
+                        range,
+                        AnalyzerRange {
+                            range,
+                            names: Name {
+                                type_name: "fn".to_string(),
+                                name: name.to_string(),
+                            },
+                        },
+                    );
+                } else {
+                    analyzer.insert(
+                        range,
+                        AnalyzerRange {
+                            range,
+                            names: Name {
+                                type_name: "fn".to_string(),
+                                name: "".to_string(),
+                            },
+                        },
+                    );
+                }
+            }
+            ra_ap_syntax::ast::Item::Struct(s) => {
+                let name = s.name();
+                let range = s.syntax().text_range();
+                if let Some(name) = name {
+                    analyzer.insert(
+                        range,
+                        AnalyzerRange {
+                            range,
+                            names: Name {
+                                type_name: "struct".to_string(),
+                                name: name.to_string(),
+                            },
+                        },
+                    );
+                } else {
+                    analyzer.insert(
+                        range,
+                        AnalyzerRange {
+                            range,
+                            names: Name {
+                                type_name: "struct".to_string(),
+                                name: "".to_string(),
+                            },
+                        },
+                    );
+                }
+            }
+            ra_ap_syntax::ast::Item::Enum(e) => {
+                let name = e.name();
+                let range = e.syntax().text_range();
+                if let Some(name) = name {
+                    analyzer.insert(
+                        range,
+                        AnalyzerRange {
+                            range,
+                            names: Name {
+                                type_name: "enum".to_string(),
+                                name: name.to_string(),
+                            },
+                        },
+                    );
+                } else {
+                    analyzer.insert(
+                        range,
+                        AnalyzerRange {
+                            range,
+                            names: Name {
+                                type_name: "enum".to_string(),
+                                name: "".to_string(),
+                            },
+                        },
+                    );
+                }
+            }
+            ra_ap_syntax::ast::Item::Impl(i) => {
+                let name_type = i.trait_();
+
+                if let Some(name) = name_type {
+                    let range = i.syntax().text_range();
+                    analyzer.insert(
+                        range,
+                        AnalyzerRange {
+                            range,
+                            names: Name {
+                                type_name: "impl".to_string(),
+                                name: name.to_string(),
+                            },
+                        },
+                    );
+                } else {
+                    let range = i.syntax().text_range();
+                    analyzer.insert(
+                        range,
+                        AnalyzerRange {
+                            range,
+                            names: Name {
+                                type_name: "impl".to_string(),
+                                name: "".to_string(),
+                            },
+                        },
+                    );
+                }
+                if let Some(val) = i.assoc_item_list() {
+                    let items = val.assoc_items();
+                    for each in items {
+                        if let ra_ap_syntax::ast::AssocItem::Fn(f) = each {
+                            let name = f.name();
+                            let range = f.syntax().text_range();
+                            if let Some(name) = name {
+                                analyzer.insert(
+                                    range,
+                                    AnalyzerRange {
+                                        range,
+                                        names: Name {
+                                            type_name: "fn".to_string(),
+                                            name: name.to_string(),
+                                        },
+                                    },
+                                );
+                            } else {
+                                analyzer.insert(
+                                    range,
+                                    AnalyzerRange {
+                                        range,
+                                        names: Name {
+                                            type_name: "fn".to_string(),
+                                            name: "".to_string(),
+                                        },
+                                    },
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+            ra_ap_syntax::ast::Item::Trait(t) => {
+                let name = t.name();
+                let range = t.syntax().text_range();
+                if let Some(name) = name {
+                    analyzer.insert(
+                        range,
+                        AnalyzerRange {
+                            range,
+                            names: Name {
+                                type_name: "trait".to_string(),
+                                name: name.to_string(),
+                            },
+                        },
+                    );
+                } else {
+                    analyzer.insert(
+                        range,
+                        AnalyzerRange {
+                            range,
+                            names: Name {
+                                type_name: "trait".to_string(),
+                                name: "".to_string(),
+                            },
+                        },
+                    );
+                }
+            }
+            ra_ap_syntax::ast::Item::TypeAlias(t) => {
+                let name = t.name();
+                let range = t.syntax().text_range();
+                if let Some(name) = name {
+                    analyzer.insert(
+                        range,
+                        AnalyzerRange {
+                            range,
+                            names: Name {
+                                type_name: "type_alias".to_string(),
+                                name: name.to_string(),
+                            },
+                        },
+                    );
+                } else {
+                    analyzer.insert(
+                        range,
+                        AnalyzerRange {
+                            range,
+                            names: Name {
+                                type_name: "type_alias".to_string(),
+                                name: "".to_string(),
+                            },
+                        },
+                    );
+                }
+            }
+            ra_ap_syntax::ast::Item::Use(u) => {
+                let name = u.to_smolstr();
+                let range = u.syntax().text_range();
+                analyzer.insert(
+                    range,
+                    AnalyzerRange {
+                        range,
+                        names: Name {
+                            type_name: "use".to_string(),
+                            name: name.to_string(),
+                        },
+                    },
+                );
+            }
+            ra_ap_syntax::ast::Item::MacroCall(m) => {
+                let range = m.syntax().text_range();
+                analyzer.insert(
+                    range,
+                    AnalyzerRange {
+                        range,
+                        names: Name {
+                            type_name: "macro".to_string(),
+                            name: "".to_string(),
+                        },
+                    },
+                );
+            }
+            ra_ap_syntax::ast::Item::MacroRules(m) => {
+                let range = m.syntax().text_range();
+                let name = m.name();
+                if let Some(name) = name {
+                    analyzer.insert(
+                        range,
+                        AnalyzerRange {
+                            range,
+                            names: Name {
+                                type_name: "macro_rules".to_string(),
+                                name: name.to_string(),
+                            },
+                        },
+                    );
+                } else {
+                    analyzer.insert(
+                        range,
+                        AnalyzerRange {
+                            range,
+                            names: Name {
+                                type_name: "macro_rules".to_string(),
+                                name: "".to_string(),
+                            },
+                        },
+                    );
+                }
+            }
+            ra_ap_syntax::ast::Item::ExternBlock(e) => {
+                let range = e.syntax().text_range();
+                analyzer.insert(
+                    range,
+                    AnalyzerRange {
+                        range,
+                        names: Name {
+                            type_name: "extern_block".to_string(),
+                            name: "".to_string(),
+                        },
+                    },
+                );
+            }
+            ra_ap_syntax::ast::Item::Module(m) => {
+                let range = m.syntax().text_range();
+                if let Some(name) = m.name() {
+                    analyzer.insert(
+                        range,
+                        AnalyzerRange {
+                            range,
+                            names: Name {
+                                type_name: "mod".to_string(),
+                                name: name.to_string(),
+                            },
+                        },
+                    );
+                } else {
+                    analyzer.insert(
+                        range,
+                        AnalyzerRange {
+                            range,
+                            names: Name {
+                                type_name: "mod".to_string(),
+                                name: "".to_string(),
+                            },
+                        },
+                    );
+                }
+                let items = m.item_list();
+                if let Some(items) = items {
+                    let module_items = items.items().collect::<Vec<ra_ap_syntax::ast::Item>>();
+                    let k = parse_all_rust_analyzer(module_items)?;
+                    analyzer.extend(k);
+                }
+            }
+            ra_ap_syntax::ast::Item::TraitAlias(t) => {
+                let range = t.syntax().text_range();
+                if let Some(name) = t.name() {
+                    analyzer.insert(
+                        range,
+                        AnalyzerRange {
+                            range,
+                            names: Name {
+                                type_name: "trait_alias".to_string(),
+                                name: name.to_string(),
+                            },
+                        },
+                    );
+                } else {
+                    analyzer.insert(
+                        range,
+                        AnalyzerRange {
+                            range,
+                            names: Name {
+                                type_name: "trait_alias".to_string(),
+                                name: "".to_string(),
+                            },
+                        },
+                    );
+                }
+            }
+            _ => (),
+        }
+    }
+
+    Ok(analyzer)
+}
+
+/// Analyzes the input source code to identify and categorize various types of comments and lifetime indicators.
+/// It processes line comments, block comments (both single and multi-line), and lifetime indicators, converting them into a structured `Vec<ObjectRange>`.
+/// The function intelligently resolves multi-line block comments by combining their start and end markers into a single `ObjectRange` for simplified representation.
+///
+/// # Arguments
+///
+/// * `source_vector` - A string slice containing the source code to be analyzed.
+///
+/// # Returns
+///
+/// A `Result` which is `Ok(Vec<ObjectRange>)` on successful parsing, containing a vector of identified comment and lifetime ranges, or an `ErrorHandling` enum if an error occurs.
 pub fn comment_lexer(source_vector: &str) -> Result<Vec<ObjectRange>, ErrorHandling> {
     let vectorized = FileExtractor::string_to_vector(source_vector);
     let mut comment_vector: Vec<ObjectRange> = Vec::new();
@@ -227,7 +603,10 @@ pub fn comment_lexer(source_vector: &str) -> Result<Vec<ObjectRange>, ErrorHandl
                 TokenKind::BlockComment { terminated } => {
                     if terminated {
                         comment_vector.push(ObjectRange {
-                            line_ranges: Range { start: line_number, end: line_number },
+                            line_ranges: Range {
+                                start: line_number,
+                                end: line_number,
+                            },
                             names: Name {
                                 type_name: "CommentBlockSingeLine".to_string(),
                                 name: "Comment".to_string(),
@@ -235,7 +614,10 @@ pub fn comment_lexer(source_vector: &str) -> Result<Vec<ObjectRange>, ErrorHandl
                         });
                     } else {
                         comment_vector.push(ObjectRange {
-                            line_ranges: Range { start: line_number, end: 0 },
+                            line_ranges: Range {
+                                start: line_number,
+                                end: 0,
+                            },
                             names: Name {
                                 type_name: "CommentBlockMultiLine".to_string(),
                                 name: "Comment".to_string(),
@@ -245,7 +627,10 @@ pub fn comment_lexer(source_vector: &str) -> Result<Vec<ObjectRange>, ErrorHandl
                 }
                 TokenKind::Slash => {
                     comment_vector.push(ObjectRange {
-                        line_ranges: Range { start: line_number, end: line_number },
+                        line_ranges: Range {
+                            start: line_number,
+                            end: line_number,
+                        },
                         names: Name {
                             type_name: "CommentBlockMultiLineEnd".to_string(),
                             name: "Refers to index - 1 (CommentBlockMultiLine)".to_string(),
@@ -254,7 +639,10 @@ pub fn comment_lexer(source_vector: &str) -> Result<Vec<ObjectRange>, ErrorHandl
                 }
                 TokenKind::LineComment => {
                     comment_vector.push(ObjectRange {
-                        line_ranges: Range { start: line_number, end: line_number },
+                        line_ranges: Range {
+                            start: line_number,
+                            end: line_number,
+                        },
                         names: Name {
                             type_name: "LineComment".to_string(),
                             name: "Comment".to_string(),
@@ -266,7 +654,10 @@ pub fn comment_lexer(source_vector: &str) -> Result<Vec<ObjectRange>, ErrorHandl
                     starts_with_number: _,
                 } => {
                     comment_vector.push(ObjectRange {
-                        line_ranges: Range { start: line_number, end: line_number },
+                        line_ranges: Range {
+                            start: line_number,
+                            end: line_number,
+                        },
                         names: Name {
                             type_name: "LifetimeIndicator".to_string(),
                             name: "Comment".to_string(),
@@ -281,10 +672,16 @@ pub fn comment_lexer(source_vector: &str) -> Result<Vec<ObjectRange>, ErrorHandl
     let multi_line = "CommentBlockMultiLine";
     let multi_line_end = "CommentBlockMultiLineEnd";
     let mut found_position = 0;
-    if let Some(pos) = comment_vector.iter().position(|obj| obj.names.type_name == multi_line) {
+    if let Some(pos) = comment_vector
+        .iter()
+        .position(|obj| obj.names.type_name == multi_line)
+    {
         found_position = pos;
     }
-    if let Some(pos) = comment_vector.iter().position(|obj| obj.names.type_name == multi_line_end) {
+    if let Some(pos) = comment_vector
+        .iter()
+        .position(|obj| obj.names.type_name == multi_line_end)
+    {
         comment_vector[found_position].line_ranges.end = comment_vector[pos].line_end();
         comment_vector.remove(pos);
     }
@@ -292,371 +689,16 @@ pub fn comment_lexer(source_vector: &str) -> Result<Vec<ObjectRange>, ErrorHandl
     Ok(comment_vector)
 }
 
-/// Parses a slice of `syn::Item`s to extract the signature (inputs and output) of the first function found.
-/// It iterates through function arguments to collect input `TokenStream`s and then analyzes the return type.
-/// Supports `Result`, `Option`, and default return types.
+/// Removes all whitespace characters from the given input string.
+/// This function iterates through each character of the input and constructs a new string containing only the non-whitespace characters.
 ///
 /// # Arguments
 ///
-/// * `items` - A slice of `syn::Item`s, expected to contain at least one `Item::Fn`.
+/// * `s` - The input `String` from which whitespace should be removed.
 ///
 /// # Returns
 ///
-/// A `Result<FunctionSignature, ErrorHandling>`:
-/// - `Ok(FunctionSignature)`: A struct containing details about the function's input parameters and return type.
-/// - `Err(ErrorHandling::NotFunction)`: If the first item is not a function.
-/// - `Err(ErrorHandling::CouldNotGetObject)`: If the return type cannot be analyzed.
-/// - `Err(ErrorHandling)`: If `fn_input` or `analyze_return_type` fails.
-fn function_parse(items: &[Item]) -> Result<FunctionSignature, ErrorHandling> {
-    let mut vec_token_inputs: Vec<TokenStream> = Vec::new();
-    let default_return = FnOutputToken {
-        kind: "Default".to_string(),
-        output_type: "()".to_string(),
-        error_type: Some("None".to_string()),
-    };
-    if let Item::Fn(f) = &items[0] {
-        let input_tokens = f.sig.inputs.iter();
-        for each in input_tokens {
-            match each {
-                FnArg::Receiver(_) => {}
-                FnArg::Typed(pat_type) => {
-                    let input_tokens = pat_type.to_token_stream();
-                    vec_token_inputs.push(input_tokens);
-                }
-            }
-        }
-        let output = &f.sig.output;
-        if let ReturnType::Type(_, boxed_ty) = &output {
-            let func = FunctionSignature {
-                fn_input: fn_input(vec_token_inputs)?,
-                fn_out: analyze_return_type(boxed_ty)?,
-            };
-            Ok(func)
-        } else {
-            if let ReturnType::Default = &output {
-                let func = FunctionSignature {
-                    fn_input: fn_input(vec_token_inputs)?,
-                    fn_out: default_return,
-                };
-                return Ok(func);
-            }
-            Err(ErrorHandling::CouldNotGetObject {
-                err_kind: format!("{:?} Name: {}", output, f.sig.ident),
-            })
-        }
-    } else {
-        event!(Level::ERROR, "{items:#?}");
-        Err(ErrorHandling::NotFunction)
-    }
-}
-
-fn fn_input(input_vector_stream: Vec<TokenStream>) -> Result<Vec<FnInputToken>, ErrorHandling> {
-    let mut input_tokens: Vec<FnInputToken> = Vec::new();
-    for input in input_vector_stream {
-        let tokens: Vec<TokenTree> = input.into_iter().collect();
-        for (i, token) in tokens.iter().enumerate() {
-            if let TokenTree::Punct(punct) = token
-                && punct.as_char() == ':' && punct.spacing() != Spacing::Joint {
-                    let before = tokens.get(i.wrapping_sub(1));
-                    let after_tokens: Vec<TokenTree> = tokens.iter().skip(i + 1).cloned().collect();
-                    let after_stream: TokenStream = after_tokens.into_iter().collect();
-                    if let Some(before_token) = before {
-                        let rm_space_from_before = remove_whitespace(before_token.to_string());
-                        let rm_space_from_after = remove_whitespace(after_stream.to_string());
-                        input_tokens.push({
-                            FnInputToken {
-                                input_name: rm_space_from_before?,
-                                input_type: rm_space_from_after?,
-                            }
-                        });
-                    }
-            }
-        }
-    }
-
-    Ok(input_tokens)
-}
-
-/// Removes all whitespace characters from a given string.
-/// This function is typically used for canonicalizing strings by stripping unnecessary spaces, tabs, and newlines.
-///
-/// # Arguments
-///
-/// * `s` - The `String` from which whitespace should be removed.
-///
-/// # Returns
-///
-/// A `Result<String, ErrorHandling>`:
-/// - `Ok(String)`: A new `String` with all whitespace characters filtered out.
-/// - `Err(ErrorHandling)`: This function is currently infallible but returns a `Result` for consistency.
+/// A `Result` which is `Ok(String)` containing the new string with all whitespace removed, or an `ErrorHandling` enum if an error occurs.
 pub fn remove_whitespace(s: String) -> Result<String, ErrorHandling> {
     Ok(s.chars().filter(|c| !c.is_whitespace()).collect())
-}
-
-fn analyze_return_type(ty: &Type) -> Result<FnOutputToken, ErrorHandling> {
-    let mut kind = "Other".to_string();
-    let mut output_type = ty.to_token_stream().to_string();
-    let mut error_type = None;
-    if let Type::Path(TypePath { path, .. }) = ty &&
-        let Some(segment) = path.segments.last() {
-            let ident_str = segment.ident.to_string();
-            match ident_str.as_str() {
-                "Result" => {
-                    kind = "Result".to_string();
-
-                    if let PathArguments::AngleBracketed(AngleBracketedGenericArguments {
-                        args,
-                        ..
-                    }) = &segment.arguments
-                    {
-                        let mut args = args.iter();
-                        if let Some(ok_ty) = args.next() {
-                            output_type = remove_whitespace(ok_ty.to_token_stream().to_string())?;
-                        }
-                        if let Some(err_ty) = args.next() {
-                            error_type = Some(err_ty.to_token_stream().to_string());
-                        }
-                    }
-                }
-                "Option" => {
-                    kind = "Option".to_string();
-
-                    if let PathArguments::AngleBracketed(AngleBracketedGenericArguments {
-                        args,
-                        ..
-                    }) = &segment.arguments
-                        && let Some(inner_ty) = args.first() {
-                            output_type =
-                                remove_whitespace(inner_ty.to_token_stream().to_string())?;
-                        }
-                }
-                _ => {
-                    kind = "Other".to_string();
-                    output_type = ty.to_token_stream().to_string();
-                }
-            }
-        
-    }
-    Ok(FnOutputToken {
-        kind,
-        output_type,
-        error_type,
-    })
-}
-
-/// Visits a slice of `syn::Item`s to extract information about Rust code objects.
-/// It iterates through various types of items (structs, enums, functions, modules, uses, impls, traits, types, unions, consts, macros, extern crates, statics).
-/// For each recognized item, it creates an `ObjectRange` containing its line range (start and end lines) and its name (type and identifier).
-/// Special handling is included for `impl` blocks to also parse items within the implementation.
-/// Recursive calls are made for module items with content.
-///
-/// # Arguments
-///
-/// * `items` - A slice of `syn::Item`s representing the parsed items from a Rust file or module.
-///
-/// # Returns
-///
-/// A `Result<Vec<ObjectRange>, ErrorHandling>`:
-/// - `Ok(Vec<ObjectRange>)`: A vector of `ObjectRange` structs, each representing a parsed Rust code object with its line range and name.
-/// - `Err(ErrorHandling)`: If nested parsing (e.g., within modules) fails or other internal errors occur.
-fn visit_items(items: &[Item]) -> Result<Vec<ObjectRange>, ErrorHandling> {
-    let mut object_line: Vec<ObjectRange> = Vec::new();
-
-    for item in items {
-        match item {
-            Item::Struct(s) => {
-                object_line.push(ObjectRange {
-                    line_ranges: Range { start: s.span().start().line, end: s.span().end().line },
-                    names: Name {
-                        type_name: "struct".to_string(),
-                        name: s.ident.to_string(),
-                    },
-                });
-            }
-            Item::Enum(e) => {
-                object_line.push(ObjectRange {
-                    line_ranges: Range { start: e.span().start().line, end: e.span().end().line },
-                    names: Name {
-                        type_name: "enum".to_string(),
-                        name: e.ident.to_string(),
-                    },
-                });
-            }
-            Item::Fn(f) => {
-                object_line.push(ObjectRange {
-                    line_ranges: Range { start: f.span().start().line, end: f.span().end().line },
-                    names: Name {
-                        type_name: "fn".to_string(),
-                        name: f.sig.ident.to_string(),
-                    },
-                });
-            }
-            Item::Mod(m) => match &m.content {
-                Some((_, items)) => {
-                    object_line.push(ObjectRange {
-                        line_ranges: Range { start: m.span().start().line, end: m.span().end().line },
-                        names: Name {
-                            type_name: "mod".to_string(),
-                            name: m.ident.to_string(),
-                        },
-                    });
-                    object_line.extend(visit_items(items)?);
-                }
-                None => {
-                    object_line.push(ObjectRange {
-                        line_ranges: Range { start: m.span().start().line, end: m.span().end().line },
-                        names: Name {
-                            type_name: "mod".to_string(),
-                            name: m.ident.to_string(),
-                        },
-                    });
-                }
-            },
-            Item::Use(u) => {
-                if let syn::UseTree::Path(path) = u.tree.to_owned() {
-                    object_line.push(ObjectRange {
-                        line_ranges: Range { start: path.span().start().line, end: path.span().end().line },
-                        names: Name {
-                            type_name: "use".to_string(),
-                            name: path.ident.to_string(),
-                        },
-                    });
-                }
-            }
-            Item::Impl(i) => {
-                let trait_name = if let Some((_, path, _)) = &i.trait_ {
-                    if let Some(seg) = path.segments.last() {
-                        seg.ident.to_string()
-                    } else {
-                        "matches struct".to_string()
-                    }
-                } else {
-                    "matches struct".to_string()
-                };
-                object_line.push(ObjectRange {
-                    line_ranges: Range { start: i.span().start().line, end: i.span().end().line },
-                    names: Name {
-                        type_name: "impl".to_string(),
-                        name: trait_name,
-                    },
-                });
-                for each_block in &i.items {
-                    match each_block {
-                        ImplItem::Fn(f) => {
-                            object_line.push(ObjectRange {
-                                line_ranges: Range { start: f.span().start().line, end: f.span().end().line },
-                                names: Name {
-                                    type_name: "fn".to_string(),
-                                    name: f.sig.ident.to_string(),
-                                },
-                            });
-                        }
-                        ImplItem::Const(c) => {
-                            object_line.push(ObjectRange {
-                                line_ranges: Range { start: c.span().start().line, end: c.span().end().line },
-                                names: Name {
-                                    type_name: "const".to_string(),
-                                    name: c.ident.to_string(),
-                                },
-                            });
-                        }
-                        ImplItem::Type(t) => {
-                            object_line.push(ObjectRange {
-                                line_ranges: Range { start: t.span().start().line, end: t.span().end().line },
-                                names: Name {
-                                    type_name: "type".to_string(),
-                                    name: t.ident.to_string(),
-                                },
-                            });
-                        }
-                        ImplItem::Macro(m) => {
-                            object_line.push(ObjectRange {
-                                line_ranges: Range { start: m.span().start().line, end: m.span().end().line },
-                                names: Name {
-                                    type_name: "macro".to_string(),
-                                    name: format!("{:?}", m.mac.path),
-                                },
-                            });
-                        }
-                        ImplItem::Verbatim(v) => {
-                            object_line.push(ObjectRange {
-                                line_ranges: Range { start: v.span().start().line, end: v.span().end().line },
-                                names: Name {
-                                    type_name: "verbatim".to_string(),
-                                    name: v.to_string(),
-                                },
-                            });
-                        }
-                        _ => event!(Level::INFO, "Other impl object"),
-                    }
-                }
-            }
-            Item::Trait(t) => {
-                object_line.push(ObjectRange {
-                    line_ranges: Range { start: t.span().start().line, end: t.span().end().line },
-                    names: Name {
-                        type_name: "trait".to_string(),
-                        name: t.ident.to_string(),
-                    },
-                });
-            }
-            Item::Type(t) => {
-                object_line.push(ObjectRange {
-                    line_ranges: Range { start: t.span().start().line, end: t.span().end().line },
-                    names: Name {
-                        type_name: "type".to_string(),
-                        name: t.ident.to_string(),
-                    },
-                });
-            }
-            Item::Union(u) => {
-                object_line.push(ObjectRange {
-                    line_ranges: Range { start: u.span().start().line, end: u.span().end().line },
-                    names: Name {
-                        type_name: "union".to_string(),
-                        name: u.ident.to_string(),
-                    },
-                });
-            }
-            Item::Const(c) => {
-                object_line.push(ObjectRange {
-                    line_ranges: Range { start: c.span().start().line, end: c.span().end().line },
-                    names: Name {
-                        type_name: "const".to_string(),
-                        name: c.ident.to_string(),
-                    },
-                });
-            }
-            Item::Macro(m) => {
-                object_line.push(ObjectRange {
-                    line_ranges: Range { start: m.span().start().line, end: m.span().end().line },
-                    names: Name {
-                        type_name: "macro".to_string(),
-                        name: format!("{:?}", m.mac.path),
-                    },
-                });
-            }
-            Item::ExternCrate(c) => {
-                object_line.push(ObjectRange {
-                    line_ranges: Range { start: c.span().start().line, end: c.span().end().line },
-                    names: Name {
-                        type_name: "extern crate".to_string(),
-                        name: c.ident.to_string(),
-                    },
-                });
-            }
-            Item::Static(s) => {
-                object_line.push(ObjectRange {
-                    line_ranges: Range { start: s.span().start().line, end: s.span().end().line },
-                    names: Name {
-                        type_name: "static".to_string(),
-                        name: s.ident.to_string(),
-                    },
-                });
-            }
-            _ => event!(Level::INFO, "Other item"),
-        }
-    }
-
-    Ok(object_line)
 }

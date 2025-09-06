@@ -195,10 +195,10 @@ cargo build --release
 
 - in `binding.rs`: grouping methods, all public methods are moved to the top of the file
   
-  - find_context() functions gathers context and writes it to SingleFunctionData, 
-  any contributions to make it work better, for example, through parsing Cargo.toml would be highly appreciated.
-  Any viable function context greatly increases quality of generated documented. It works for small projects, but for 
-  bigger projects it may be not so viable as of now
+  - analyzer::contextualizer() function gathers context and writes it to SingleFunctionData, 
+  any contributions to make it work better, such as certain optimizations to rust-analyzer flow would be highly appreciated.
+  Any viable function context greatly increases quality of generated documented. With introduction of ra-ap, it became infinitely scalable and it's also well optimized, to be able to function in tight boundaries of action runner.
+
 
 -  `git_parsing` contains a few methods, to sort relevant changes from all hunks
 
@@ -233,4 +233,5 @@ cargo build --release
 - Broken answers trigger recursive retries until all requests succeed.
 
 #### 6. Result writing
-- When quantity of responses matches with requests, the requests are written simultaneously
+- When quantity of responses matches with requests, the requests are written simultaneously, so you shouldn't be expecting any 
+breakage where results may not be consistent throughout the board.
