@@ -199,6 +199,7 @@ cargo build --release
   any contributions to make it work better, such as certain optimizations to rust-analyzer flow would be highly appreciated.
   Any viable function context greatly increases quality of generated documented. With introduction of ra-ap, it became infinitely scalable and it's also well optimized, to be able to function in tight boundaries of action runner.
 
+
 -  `git_parsing` contains a few methods, to sort relevant changes from all hunks
 
 -  `gemini` provides all the necessary interface to prepare a response, collect it into a structure and process the result
