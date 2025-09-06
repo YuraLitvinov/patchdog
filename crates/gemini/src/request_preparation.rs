@@ -233,6 +233,14 @@ impl Default for PreparingRequests {
 
 impl Display for PreparingRequests {
 
+/// Implements the `std::fmt::Display` trait, allowing the struct to be formatted for output using its debug representation.
+/// This method specifically pretty-prints the entire instance using the `:#?` format specifier, making it ideal for detailed logging and debugging purposes. It writes the formatted output to the provided `std::fmt::Formatter`.
+///
+/// # Arguments
+/// * `f` - A mutable reference to a `std::fmt::Formatter` where the output will be written.
+///
+/// # Returns
+/// A `std::fmt::Result` indicating whether the formatting operation was successful.
 /// Implements the `std::fmt::Display` trait for the struct, enabling formatted output. This function pretty-prints the debug representation of the instance to the provided formatter, which is particularly useful for logging and debugging purposes.
 ///
 /// # Arguments

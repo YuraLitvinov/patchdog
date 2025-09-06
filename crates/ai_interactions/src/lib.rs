@@ -28,6 +28,11 @@ pub struct YamlRead {
     pub patchdog_settings: PathdogSettings,
 }
 
+/// Reads the application's configuration from a YAML file specified by the "CONFIG_PATH" environment variable, extracting various settings.
+/// It specifically parses parameters for Large Language Model (LLM) interaction, including model names and rate limits, alongside application-specific settings like excluded files and functions. This function ensures that essential configuration values are retrieved, providing default values and logging errors if keys are missing or the file is malformed.
+///
+/// # Returns
+/// A `Result<YamlRead, ErrorHandling>` containing a `YamlRead` struct with the parsed configuration on success, or an `ErrorHandling` if the file cannot be read or parsed.
 /// Reads and parses the application's configuration from a YAML file specified by the "CONFIG_PATH" environment variable. It extracts settings for LLM interaction, including model names, token limits, and request rates, as well as application-specific settings like excluded files and functions.
 ///
 /// # Returns

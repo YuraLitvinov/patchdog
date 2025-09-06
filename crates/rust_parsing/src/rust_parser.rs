@@ -236,6 +236,14 @@ fn offset_to_line(offset: usize, line_starts: &[usize]) -> usize {
     }
 }
 
+/// Processes a collection of `rust-analyzer` AST items to extract and categorize key information about Rust code elements.
+/// This function iterates through a vector of AST items, identifying various types like functions, structs, enums, and modules. For each item, it extracts its `TextRange` and assigns a type and name, recursively descending into `impl` blocks and modules to build a comprehensive `HashMap<TextRange, AnalyzerRange>` of all recognized Rust constructs within the provided AST.
+///
+/// # Arguments
+/// * `items` - A `Vec<ra_ap_syntax::ast::Item>` representing the parsed AST items from `rust-analyzer`.
+///
+/// # Returns
+/// A `Result<HashMap<TextRange, AnalyzerRange>, ErrorHandling>` containing a map of text ranges to `AnalyzerRange` structs for each identified item, or an `ErrorHandling` enum if an error occurs during processing.
 /// Processes a vector of `rust-analyzer` AST items to extract their `TextRange` and identify their type and name.
 /// It creates a `HashMap` where keys are `TextRange` and values are `AnalyzerRange` structs, categorizing each item like functions, structs, enums, impls, traits, and modules.
 /// The function recursively descends into modules and `impl` blocks to find nested items, building a complete map of all recognized Rust constructs.
