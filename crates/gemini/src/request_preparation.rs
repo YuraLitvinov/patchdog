@@ -231,13 +231,6 @@ impl Default for PreparingRequests {
     }
 }
 
-/// Implements the `std::fmt::Display` trait for the `PreparingRequests` struct. This enables custom formatting for instances of `PreparingRequests`, specifically by pretty-printing their debug representation (`{self:#?}`) to the provided formatter. It's useful for human-readable output and debugging.
-///
-/// # Arguments
-/// * `f` - A mutable reference to a `std::fmt::Formatter`.
-///
-/// # Returns
-/// A `std::fmt::Result` indicating whether the formatting operation was successful.
 impl Display for PreparingRequests {
 
 /// Implements the `std::fmt::Display` trait for the struct, enabling formatted output. This function pretty-prints the debug representation of the instance to the provided formatter, which is particularly useful for logging and debugging purposes.
@@ -263,10 +256,6 @@ impl Default for RequestToAgent {
     }
 }
 
-/// Creates a new `RequestToAgent` instance, initializing its `remaining_capacity` for requests based on LLM token and request rate configurations. The `data` vector for preparing requests is initially empty. This function sets up the agent for managing LLM requests.
-///
-/// # Returns
-/// A `Result<RequestToAgent, ErrorHandling>` containing a new `RequestToAgent` instance, or an `ErrorHandling` if configuration loading fails.
 #[allow(async_fn_in_trait)]
 impl RequestToAgent {
 

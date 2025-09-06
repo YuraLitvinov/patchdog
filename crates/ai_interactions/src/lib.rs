@@ -17,6 +17,7 @@ pub struct LLMSettings {
 pub struct PathdogSettings {
     pub excluded_files: Vec<String>,
     pub excluded_functions: Vec<String>,
+    pub affected_object_types: Vec<String>,
     pub llm_model: String,
 }
 
@@ -89,6 +90,15 @@ pub fn return_prompt() -> Result<YamlRead, ErrorHandling> {
                         .collect()
                 })
                 .unwrap_or_default();
+            let affected_object_types = patchdog_settings
+                .get(&Yaml::String("affected_object_types".into()))
+                .and_then(|v| v.as_vec())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|item| item.as_str().map(String::from))
+                        .collect()
+                })
+                .unwrap_or_default();
             let llm_model = patchdog_settings
                 .get(&Yaml::String("llm_model".into()))
                 .and_then(|v| v.as_str().map(String::from))
@@ -105,6 +115,7 @@ pub fn return_prompt() -> Result<YamlRead, ErrorHandling> {
                 patchdog_settings: PathdogSettings {
                     excluded_files,
                     excluded_functions,
+                    affected_object_types,
                     llm_model,
                 },
             })
@@ -125,6 +136,7 @@ pub fn return_prompt() -> Result<YamlRead, ErrorHandling> {
                 patchdog_settings: PathdogSettings {
                     excluded_files: vec![],
                     excluded_functions: vec![],
+                    affected_object_types: vec![],
                     llm_model: String::new(),
                 },
             })
@@ -147,6 +159,7 @@ pub fn return_prompt() -> Result<YamlRead, ErrorHandling> {
             patchdog_settings: PathdogSettings {
                 excluded_files: vec![],
                 excluded_functions: vec![],
+                affected_object_types: vec![],
                 llm_model: String::new(),
             },
         })

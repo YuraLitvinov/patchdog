@@ -26,11 +26,6 @@ pub trait Files {
     ) -> Result<(), ErrorHandling>;
 }
 
-/// Provides implementations for the `Files` trait, offering utilities for manipulating file content as vectors of strings. This `impl` block includes methods for writing a vector of strings to a file at a specific line index, converting a string slice into a vector of strings (line by line), and pushing a new string to the beginning or end of a vector while preserving indentation.
-/// It also includes a utility to check if a given line number falls within a parsed code object's range. These methods collectively enable robust file content management and analysis.
-///
-/// This implementation block provides core utilities for file manipulation and parsing, crucial for features like applying patch changes or analyzing code structure.
-/// It handles potential I/O errors and preserves formatting where applicable.
 impl Files for FileExtractor {
 
 /// Inserts a `changed_element` string into a `Vec<String>` representation of a file at a specific `line_index` and then writes the modified content back to the original file path. This function is designed to apply changes to a file by modifying its in-memory line representation and then persisting these changes.
