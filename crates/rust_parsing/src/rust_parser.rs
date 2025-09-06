@@ -63,6 +63,19 @@ pub trait RustParser {
 pub struct RustItemParser;
 
 impl RustParser for RustItemParser {
+/// Parses a Rust source file from a given path, extracts its Abstract Syntax Tree (AST), and identifies top-level Rust items within it.
+/// The function reads the file content, then leverages `ra_ap_syntax` to parse the source and `rayon` for parallel processing of the extracted AST items.
+/// It converts byte-based `TextRange`s into 1-based line ranges, ultimately returning a vector of `ObjectRange` structs, each representing a parsed Rust item with its line boundaries and names.
+///
+/// # Arguments
+///
+/// * `src` - A reference to a `Path` pointing to the Rust source file to be parsed.
+///
+/// # Returns
+///
+/// A `Result<Vec<ObjectRange>, ErrorHandling>`:
+/// - `Ok(Vec<ObjectRange>)`: A vector of `ObjectRange` structs, each encapsulating a parsed Rust item's details.
+/// - `Err(ErrorHandling)`: If file reading fails or if there's an error during AST parsing.
     /// Parses a Rust source file from a given path into its Abstract Syntax Tree (AST) and extracts top-level Rust items.
     /// It reads the file content, then uses the `syn` crate to parse it into an AST representation.
     /// The function then visits the items in the AST to identify and collect information about each Rust item, such as functions, structs, or enums, along with their line ranges.
@@ -89,6 +102,19 @@ impl RustParser for RustItemParser {
         Ok(visited)
     }
 
+/// Provides a comprehensive parsing of a Rust source string, identifying and extracting information for both code items (functions, structs, etc.) and all types of comments.
+/// It first separates the process into lexing comments and parsing AST items, then converts all identified elements into a unified `ObjectRange` representation with 1-based line numbers.
+/// The collected code items and comments are combined and sorted by their starting line number, offering a complete and ordered structural view of the source code.
+///
+/// # Arguments
+///
+/// * `src` - A string slice (`&str`) containing the Rust source code to be parsed.
+///
+/// # Returns
+///
+/// A `Result<Vec<ObjectRange>, ErrorHandling>`:
+/// - `Ok(Vec<ObjectRange>)`: A sorted vector of `ObjectRange` structs, representing all parsed code items and comments.
+/// - `Err(ErrorHandling)`: If any error occurs during comment lexing, AST parsing, or range conversion.
     /// Parses all Rust items, including code structures (functions, structs, enums, etc.) and comments, from a given source string.
     /// It first parses the source into an AST, then extracts items from the AST.
     /// Concurrently, it lexes comments from the raw source string.
@@ -120,6 +146,18 @@ impl RustParser for RustItemParser {
 
         Ok(visited)
     }
+/// Converts a byte-offset based `TextRange` within a given source string into a 1-based `Range<usize>` representing its corresponding line numbers.
+/// This function relies on pre-computed line start offsets to accurately translate byte positions to human-readable line numbers.
+/// It ensures consistent 1-based line numbering for easier debugging and user interaction.
+///
+/// # Arguments
+///
+/// * `range` - The `TextRange` to convert, specifying start and end byte offsets.
+/// * `src` - A string slice (`&str`) of the source code where the `TextRange` is located.
+///
+/// # Returns
+///
+/// A `Range<usize>`: A new range representing the 1-based start and end line numbers of the original `TextRange`.
     fn textrange_into_linerange(range: TextRange, src: &str) -> Range<usize> {
         let line_starts = compute_line_starts(src);
 
@@ -133,6 +171,19 @@ impl RustParser for RustItemParser {
         }
     }
 
+/// Parses a Rust source string into an Abstract Syntax Tree (AST) and extracts all top-level `ast::Item`s.
+/// This function leverages the `ra_ap_syntax` crate to perform the initial parsing and then delegates the detailed extraction of item-specific information to `parse_all_rust_analyzer`.
+/// It serves as an intermediate step to prepare AST items for further analysis, collecting them into a map of their byte ranges and associated `AnalyzerRange` data.
+///
+/// # Arguments
+///
+/// * `src` - A string slice (`&str`) containing the Rust source code.
+///
+/// # Returns
+///
+/// A `Result<HashMap<TextRange, AnalyzerRange>, ErrorHandling>`:
+/// - `Ok(HashMap<TextRange, AnalyzerRange>)`: A hash map where keys are `TextRange`s of AST items and values are `AnalyzerRange`s containing detailed item information.
+/// - `Err(ErrorHandling)`: If parsing the source string into an AST fails, or if `parse_all_rust_analyzer` encounters an error.
     fn parse_result_items(src: &str) -> Result<HashMap<TextRange, AnalyzerRange>, ErrorHandling> {
         let parse = ra_ap_syntax::SourceFile::parse(src, ra_ap_ide::Edition::Edition2024);
         let items = parse
@@ -142,6 +193,20 @@ impl RustParser for RustItemParser {
         parse_all_rust_analyzer(items)
     }
 
+/// Parses a Rust source string to extract the `ObjectRange` information for the *first* top-level Rust item encountered.
+/// This function first parses all items in the source and then filters to select the very first one, converting its byte range into 1-based line numbers.
+/// It provides a simplified view of the source by focusing solely on the initial major declaration, such as the first function or struct.
+///
+/// # Arguments
+///
+/// * `src` - A string slice (`&str`) containing the Rust source code.
+///
+/// # Returns
+///
+/// A `Result<ObjectRange, ErrorHandling>`:
+/// - `Ok(ObjectRange)`: The `ObjectRange` representing the first parsed Rust item.
+/// - `Err(ErrorHandling::LineOutOfBounds)`: If no Rust items are found in the source string.
+/// - `Err(ErrorHandling)`: For other parsing or conversion errors.
     fn rust_item_parser(src: &str) -> Result<ObjectRange, ErrorHandling> {
         let analyzer: Vec<ObjectRange> = Self::parse_result_items(src)?
             .par_iter()
@@ -168,6 +233,21 @@ impl RustParser for RustItemParser {
         })
     }
 
+/// Attempts to locate the file path for a Rust module based on a given base path and the module's name.
+/// It assumes that module files are named `mod_name.rs` and reside in the same directory as the parent of the `base_path` (e.g., `src/main.rs`'s parent is `src/`, so `mod data;` would look for `src/data.rs`).
+/// This function is useful for dynamically resolving module file paths in Rust projects.
+///
+/// # Arguments
+///
+/// * `base_path` - A `PathBuf` representing the path of the file where the module is declared (e.g., the file containing `mod my_module;`).
+/// * `mod_name` - A `String` representing the name of the module to find (e.g., "my_module").
+///
+/// # Returns
+///
+/// A `Result<Option<PathBuf>, ErrorHandling>`:
+/// - `Ok(Some(PathBuf))`: If the module file is successfully found at the expected location.
+/// - `Ok(None)`: If the module file does not exist.
+/// - `Err(ErrorHandling)`: If an I/O error occurs while checking file existence.
     /// Attempts to find the file path for a Rust module given a base path and the module name.
     /// It assumes the module file will be named `{mod_name}.rs` and located in the same directory as the `base_path`'s parent.
     ///
@@ -198,6 +278,17 @@ impl RustParser for RustItemParser {
     }
 }
 
+/// Computes and returns a vector of byte offsets, where each offset indicates the starting position of a new line within the input source string.
+/// This helper function is crucial for translating byte-based text ranges into human-readable, line-based ranges.
+/// The first element of the vector is always `0`, representing the start of the first line.
+///
+/// # Arguments
+///
+/// * `src` - A string slice (`&str`) representing the source code.
+///
+/// # Returns
+///
+/// A `Vec<usize>`: A vector containing the byte offsets for the start of each line.
 fn compute_line_starts(src: &str) -> Vec<usize> {
     let mut starts = vec![0];
     for (i, b) in src.bytes().enumerate() {
@@ -208,6 +299,18 @@ fn compute_line_starts(src: &str) -> Vec<usize> {
     starts
 }
 
+/// Converts a byte `offset` within a source string to its corresponding 0-based line number.
+/// This utility function performs a binary search on a pre-computed list of line starting byte offsets to efficiently determine which line contains the given offset.
+/// It is commonly used in parsing and analysis tools to map precise character positions back to line-oriented views.
+///
+/// # Arguments
+///
+/// * `offset` - The byte offset (position) within the source string to convert.
+/// * `line_starts` - A slice of `usize` values, where each element is the byte offset of the start of a line.
+///
+/// # Returns
+///
+/// A `usize`: The 0-based line number corresponding to the given `offset`.
 fn offset_to_line(offset: usize, line_starts: &[usize]) -> usize {
     match line_starts.binary_search(&offset) {
         Ok(line) => line,
@@ -215,6 +318,19 @@ fn offset_to_line(offset: usize, line_starts: &[usize]) -> usize {
     }
 }
 
+/// Recursively parses a vector of Rust Abstract Syntax Tree (AST) items, extracting their byte ranges, names, and specific types (e.g., function, struct, module).
+/// This function iterates through different `ra_ap_syntax::ast::Item` variants, such as functions, structs, enums, and modules, to gather detailed metadata.
+/// For nested modules, it recursively calls itself to process their internal items, building a comprehensive `HashMap` that maps each item's `TextRange` to its `AnalyzerRange` information.
+///
+/// # Arguments
+///
+/// * `items` - A `Vec<ra_ap_syntax::ast::Item>` containing the AST items to be analyzed.
+///
+/// # Returns
+///
+/// A `Result<HashMap<TextRange, AnalyzerRange>, ErrorHandling>`:
+/// - `Ok(HashMap<TextRange, AnalyzerRange>)`: A hash map containing `TextRange` as keys and `AnalyzerRange`s (with item type and name) as values for all parsed items.
+/// - `Err(ErrorHandling)`: If an error occurs during recursive calls for nested modules.
 fn parse_all_rust_analyzer(
     items: Vec<ra_ap_syntax::ast::Item>,
 ) -> Result<HashMap<TextRange, AnalyzerRange>, ErrorHandling> {
@@ -549,6 +665,19 @@ fn parse_all_rust_analyzer(
     Ok(analyzer)
 }
 
+/// Lexes a Rust source string to identify and extract information about all types of comments and lifetime indicators.
+/// It tokenizes each line, categorizing comments into single-line, multi-line block starts, and multi-line block ends, as well as lifetime tokens.
+/// The function then performs special handling to correctly link the start and end lines of multi-line block comments, ensuring accurate range reporting.
+///
+/// # Arguments
+///
+/// * `source_vector` - A string slice (`&str`) containing the Rust source code to be analyzed.
+///
+/// # Returns
+///
+/// A `Result<Vec<ObjectRange>, ErrorHandling>`:
+/// - `Ok(Vec<ObjectRange>)`: A vector of `ObjectRange` structs, each representing a detected comment or lifetime indicator with its line range and type.
+/// - `Err(ErrorHandling)`: If string processing fails (e.g., converting to vector of lines or tokenization).
 /// Lexes a Rust source string to identify and extract information about comments.
 /// It tokenizes each line of the source and categorizes comments into single-line block, multi-line block (start and end),
 /// and single-line comments. It also identifies 'LifetimeIndicator' tokens.
@@ -660,6 +789,19 @@ pub fn comment_lexer(source_vector: &str) -> Result<Vec<ObjectRange>, ErrorHandl
     Ok(comment_vector)
 }
 
+/// Removes all whitespace characters from an input `String`.
+/// This function is primarily used to canonicalize strings by stripping out spaces, tabs, and newlines, which can be useful for comparisons or data processing where whitespace is irrelevant.
+/// It iterates through the string's characters, filtering out any that are whitespace, and collects the remainder into a new string.
+///
+/// # Arguments
+///
+/// * `s` - The `String` from which all whitespace characters should be removed.
+///
+/// # Returns
+///
+/// A `Result<String, ErrorHandling>`:
+/// - `Ok(String)`: A new `String` with all whitespace characters filtered out.
+/// - `Err(ErrorHandling)`: While currently infallible, the `Result` type is used for consistency and potential future error handling.
 /// Removes all whitespace characters from a given string.
 /// This function is typically used for canonicalizing strings by stripping unnecessary spaces, tabs, and newlines.
 ///

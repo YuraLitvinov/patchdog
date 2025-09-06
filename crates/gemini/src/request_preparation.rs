@@ -81,6 +81,9 @@ pub struct RequestToAgent {
 } //Req Res = Request Response
 
 impl Context {
+/// Calculates the total character length of all strings within the `external_dependencies` and `old_comment` fields of the current struct instance.
+/// This method is designed to provide an estimated size for contextual data, typically used in token cost calculations for LLMs.
+/// It iterates through both vectors, summing the lengths of each string and returning the cumulative `usize` value.
     /// Calculates the total length of all external dependencies and old comments within the struct.
     /// This is typically used to estimate the size of contextual data.
     ///
@@ -104,6 +107,9 @@ impl Context {
 }
 
 impl SingleFunctionData {
+/// Estimates the token size of the current struct instance by summing the character lengths of its `fn_name`, `context`, and `function_text` fields.
+/// The `context.size()` method is called recursively to include its internal length calculation.
+/// The total character count is then divided by 3, providing a rough `usize` approximation of the token count based on an assumption of 3 characters per token.
     /// Estimates the size of the current struct instance based on the lengths of its `fn_name`, `context`, and `function_text` fields.
     /// The total length is divided by 3, assuming an average of 3 symbols per token for estimation purposes.
     ///
@@ -126,6 +132,9 @@ pub struct MappedRequest {
 }
 
 impl MappedRequest {
+/// Creates a new `MappedRequest` instance, initializing its `remaining_capacity` and an empty `data` vector.
+/// The `remaining_capacity` is determined by dividing the `tokens_per_minute` by `requests_per_minute`, both retrieved from the global configuration via `return_prompt()`.
+/// Returns `Ok(MappedRequest)` with the calculated capacity or an `Err(ErrorHandling)` if configuration retrieval fails.
     /// Creates a new `MappedRequest` instance, initializing its remaining capacity based on token and request limits read from configuration.
     /// The capacity is calculated as `tokens_per_minute / requests_per_minute`.
     ///
@@ -142,6 +151,9 @@ impl MappedRequest {
         })
     }
 
+/// Attempts to add a `Request` object to the `MappedRequest`'s internal `data` vector.
+/// It checks if the estimated size of the `request_data` (calculated by `request_data.data.size()`) is less than or equal to the `remaining_capacity`.
+/// If the request fits, it's added to the vector, and `remaining_capacity` is updated; otherwise, it returns `false` indicating the request could not be added.
     /// Attempts to add a `Request` to the internal data vector if its size does not exceed the `remaining_capacity`.
     /// If the request fits, it's added, and the `remaining_capacity` is updated.
     ///
@@ -168,6 +180,9 @@ impl MappedRequest {
 }
 
 impl Default for MappedRequest {
+/// Provides a default instance of the struct by calling its `new()` constructor and unwrapping the `Result`.
+/// This implementation assumes that `new()` will always successfully initialize the struct in a default context.
+/// Returns a fully initialized `Self` instance.
     /// Provides a default instance of `Self` by calling the `new()` constructor and unwrapping its result.
     /// This implementation assumes that `new()` will always succeed in a default context.
     ///
@@ -180,6 +195,9 @@ impl Default for MappedRequest {
 }
 
 impl Display for MappedRequest {
+/// Implements the `fmt` trait for the struct, enabling its display formatting.
+/// It uses the pretty-print debug formatter (`{self:#?}`) to write a detailed, multi-line representation of the struct's internal state into the provided formatter.
+/// Returns a `std::fmt::Result` indicating the success or failure of the formatting operation.
     /// Implements the `fmt` trait for the struct, allowing it to be formatted for display.
     /// It uses the `Debug` formatter (`{self:#?}`) to write a pretty-printed debug representation of `self` to the formatter.
     ///
@@ -203,6 +221,9 @@ pub struct PreparingRequests {
 }
 
 impl PreparingRequests {
+/// Creates a new `PreparingRequests` instance, initializing its `remaining_capacity` and an empty `data` vector.
+/// The capacity is calculated by dividing `tokens_per_minute` by `requests_per_minute` (from `return_prompt()`), then subtracting the character lengths of the configured `gemini_model` and `prompt`.
+/// Returns `Ok(PreparingRequests)` with the calculated capacity or an `Err(ErrorHandling)` if configuration retrieval fails.
     /// Creates a new `PreparingRequests` instance.
     /// It initializes the `remaining_capacity` by calculating it based on token and request limits, subtracting the lengths of the model name and prompt from the configuration.
     /// The `data` vector is initialized as empty.
@@ -222,6 +243,9 @@ impl PreparingRequests {
         })
     }
 
+/// Attempts to add a `SingleFunctionData` item to the `PreparingRequests`'s internal `data` vector.
+/// It checks if the estimated size of the `request_data` (calculated by `request_data.size()`) is less than or equal to the `remaining_capacity`.
+/// If the item fits, it's added to the vector, and `remaining_capacity` is updated; otherwise, it returns `false` indicating the item could not be added.
     /// Attempts to add a `SingleFunctionData` item to the internal `data` vector if its size does not exceed the `remaining_capacity`.
     /// If the item fits, it's added, and the `remaining_capacity` is reduced by the item's size.
     ///
@@ -248,6 +272,9 @@ impl PreparingRequests {
 }
 
 impl Default for PreparingRequests {
+/// Provides a default instance of the struct by calling its `new()` constructor and unwrapping the `Result`.
+/// This implementation assumes that `new()` will always successfully initialize the struct in a default context.
+/// Returns a fully initialized `Self` instance.
     /// Provides a default instance of `Self` by calling the `new()` constructor and unwrapping its result.
     /// This implementation assumes that `new()` will always succeed in a default context.
     ///
@@ -260,6 +287,9 @@ impl Default for PreparingRequests {
 }
 
 impl Display for PreparingRequests {
+/// Implements the `fmt` trait for the struct, enabling its display formatting.
+/// It uses the pretty-print debug formatter (`{self:#?}`) to write a detailed, multi-line representation of the struct's internal state into the provided formatter.
+/// Returns a `std::fmt::Result` indicating the success or failure of the formatting operation.
     /// Implements the `fmt` trait for the struct, allowing it to be formatted for display.
     /// It uses the `Debug` formatter (`{self:#?}`) to write a pretty-printed debug representation of `self` to the formatter.
     ///
@@ -277,6 +307,9 @@ impl Display for PreparingRequests {
 }
 
 impl Default for RequestToAgent {
+/// Provides a default instance of the struct by calling its `new()` constructor and unwrapping the `Result`.
+/// This implementation assumes that `new()` will always successfully initialize the struct in a default context.
+/// Returns a fully initialized `Self` instance.
     /// Provides a default instance of `Self` by calling the `new()` constructor and unwrapping its result.
     /// This implementation assumes that `new()` will always succeed in a default context.
     ///
@@ -290,6 +323,9 @@ impl Default for RequestToAgent {
 
 #[allow(async_fn_in_trait)]
 impl RequestToAgent {
+/// Creates a new `RequestToAgent` instance, specifically initializing its `preparing_requests` field.
+/// The `remaining_capacity` for `preparing_requests` is calculated by dividing the configured `tokens_per_minute` by `requests_per_minute`, retrieved from `return_prompt()`.
+/// Returns `Ok(RequestToAgent)` with the initialized `preparing_requests` or an `Err(ErrorHandling)` if configuration retrieval fails.
     /// Creates a new `GoogleGemini` instance, initializing its `preparing_requests` field.
     /// The `remaining_capacity` for `preparing_requests` is calculated based on token and request limits retrieved from configuration.
     ///
@@ -308,6 +344,9 @@ impl RequestToAgent {
         })
     }
 
+/// Asynchronously sends batches of prepared requests (`WaitForTimeout`) to the appropriate Large Language Model (LLM).
+/// It iterates through each `WaitForTimeout` object, serializes the enclosed `SingleFunctionData` to JSON, and dispatches it via `AiRequest::switch_llm`.
+/// Responses are collected, and a one-minute pause is introduced between batches (if multiple exist) to respect API rate limits, returning a vector of LLM responses or an `ErrorHandling` upon failure.
     pub async fn send_batches(request: &Vec<WaitForTimeout>) -> Result<Vec<String>, ErrorHandling> {
         let mut response = vec![];
         let one_minute = time::Duration::from_secs(61);
@@ -334,6 +373,9 @@ impl RequestToAgent {
         Ok(response)
     }
 
+/// Manages and batches incoming `MappedRequest` objects into `WaitForTimeout` groups to adhere to configured requests-per-minute limits.
+/// It retrieves the `requests_per_minute` from the global configuration via `return_prompt()` and divides the input `batch` accordingly.
+/// Returns a `Result<Vec<WaitForTimeout>, ErrorHandling>` containing a vector of `WaitForTimeout` structs, each holding a subset of requests suitable for sending within the time limit, or an error if configuration retrieval fails.
     /// Manages and batches incoming `MappedRequest` objects into `WaitForTimeout` groups based on configured requests per minute.
     /// If the total number of requests exceeds the per-minute limit, it splits them into multiple `WaitForTimeout` batches.
     /// Otherwise, all requests are placed into a single batch.
@@ -383,6 +425,9 @@ impl RequestToAgent {
         Ok(await_response)
     }
 
+/// Prepares a vector of `Request` objects by mapping them into `MappedRequest` batches, optimizing for LLM API token capacity.
+/// It iterates through individual requests, adding them to the current `MappedRequest` batch until its `remaining_capacity` is exceeded.
+/// When a batch is full or a request doesn't fit, the current batch is finalized, a new `MappedRequest` is initialized, and the process continues, returning `Ok(Vec<MappedRequest>)` or an `Err(ErrorHandling)`.
     /// Prepares a vector of `Request` objects into batches of `MappedRequest` instances.
     /// It iterates through the incoming requests and attempts to add them to the current `MappedRequest` batch.
     /// If a request does not fit into the current batch (due to capacity limits), the current batch is finalized and added to `batches`,

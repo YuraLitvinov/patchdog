@@ -27,6 +27,22 @@ pub trait Files {
 }
 
 impl Files for FileExtractor {
+/// Inserts a new line of code or comment into a vector representing file content at a specified line index, and then writes the entire modified content back to the original file.
+/// This function is essential for programmatic modification of source files, ensuring that new content is placed precisely within the existing structure.
+/// It handles the creation or overwriting of the file and ensures proper line-by-line writing, making it a robust utility for file manipulation.
+///
+/// # Arguments
+///
+/// * `path` - The `PathBuf` specifying the file to be written to.
+/// * `source` - A mutable `Vec<String>` representing the lines of the file content, which will be modified in-place.
+/// * `line_index` - The 1-based line number where `changed_element` should be inserted.
+/// * `changed_element` - The `String` content to be inserted into the file.
+///
+/// # Returns
+///
+/// A `Result<(), ErrorHandling>`:
+/// - `Ok(())`: If the write operation completes successfully.
+/// - `Err(ErrorHandling)`: If an I/O error occurs during file creation or writing.
     /// Inserts a given `changed_element` string into a vector of source code lines at a specified `line_index` and then writes the modified content back to the original file path.
     /// This utility function is crucial for precisely inserting new lines of code or comments into an existing file structure.
     /// It handles file creation/overwriting and ensures proper line-by-line writing to the file system.
@@ -56,10 +72,36 @@ impl Files for FileExtractor {
         Ok(())
     }
 
+/// Converts a multi-line string into a vector of individual strings, where each element in the vector corresponds to a single line from the original input.
+/// This function is useful for processing text content line by line, such as parsing configuration files or source code.
+/// It iterates through the input string's lines and collects them into a new `Vec<String>`.
+///
+/// # Arguments
+///
+/// * `source` - A string slice (`&str`) containing the multi-line content.
+///
+/// # Returns
+///
+/// A `Vec<String>`: A vector where each string represents a line from the input `source`.
     fn string_to_vector(source: &str) -> Vec<String> {
         source.lines().map(|line| line.to_string()).collect()
     }
 
+/// Inserts a new string into a vector of source code lines, automatically preserving the indentation of the first line to maintain code formatting.
+/// This function calculates the leading whitespace from the initial line of the source and applies it to the new content before insertion.
+/// The `push_where` parameter determines whether the new content is prepended to the beginning or appended to the end of the `source_clone` vector.
+///
+/// # Arguments
+///
+/// * `str_source` - A slice of `String`s representing the original source code lines.
+/// * `push` - The `String` content to be inserted.
+/// * `push_where` - A `bool` flag: `true` to insert at the beginning, `false` to insert at the end.
+///
+/// # Returns
+///
+/// A `Result<Vec<String>, ErrorHandling>`:
+/// - `Ok(Vec<String>)`: A new vector of strings with the `push` content inserted and correctly indented.
+/// - `Err(ErrorHandling)`: If `str_source` is empty or whitespace calculation fails.
     /// Inserts a given string into a vector of strings while preserving the original indentation.
     /// It calculates the whitespace from the first line of `str_source` and prepends it to `push`.
     /// The `push_where` boolean determines whether to insert the new string at the beginning (`true`) or the end (`false`) of the `source_clone` vector.
@@ -98,6 +140,21 @@ impl Files for FileExtractor {
         Ok(source_clone)
     }
 
+/// Checks if a given `line_number` falls within the line range of any `ObjectRange` present in a slice of parsed Rust items.
+/// This function is primarily used to determine if a specific line of code is part of an already identified Rust entity, such as a function, struct, or module.
+/// It iterates through the provided `ObjectRange`s and compares the `line_number` against their `start` and `end` line ranges.
+///
+/// # Arguments
+///
+/// * `parsed` - A slice of `ObjectRange` structs, each defining a Rust item's line boundaries.
+/// * `line_number` - The 1-based line number to check for containment within an object's range.
+///
+/// # Returns
+///
+/// A `Result<bool, ErrorHandling>`:
+/// - `Ok(false)`: If the `line_number` is found to be within the range of at least one `ObjectRange`.
+/// - `Ok(true)`: If the `line_number` is not contained within any of the provided `ObjectRange`s.
+/// - `Err(ErrorHandling)`: This function currently does not explicitly return errors, but the signature allows for future error propagation.
     /// Checks if a given `line_number` falls within the line range of any `ObjectRange` in the `parsed` slice.
     /// This function is typically used to determine if a specific line belongs to an existing parsed Rust item (like a function, struct, etc.).
     ///

@@ -16,6 +16,15 @@ pub mod cli;
 
 #[cfg(test)]
 pub mod tests;
+/// The main asynchronous entry point of the application, marked with `#[tokio::main]`.
+/// This function is responsible for initializing the application's environment, including parsing command-line arguments, setting up optional debug tracing, and loading environment variables from a `.env` file.
+/// It then delegates the core business logic to `cli_patch_to_agent`, passing the initialized analyzer data and parsed commands.
+///
+/// # Returns
+///
+/// A `Result<(), ErrorBinding>`:
+/// - `Ok(())`: Indicates successful execution of the application's main logic.
+/// - `Err(ErrorBinding)`: Signifies an error during setup or the execution of `cli_patch_to_agent`.
 /// The main entry point for the application, marked with `#[tokio::main]` for asynchronous execution.
 /// It initializes dotenv for environment variables and tracing_subscriber for logging.
 /// The core logic is delegated to `cli_patch_to_agent()`.
@@ -37,6 +46,13 @@ async fn main() -> Result<(), ErrorBinding> {
     Ok(())
 }
 
+/// Sets up and configures the application's tracing and logging infrastructure using OpenTelemetry and `tracing-subscriber`.
+/// It initializes an OTLP exporter to send telemetry data via gRPC and creates a `SdkTracerProvider` with a `BatchSpanProcessor` for efficient span processing.
+/// Additionally, it configures two `tracing-subscriber` layers: one for OpenTelemetry telemetry and another for formatted console logs, allowing log levels to be controlled via the `RUST_LOG` environment variable and disabling specific noisy targets.
+///
+/// # Returns
+///
+/// An `SdkTracerProvider`: The configured OpenTelemetry `SdkTracerProvider` instance, which can be used to create new tracers.
 fn setup_tracing() -> SdkTracerProvider {
     // Initialize OTLP exporter using gRPC (Tonic)
     let exporter = opentelemetry_otlp::SpanExporter::builder()

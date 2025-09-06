@@ -17,6 +17,9 @@ pub enum Git2ErrorHandling {
     PatchExportError,
 }
 impl From<git2::Error> for Git2ErrorHandling {
+/// Implements the `From` trait to convert a `git2::Error` into a `Git2ErrorHandling::Git2Error` variant.
+/// This conversion standardizes the handling of Git-related errors within the application's custom error system.
+/// Returns a `Git2ErrorHandling::Git2Error` containing the original `git2::Error`.
     /// Implements the `From` trait to convert a `git2::Error` into a `Git2ErrorHandling::Git2Error`.
     /// This provides a standardized way to integrate `git2` errors into the custom error handling system.
     ///
@@ -130,6 +133,9 @@ pub fn get_easy_hunk(
 }
 
 /// Extracts the new file paths from a Git `Diff` object.
+/// It iterates through each `delta` (change) in the diff and retrieves the path of the `new_file` associated with that change.
+/// Returns `Ok(Vec<String>)` containing a vector of file paths (including paths of modified files' new versions) or an `Err(Git2ErrorHandling)` if path extraction fails.
+/// Extracts the new file paths from a Git `Diff` object.
 /// It iterates through the deltas (changes) in the diff and collects the new file path for each delta.
 ///
 /// # Arguments
@@ -154,6 +160,9 @@ fn get_filenames(diff: &Diff<'static>) -> Result<Vec<String>, Git2ErrorHandling>
     Ok(vector_of_filenames)
 }
 
+/// Processes a Git `Diff` object to extract detailed `Hunk` information, associating changes with specific lines and filenames.
+/// It iterates through each delta and its hunks within the diff, determining the `ChangeType` (Add, Modify) for individual lines.
+/// Returns `Ok(Vec<Hunk>)` containing a vector of `Hunk` structs, each representing a changed line with its type, line number, and filename, or an `Err(Git2ErrorHandling)` if parsing fails.
 fn git_get_hunks(
     diff: &Diff<'static>,
     vector_of_filenames: Vec<String>,

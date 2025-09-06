@@ -50,6 +50,9 @@ pub struct ResponseForm {
     new_comment: String,
 }
 
+/// Orchestrates the entire patch processing workflow for command-line interface (CLI) interactions.
+/// It reads a specified patch file, filters code changes based on configured file exclusions and Rust item types/names, and generates `Request` objects for an LLM.
+/// If requests are generated, it dispatches them to the `call` function (with a recursion limit) and then writes the LLM's responses back to the relevant files, handling errors throughout the process.
 pub async fn cli_patch_to_agent(
     analyzer_data: AnalyzerData,
     commands: Mode,
@@ -90,6 +93,20 @@ pub async fn cli_patch_to_agent(
     Ok(())
 }
 
+/// Asynchronously handles a batch of `Request`s by preparing them for an external agent, sending them, and processing the responses.
+/// It first maps incoming requests into a pool, then batches them for sending, and matches the received responses back to the original requests.
+/// This function includes a retry mechanism, recursively calling itself up to 3 times for any requests that did not receive a valid response, to ensure robustness in communication with the agent.
+///
+/// # Arguments
+///
+/// * `request` - A `Vec<Request>` containing the original requests to be processed.
+/// * `call_limiter` - A mutable reference to a `usize` used to limit the number of recursive retry calls for failed requests.
+///
+/// # Returns
+///
+/// A `Result<Vec<ResponseForm>, ErrorBinding>`:
+/// - `Ok(Vec<ResponseForm>)`: A vector of successfully processed responses, where each `ResponseForm` contains the original request data and the agent's new comment.
+/// - `Err(ErrorBinding)`: If any critical error occurs during request preparation, sending, response matching, or internal processing.
 pub async fn call(
     request: Vec<Request>,
     call_limiter: &mut usize,
@@ -136,6 +153,19 @@ pub async fn call(
     }
 }
 
+/// Extracts specific JSON-like response objects from a raw response string using a predefined regular expression.
+/// This function is designed to robustly parse responses, even if they are embedded within larger, potentially malformed text, by identifying patterns that match expected `uuid` and `new_comment` fields.
+/// Each successfully extracted and deserialized object is collected into a vector of `RawResponse` structs.
+///
+/// # Arguments
+///
+/// * `response` - A string slice (`&str`) containing the raw response text from which to cherry-pick data.
+///
+/// # Returns
+///
+/// A `Result<Vec<RawResponse>, ErrorHandling>`:
+/// - `Ok(Vec<RawResponse>)`: A vector of `RawResponse` objects parsed from the input string.
+/// - `Err(ErrorHandling)`: If the regular expression fails to compile or if deserialization of a captured string fails.
 pub fn cherrypick_response(response: &str) -> Result<Vec<RawResponse>, ErrorHandling> {
     let re = Regex::new(REGEX)?;
     let response_cherrypicked = re
