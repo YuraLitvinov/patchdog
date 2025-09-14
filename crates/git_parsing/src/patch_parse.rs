@@ -45,21 +45,6 @@ impl Hunk {
     }
 }
 
-/// Matches parsed Rust code items with hunks from a Git patch.
-/// It first identifies unique Rust files involved in the patch, then retrieves all hunks.
-/// For each unique file, it finds the corresponding hunk and collects them.
-/// Hunks without a matching file are returned as `ChangeType::Remove` which are mitigated later.
-///
-/// # Arguments
-///
-/// * `relative_path` - A reference to a `Path` indicating the base directory for relative file paths.
-/// * `patch_src` - A reference to a `git2::Diff` object representing the Git patch.
-///
-/// # Returns
-///
-/// A `Result<Vec<Hunk>, Git2ErrorHandling>`:
-/// - `Ok(Vec<Hunk>)`: A vector of `Hunk` structs, each representing a change in a Rust file that corresponds to a parsed item.
-/// - `Err(Git2ErrorHandling)`: If there are issues reading filenames, getting hunks, or other Git2-related errors.
 pub fn match_patch_with_parse(
     relative_path: &Path,
     patch_src: &Diff<'static>,
@@ -68,7 +53,7 @@ pub fn match_patch_with_parse(
     let changed = get_filenames(patch_src)?;
     let mut hunks = git_get_hunks(patch_src, changed)?;
     hunks.sort_by_key(|a| a.filename());
-    let changes: Vec<Hunk> = list_of_unique_files
+    Ok(list_of_unique_files
         .par_iter()
         .map(|each_unique| {
             let collected = hunks.par_iter().find_first(|each| {
@@ -86,8 +71,7 @@ pub fn match_patch_with_parse(
                 }
             }
         })
-        .collect::<Vec<Hunk>>();
-    Ok(changes)
+        .collect::<Vec<Hunk>>())
 }
 
 /// Extracts hunks from a Git patch that correspond to a specific file path.

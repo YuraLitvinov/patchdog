@@ -80,9 +80,8 @@ pub async fn cli_patch_to_agent(
         &excluded_paths,
         analyzer_data,
     )?;
-    println!("{:#?}", request);
     //Here occurs check for pending changes
-    /*if request.is_empty() {
+    if request.is_empty() {
         event!(Level::INFO, "No requests");
     } else {
         event!(Level::INFO, "Requests length: {}", &request.len());
@@ -95,7 +94,7 @@ pub async fn cli_patch_to_agent(
             responses_collected.len()
         );
         write_to_file(responses_collected)?;
-    }*/
+    }
     Ok(())
 }
 
