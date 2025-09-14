@@ -48,17 +48,6 @@ pub struct ResponseForm {
     new_comment: String,
 }
 
-/// Orchestrates the entire process of applying a patch to a codebase, generating AI-based code suggestions, and writing them back to files. This asynchronous function takes a patch file, analyzes the changes, filters them based on exclusion rules, and then generates `Request` objects for an AI agent.
-/// It then calls the AI agent, collects the responses, and writes the suggested new comments or code modifications to the corresponding files. The function includes a call limit to prevent infinite recursion in case of persistent AI failures.
-///
-/// # Arguments
-///
-/// * `analyzer_data` - `AnalyzerData` providing context for code analysis.
-/// * `commands` - `Mode` struct containing command-line arguments, including the patch file path, target Rust types, and names, and debug flag.
-///
-/// # Returns
-///
-/// A `Result<(), ErrorBinding>` indicating the success or failure of the entire patch-to-agent and write-back process.
 pub async fn cli_patch_to_agent(
     analyzer_data: AnalyzerData,
     commands: Mode,
@@ -80,9 +69,8 @@ pub async fn cli_patch_to_agent(
         &excluded_paths,
         analyzer_data,
     )?;
-    println!("{:#?}", request);
     //Here occurs check for pending changes
-    /*if request.is_empty() {
+    if request.is_empty() {
         event!(Level::INFO, "No requests");
     } else {
         event!(Level::INFO, "Requests length: {}", &request.len());
@@ -95,7 +83,7 @@ pub async fn cli_patch_to_agent(
             responses_collected.len()
         );
         write_to_file(responses_collected)?;
-    }*/
+    }
     Ok(())
 }
 
