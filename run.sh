@@ -13,9 +13,8 @@ ASSIGNEE=$(jq -r '.author.login'  <<< "$PR_JSON")
 git config user.email "$COMMIT_EMAIL" 
 git config user.name "$COMMIT_NAME"
 
-git fetch origin "$BASE_BRANCH":"$BASE_BRANCH"
 git fetch origin "$HEAD_BRANCH":"$HEAD_BRANCH"
-git checkout "$HEAD_BRANCH"
+git switch "$HEAD_BRANCH"
 
 #Test if PR contains conflict and abort any further actions
 git merge --no-commit --no-ff origin/"$BASE_BRANCH" || exit 1
@@ -28,14 +27,14 @@ fi
 #Download and run latest release
 curl -L -o patchdog-linux-x86_64 https://github.com/YuraLitvinov/patchdog/releases/latest/download/patchdog-linux-x86_64
 chmod +x patchdog-linux-x86_64
-git diff $BASE_BRANCH...$HEAD_BRANCH > base_head.patch
+git diff origin/$BASE_BRANCH...origin/$HEAD_BRANCH > base_head.patch
 ./patchdog-linux-x86_64 --file-patch base_head.patch
 #Cleanup artifacts
 rm base_head.patch && rm patchdog-linux-x86_64
 
 #Create a unique pull request
 PATCHDOG_BRANCH="patchdog-$(date +%s)"
-git checkout -b "$PATCHDOG_BRANCH"
+git switch -c "$PATCHDOG_BRANCH"
 git add . 
 
 if ! git diff --cached --quiet; then
