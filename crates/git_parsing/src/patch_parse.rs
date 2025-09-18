@@ -45,6 +45,16 @@ impl Hunk {
     }
 }
 
+/// Matches hunks from a Git patch to a list of unique, non-repeating files, typically Rust files. 
+/// It first extracts unique file paths and all relevant hunks from the patch, then attempts to find the corresponding hunk for each unique file. 
+/// If a hunk is found for a file, it is included; otherwise, a placeholder 'Remove' hunk is created, indicating a potential file removal or an unmatched entry to be handled later. 
+/// 
+/// # Arguments
+/// * `relative_path` - A reference to a `Path` for resolving file paths.
+/// * `patch_src` - A reference to the `git2::Diff` object representing the Git patch.
+/// 
+/// # Returns
+/// A `Result<Vec<Hunk>, Git2ErrorHandling>` containing a vector of matched `Hunk` objects or placeholder 'Remove' hunks, or an error if patch processing fails.
 pub fn match_patch_with_parse(
     relative_path: &Path,
     patch_src: &Diff<'static>,
@@ -74,6 +84,16 @@ pub fn match_patch_with_parse(
         .collect::<Vec<Hunk>>())
 }
 
+/// Extracts a filtered list of `Hunk` objects from a Git patch that specifically pertain to a given file path.
+/// It first retrieves all filenames and all hunks present in the `patch_src`, then iterates through these hunks, collecting only those whose filename exactly matches `at_file_path`.
+/// The function aims to provide all relevant change hunks for a single specified file.
+///
+/// # Arguments
+/// * `patch_src` - A reference to a `git2::Diff` object representing the Git patch.
+/// * `at_file_path` - A string slice (`&str`) representing the target file path.
+///
+/// # Returns
+/// A `Result<Vec<Hunk>, Git2ErrorHandling>` containing a vector of `Hunk` structs that apply to the specified file, or an error if processing the patch fails.
 /// Extracts hunks from a Git patch that correspond to a specific file path.
 /// It first gets all filenames and hunks from the patch, then filters these hunks to include only those belonging to the specified `at_file_path`.
 /// The resulting vector of hunks is sorted by filename.
