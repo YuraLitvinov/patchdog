@@ -13,11 +13,9 @@ use ra_ap_hir_def::{
 };
 use ra_ap_project_model::{CargoConfig, ProjectManifest, ProjectWorkspace, RustLibSource};
 
-#[allow(unused)]
 use ra_ap_hir_def::{
     expr_store::Body,
-    hir::Expr::{self, *},
-    lang_item::LangItemTarget,
+    hir::Expr,
     nameres::crate_def_map,
 };
 use ra_ap_ide::{AnalysisHost, RootDatabase, TextRange};
@@ -73,6 +71,7 @@ pub fn init_analyzer() -> AnalyzerData {
             }
         })
         .collect::<Vec<ra_ap_base_db::Crate>>();
+    
     AnalyzerData { db, vfs, krates }
 }
 

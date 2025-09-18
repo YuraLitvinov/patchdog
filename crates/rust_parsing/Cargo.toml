@@ -4,8 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-proc-macro2 = { version = "1", features = ["span-locations"] }
-quote = { workspace = true }
 serde = { workspace = true }
 dotenv = { workspace = true }
 serde_json = { workspace = true }
