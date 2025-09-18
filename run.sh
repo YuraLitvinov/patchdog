@@ -1,6 +1,14 @@
 #!/bin/bash
 set -e
 
+
+#Set environment variables
+PR_NUMBER=$(jq -r .issue.number "$GITHUB_EVENT_PATH")
+PR_JSON=$(gh pr view "$PR_NUMBER" --json headRefName,baseRefName,author,url)
+HEAD_BRANCH=$(jq -r '.headRefName'  <<< "$PR_JSON")
+BASE_BRANCH=$(jq -r '.baseRefName'  <<< "$PR_JSON")
+ASSIGNEE=$(jq -r '.author.login'  <<< "$PR_JSON")
+
 #Configure user
 git config user.email "$COMMIT_EMAIL" 
 git config user.name "$COMMIT_NAME"
@@ -9,7 +17,6 @@ git fetch origin ${BASE_BRANCH}
 
 #Test if PR contains conflict and abort any further actions
 git merge --no-commit --no-ff origin/"$BASE_BRANCH" || exit 1
-
 if [ -f .git/MERGE_HEAD ]; then
   git merge --abort
 fi
@@ -23,11 +30,14 @@ git diff origin/$BASE_BRANCH...$HEAD_BRANCH > base_head.patch
 rm base_head.patch && rm patchdog-linux-x86_64
 
 #Create a unique pull request
-PATCHDOG_BRANCH="patchdog-$(uuidgen)"
+PATCHDOG_BRANCH="patchdog-$(date +%s)"
 git checkout -b "$PATCHDOG_BRANCH"
 git add . 
 
-git commit -m "Patchdog-included changes for $HEAD_BRANCH"
+if ! git diff --cached --quiet; then
+  git commit -m "Patchdog-included changes for $HEAD_BRANCH"
+fi
+
 git push origin $PATCHDOG_BRANCH
 gh pr create \
   --title "Patchdog merge into $HEAD_BRANCH" \

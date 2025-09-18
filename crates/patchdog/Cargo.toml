@@ -1,6 +1,6 @@
 [package]
 name = "patchdog"
-version = "1.2.62"
+version = "1.2.63"
 edition = "2024"
 
 [dependencies]
