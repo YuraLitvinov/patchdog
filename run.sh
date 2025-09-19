@@ -12,8 +12,8 @@ ASSIGNEE=$(jq -r '.author.login'  <<< "$PR_JSON")
 #Configure user
 git config user.email "$COMMIT_EMAIL" 
 git config user.name "$COMMIT_NAME"
-
-git switch "$HEAD_BRANCH"
+git stash && git switch "$HEAD_BRANCH"
+git pull origin "$HEAD_BRANCH"
 
 #Test if PR contains conflict and abort any further actions
 git merge --no-commit --no-ff origin/"$BASE_BRANCH" || exit 1
@@ -25,9 +25,6 @@ fi
 curl -L -o patchdog-linux-x86_64 https://github.com/YuraLitvinov/patchdog/releases/latest/download/patchdog-linux-x86_64
 chmod +x patchdog-linux-x86_64
 git diff $BASE_BRANCH...$HEAD_BRANCH > base_head.patch
-echo $BASE_BRANCH
-echo $HEAD_BRANCH
-echo $ASSIGNEE
 ./patchdog-linux-x86_64 --file-patch base_head.patch
 #Cleanup artifacts
 rm base_head.patch && rm patchdog-linux-x86_64
@@ -48,4 +45,3 @@ gh pr create \
     --base "$HEAD_BRANCH" \
     --assignee "$ASSIGNEE" \
     --draft
-

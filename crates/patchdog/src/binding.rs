@@ -42,6 +42,7 @@ pub struct Difference {
     pub line: Vec<usize>,
 }
 
+#[derive(Debug, Clone)]
 pub struct LocalChange {
     pub filename: PathBuf,
     pub range: Range<usize>,
@@ -99,7 +100,7 @@ pub fn changes_from_patch(
         .iter()
         .filter_map(|change| {
             //Here we only allow files, that are not in the config.yaml-Patchdog_settings-excluded_files
-            if is_file_allowed(&change.filename, file_exclude).ok()? {
+            if !is_file_allowed(&change.filename, file_exclude).ok()? {
                 let source = fs::read_to_string(&change.filename).ok()?;
                 let parsed_object = RustItemParser::parse_all_rust_items(&source)
                     .ok()?
