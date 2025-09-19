@@ -33,11 +33,12 @@ rm base_head.patch && rm patchdog-linux-x86_64
 PATCHDOG_BRANCH="patchdog-$(date +%s)"
 git switch -c "$PATCHDOG_BRANCH"
 git add . 
-git commit -m "Patchdog-included changes for $HEAD_BRANCH"
+if ! git diff --cached --quiet; then
+    git commit -m "Patchdog-included changes for $HEAD_BRANCH"
+fi
 git push origin "$PATCHDOG_BRANCH"
 
 # Authenticate GH CLI and create PR
-echo "$GH_TOKEN" | gh auth login --with-token
 gh pr create \
     --title "Patchdog merge into $HEAD_BRANCH" \
     --body "PR initialized by patchdog" \
