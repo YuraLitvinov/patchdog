@@ -200,7 +200,6 @@ fn resolve_call_expr(sema: &Semantics<'_, RootDatabase>, call: &ast::CallExpr) -
         .and_then(|e| ast::PathExpr::cast(e.syntax().clone()))
         && let Some(path) = path_expr.path()
     {
-        println!("{:#?}", path);
         let catch_panic = std::panic::catch_unwind(AssertUnwindSafe(|| sema.resolve_path(&path)));
         if let Some(ra_ap_hir::PathResolution::Def(ra_ap_hir::ModuleDef::Function(f))) =
             catch_panic.ok()?
@@ -221,7 +220,6 @@ fn resolve_method_call_expr(
         .and_then(|e| ast::PathExpr::cast(e.syntax().clone()))
         && let Some(path) = path_expr.path()
     {
-        println!("{:#?}", path);
         let catch_panic = std::panic::catch_unwind(AssertUnwindSafe(|| sema.resolve_path(&path)));
         if let Some(ra_ap_hir::PathResolution::Def(ra_ap_hir::ModuleDef::Function(f))) =
             catch_panic.ok()?
