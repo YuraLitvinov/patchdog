@@ -3,7 +3,7 @@ mod tests {
     use gemini::request_preparation::RawResponse;
     use regex::Regex;
     use rust_parsing::ErrorHandling;
-    use rust_parsing::error::{InvalidIoOperationsSnafu};
+    use rust_parsing::error::InvalidIoOperationsSnafu;
     use rust_parsing::file_parsing::{FileExtractor, Files, REGEX};
     use rust_parsing::object_range::Name;
     use rust_parsing::{
@@ -52,8 +52,7 @@ mod tests {
         let parsed = RustItemParser::parse_all_rust_items(&source).expect("Parsing failed");
         for object in parsed {
             let obj_type = object.names.type_name.clone();
-            if obj_type == "impl".to_string() {
-            }
+            if obj_type == "impl".to_string() {}
         }
     }
 
@@ -98,7 +97,7 @@ mod tests {
     const _JSON: &str = r#"{
   "files": [
     {
-      "filename": "/home/yurii-sama/patchdog/crates/gemini/src/lib.rs",
+      "filename": "crates/gemini/src/lib.rs",
       "types": {
         "fn": [
           {
@@ -168,25 +167,25 @@ mod tests {
         //let deserial_out = serde_json::from_str::<PathObject>(output).expect("err failed to parse from json PathObject");
     }
 
-
-    #[test] 
-    fn test_paths () {
-        let file_path = fs::canonicalize("/home/yurii-sama/patchdog/crates/patchdog/src/tests.rs").unwrap();
+    #[test]
+    fn test_paths() {
+        let mut dir = env::current_dir().unwrap();
+        dir.pop();
+        dir.pop();
+        let file_path = dir
+            .join("crates/patchdog/src/tests.rs")
+            .display()
+            .to_string();
         let more_paths = [
-    "/home/yurii-sama/patchdog/tests/",
-    "/home/yurii-sama/patchdog/crates/patchdog/src/tests.rs",
-    "/home/yurii-sama/patchdog/crates/rust_parsing/src/error.rs",
-        ];
-        let starts = more_paths.iter().all(|path| Path::new(path).starts_with(&file_path));
-        if starts == false {
-            for path in more_paths.iter() {
-                if Path::new(path) == file_path {
-                    println!("{}", path);
-                }
-            }
-        }
-        println!("{}", starts);
-
-        assert_eq!(true,false);
+            "tests/",
+            "crates/patchdog/src/tests.rs",
+            "crates/**/src/main.rs",
+        ]
+        .iter()
+        .map(|s| dir.join(s).display().to_string())
+        .collect::<Vec<String>>();
+        let val = crate::binding::is_file_allowed(&Path::new(&file_path), &more_paths).unwrap();
+        println!("is file_allowed: {:?}", val);
+        assert_eq!(false, true);
     }
 }

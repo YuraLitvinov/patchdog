@@ -17,7 +17,6 @@ use serde::Deserialize;
 use serde::Serialize;
 use snafu::ResultExt;
 use std::collections::HashMap;
-use std::path::Path;
 use std::{env, fs, path::PathBuf};
 use tracing::{Level, event};
 
@@ -65,14 +64,14 @@ pub async fn cli_patch_to_agent(
 ) -> Result<(), ErrorBinding> {
     //Mode accepts type and name of the object for the sake of debugging. It autodefaults to any fn
     let patch = binding::patch_data_argument(commands.file_patch)?;
-    let parameters = ai_interactions::return_prompt()?
-        .patchdog_settings;
+    let parameters = ai_interactions::return_prompt()?.patchdog_settings;
     event!(Level::INFO, "type: {:#?}", parameters.affected_object_types);
     let dir = env::current_dir()?;
-    let excluded_paths = parameters.excluded_files
+    let excluded_paths = parameters
+        .excluded_files
         .par_iter()
-        .map(|path| fs::canonicalize(dir.join(Path::new(path))).unwrap())
-        .collect::<Vec<PathBuf>>();
+        .map(|path| dir.join(path).display().to_string())
+        .collect::<Vec<String>>();
     let request = changes_from_patch(
         patch,
         parameters.affected_object_types,
@@ -80,6 +79,7 @@ pub async fn cli_patch_to_agent(
         &excluded_paths,
         analyzer_data,
     )?;
+    println!("request: {:#?}", request);
     //Here occurs check for pending changes
     if request.is_empty() {
         event!(Level::INFO, "No requests");

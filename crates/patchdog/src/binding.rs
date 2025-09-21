@@ -1,8 +1,10 @@
+use crate::analyzer::{AnalyzerData, contextualizer};
 use ai_interactions::return_prompt;
 use clap::error::Result;
 use gemini::request_preparation::{Context, Metadata, Request, SingleFunctionData};
 use git_parsing::{Git2ErrorHandling, Hunk, get_easy_hunk, match_patch_with_parse};
 use git2::Diff;
+use glob::glob;
 use rayon::prelude::*;
 use rust_parsing::ObjectRange;
 use rust_parsing::error::{ErrorBinding, InvalidIoOperationsSnafu};
@@ -16,8 +18,6 @@ use std::{
     ops::Range,
     path::{Path, PathBuf},
 };
-
-use crate::analyzer::{AnalyzerData, contextualizer};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct UseItem {
@@ -43,10 +43,9 @@ pub struct Difference {
 }
 
 #[derive(Debug, Clone)]
-pub struct LocalChange {
-    pub filename: PathBuf,
-    pub range: Range<usize>,
-    pub file: String,
+struct LocalChange {
+    filename: PathBuf,
+    range: Range<usize>,
 }
 #[derive(Debug, Clone)]
 pub struct LocalContext {
@@ -61,12 +60,29 @@ pub struct ChangeFromPatch {
     pub range: Vec<Range<usize>>,
 }
 
-fn is_file_allowed(file: &Path, exclusions: &[PathBuf]) -> Result<bool, ErrorBinding> {
-    let starts = exclusions.iter().all(|path| Path::new(path).starts_with(&file));
-    if starts == false {
+pub fn is_file_allowed(file: &Path, exclusions: &[String]) -> Result<bool, ErrorBinding> {
+    let excluded_global = exclusions
+        .iter()
+        .flat_map(|pat| {
+            if pat.contains("**") {
+                // Expand glob into multiple canonicalized paths
+                glob(pat)
+                    .expect("Invalid glob pattern: use **")
+                    .filter_map(|entry| entry.ok())
+                    .filter_map(|p| fs::canonicalize(p).ok())
+                    .collect::<Vec<_>>()
+            } else {
+                // Just canonicalize single path
+                vec![fs::canonicalize(pat).unwrap()]
+            }
+        })
+        .collect::<Vec<PathBuf>>();
+
+    let starts = excluded_global.iter().any(|path| path.starts_with(file));
+    if !starts {
         for path in exclusions.iter() {
             if Path::new(path) == file {
-                return Ok(false);
+                return Ok(true);
             }
         }
     }
@@ -77,7 +93,7 @@ pub fn changes_from_patch(
     exported_from_file: Vec<ChangeFromPatch>,
     rust_type: Vec<String>,
     rust_name: Vec<String>,
-    file_exclude: &[PathBuf],
+    file_exclude: &[String],
     analyzer_data: AnalyzerData,
 ) -> Result<Vec<Request>, ErrorBinding> {
     let tasks: Vec<LocalChange> = exported_from_file
@@ -87,11 +103,6 @@ pub fn changes_from_patch(
                 Some(LocalChange {
                     filename: each.filename.clone(),
                     range: obj.clone(),
-                    file: fs::read_to_string(&each.filename)
-                        .context(InvalidIoOperationsSnafu {
-                            path: each.filename.clone(),
-                        })
-                        .ok()?,
                 })
             })
         })
@@ -100,9 +111,9 @@ pub fn changes_from_patch(
         .iter()
         .filter_map(|change| {
             //Here we only allow files, that are not in the config.yaml-Patchdog_settings-excluded_files
-            if !is_file_allowed(&change.filename, file_exclude).ok()? {
+            if is_file_allowed(&change.filename, file_exclude).ok()? {
                 let source = fs::read_to_string(&change.filename).ok()?;
-                let parsed_object = RustItemParser::parse_all_rust_items(&source)
+                let parsed_object = RustItemParser::parse_rust_file(&change.filename)
                     .ok()?
                     .iter()
                     .filter_map(|each| {
@@ -113,18 +124,22 @@ pub fn changes_from_patch(
                     })
                     .collect::<Vec<ObjectRange>>();
                 let default_object = ObjectRange::default();
-                let obj_type_to_compare = &parsed_object.first().unwrap_or(&default_object).names.type_name;
-                let obj_name_to_compare = &parsed_object.first().unwrap_or(&default_object).names.name;
+                let obj_type_to_compare = &parsed_object
+                    .first()
+                    .unwrap_or(&default_object)
+                    .names
+                    .type_name;
+                let obj_name_to_compare =
+                    &parsed_object.first().unwrap_or(&default_object).names.name;
                 if rust_type.par_iter().any(|t| obj_type_to_compare == t)
                     || rust_name.par_iter().any(|n| obj_name_to_compare == n)
                         && !return_prompt()
                             .ok()?
                             .patchdog_settings
                             .excluded_functions
-                            .contains(&obj_name_to_compare)
+                            .contains(obj_name_to_compare)
                 {
                     //At this point in parsed_file we are already aware of all the referenced data
-                    let source = fs::read_to_string(&change.filename).ok()?;
                     let fn_as_string = FileExtractor::string_to_vector(&source)
                         [change.range.start - 1..change.range.end]
                         .join("\n");
@@ -135,13 +150,12 @@ pub fn changes_from_patch(
                         3. Return matching structures
                     }
                     */
-                    let k = fs::read_to_string(&change.filename).ok()?;
-                    let parse_analyzer = &RustItemParser::parse_result_items(&k).ok()?;
+                    let parse_analyzer = &RustItemParser::parse_result_items(&source).ok()?;
                     let mut lineranges = vec![];
                     for each in parse_analyzer {
                         let changed_syn = change.range.start..change.range.end;
                         let linerange =
-                            RustItemParser::textrange_into_linerange(each.0.to_owned(), &k);
+                            RustItemParser::textrange_into_linerange(each.0.to_owned(), &source);
                         if linerange == changed_syn {
                             lineranges.push(each.0);
                         }

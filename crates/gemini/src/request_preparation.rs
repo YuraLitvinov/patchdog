@@ -81,11 +81,10 @@ pub struct RequestToAgent {
 } //Req Res = Request Response
 
 impl Context {
-
-/// Calculates an estimated "size" for the current `Context` by summing the character lengths of all strings in its `external_dependencies` and `old_comment` vectors. This size metric is likely used to approximate token usage for LLM requests, helping to manage input limits.
-///
-/// # Returns
-/// A `usize` representing the combined length of all dependency and comment strings, serving as a heuristic for content size.
+    /// Calculates an estimated "size" for the current `Context` by summing the character lengths of all strings in its `external_dependencies` and `old_comment` vectors. This size metric is likely used to approximate token usage for LLM requests, helping to manage input limits.
+    ///
+    /// # Returns
+    /// A `usize` representing the combined length of all dependency and comment strings, serving as a heuristic for content size.
     pub fn size(&self) -> usize {
         let mut size_ext = 0;
         for each in &self.external_dependencies {
@@ -99,7 +98,6 @@ impl Context {
 }
 
 impl SingleFunctionData {
-
     pub fn size(&self) -> usize {
         (self.fn_name.len() + self.context.size() + self.function_text.len()) / 3 //One token is approx. 3 symbols
     }
@@ -112,11 +110,10 @@ pub struct MappedRequest {
 }
 
 impl MappedRequest {
-  
-/// Creates a new `MappedRequest` instance, initializing its `remaining_capacity` based on the LLM's configured tokens per minute divided by allowed requests per minute. This capacity helps in batching individual requests efficiently for LLM processing.
-///
-/// # Returns
-/// A `Result<MappedRequest, ErrorHandling>` containing a new `MappedRequest` instance on success, or an `ErrorHandling` if the application configuration cannot be loaded.
+    /// Creates a new `MappedRequest` instance, initializing its `remaining_capacity` based on the LLM's configured tokens per minute divided by allowed requests per minute. This capacity helps in batching individual requests efficiently for LLM processing.
+    ///
+    /// # Returns
+    /// A `Result<MappedRequest, ErrorHandling>` containing a new `MappedRequest` instance on success, or an `ErrorHandling` if the application configuration cannot be loaded.
     pub fn new() -> Result<MappedRequest, ErrorHandling> {
         Ok(MappedRequest {
             remaining_capacity: return_prompt()?.llm_settings.tokens
@@ -125,13 +122,13 @@ impl MappedRequest {
         })
     }
 
-/// Attempts to add a `Request` (containing `SingleFunctionData`) to the current `PreparingRequests` batch. It first checks if the `request_data`'s size fits within the `remaining_capacity` of the batch. If it fits, the request is added, and the capacity is updated.
-///
-/// # Arguments
-/// * `request_data` - The `Request` object, which includes `SingleFunctionData`, to be added to the batch.
-///
-/// # Returns
-/// `true` if the `request_data` was successfully added to the batch, `false` otherwise (e.g., if it exceeds the remaining capacity).
+    /// Attempts to add a `Request` (containing `SingleFunctionData`) to the current `PreparingRequests` batch. It first checks if the `request_data`'s size fits within the `remaining_capacity` of the batch. If it fits, the request is added, and the capacity is updated.
+    ///
+    /// # Arguments
+    /// * `request_data` - The `Request` object, which includes `SingleFunctionData`, to be added to the batch.
+    ///
+    /// # Returns
+    /// `true` if the `request_data` was successfully added to the batch, `false` otherwise (e.g., if it exceeds the remaining capacity).
     pub fn function_add(&mut self, request_data: Request) -> bool {
         let size = request_data.data.size();
         if size <= self.remaining_capacity {
@@ -145,24 +142,23 @@ impl MappedRequest {
 }
 
 impl Default for MappedRequest {
-
-/// Provides a default constructor for `PreparingRequests`, by calling its `new()` method and unwrapping the result. This simplifies the creation of a `PreparingRequests` instance when default configuration is acceptable, assuming `new()` will not fail during default initialization.
-///
-/// # Returns
-/// A `PreparingRequests` instance initialized with default or configured capacity.
+    /// Provides a default constructor for `PreparingRequests`, by calling its `new()` method and unwrapping the result. This simplifies the creation of a `PreparingRequests` instance when default configuration is acceptable, assuming `new()` will not fail during default initialization.
+    ///
+    /// # Returns
+    /// A `PreparingRequests` instance initialized with default or configured capacity.
     fn default() -> Self {
         Self::new().unwrap()
     }
 }
 
 impl Display for MappedRequest {
-/// Implements the `fmt` trait for the struct, allowing it to be formatted for display. It uses the `Debug` formatter (`{self:#?}`) to write a pretty-printed debug representation of `self` to the formatter. This is useful for detailed debugging output.
-///
-/// # Arguments
-/// * `f` - A mutable reference to a `std::fmt::Formatter`.
-///
-/// # Returns
-/// A `std::fmt::Result` indicating whether the formatting was successful.
+    /// Implements the `fmt` trait for the struct, allowing it to be formatted for display. It uses the `Debug` formatter (`{self:#?}`) to write a pretty-printed debug representation of `self` to the formatter. This is useful for detailed debugging output.
+    ///
+    /// # Arguments
+    /// * `f` - A mutable reference to a `std::fmt::Formatter`.
+    ///
+    /// # Returns
+    /// A `std::fmt::Result` indicating whether the formatting was successful.
     /// Implements the `fmt` trait for the struct, allowing it to be formatted for display.
     /// It uses the `Debug` formatter (`{self:#?}`) to write a pretty-printed debug representation of `self` to the formatter.
     ///
@@ -186,11 +182,10 @@ pub struct PreparingRequests {
 }
 
 impl PreparingRequests {
-
-/// Creates a new `PreparingRequests` instance, calculating its `remaining_capacity` based on LLM token limits and request rates, while also accounting for the lengths of the Gemini model name and the prompt string. The `data` vector for holding function data is initialized as empty.
-///
-/// # Returns
-/// A `Result<PreparingRequests, ErrorHandling>` containing a new `PreparingRequests` instance on success, or an `ErrorHandling` if the application configuration cannot be loaded.
+    /// Creates a new `PreparingRequests` instance, calculating its `remaining_capacity` based on LLM token limits and request rates, while also accounting for the lengths of the Gemini model name and the prompt string. The `data` vector for holding function data is initialized as empty.
+    ///
+    /// # Returns
+    /// A `Result<PreparingRequests, ErrorHandling>` containing a new `PreparingRequests` instance on success, or an `ErrorHandling` if the application configuration cannot be loaded.
     pub fn new() -> Result<PreparingRequests, ErrorHandling> {
         Ok(PreparingRequests {
             remaining_capacity: return_prompt()?.llm_settings.tokens
@@ -201,13 +196,13 @@ impl PreparingRequests {
         })
     }
 
-/// Attempts to add a `SingleFunctionData` item to the current `PreparingRequests` batch. The function calculates the size of the incoming data and checks if it fits within the `remaining_capacity`. If successful, the data is added, and the capacity is updated.
-///
-/// # Arguments
-/// * `request_data` - The `SingleFunctionData` object to be added to the batch.
-///
-/// # Returns
-/// `true` if the `SingleFunctionData` was successfully added, `false` otherwise (e.g., if it exceeds the remaining capacity).
+    /// Attempts to add a `SingleFunctionData` item to the current `PreparingRequests` batch. The function calculates the size of the incoming data and checks if it fits within the `remaining_capacity`. If successful, the data is added, and the capacity is updated.
+    ///
+    /// # Arguments
+    /// * `request_data` - The `SingleFunctionData` object to be added to the batch.
+    ///
+    /// # Returns
+    /// `true` if the `SingleFunctionData` was successfully added, `false` otherwise (e.g., if it exceeds the remaining capacity).
     pub fn function_add(&mut self, request_data: SingleFunctionData) -> bool {
         let size = request_data.size();
         if size <= self.remaining_capacity {
@@ -221,36 +216,33 @@ impl PreparingRequests {
 }
 
 impl Default for PreparingRequests {
-
-/// Provides a default constructor for `RequestToAgent`, delegating to the `new()` method and unwrapping the result. This function offers a convenient way to create a `RequestToAgent` instance with default settings, assuming that the `new()` method will always succeed in a default context.
-///
-/// # Returns
-/// A `RequestToAgent` instance initialized with default or configured values.
+    /// Provides a default constructor for `RequestToAgent`, delegating to the `new()` method and unwrapping the result. This function offers a convenient way to create a `RequestToAgent` instance with default settings, assuming that the `new()` method will always succeed in a default context.
+    ///
+    /// # Returns
+    /// A `RequestToAgent` instance initialized with default or configured values.
     fn default() -> Self {
         Self::new().unwrap()
     }
 }
 
 impl Display for PreparingRequests {
-
-/// Implements the `std::fmt::Display` trait for the struct, enabling formatted output. This function pretty-prints the debug representation of the instance to the provided formatter, which is particularly useful for logging and debugging purposes.
-///
-/// # Arguments
-/// * `f` - A mutable reference to a `std::fmt::Formatter` where the output will be written.
-///
-/// # Returns
-/// A `std::fmt::Result` indicating whether the formatting operation was successful.
+    /// Implements the `std::fmt::Display` trait for the struct, enabling formatted output. This function pretty-prints the debug representation of the instance to the provided formatter, which is particularly useful for logging and debugging purposes.
+    ///
+    /// # Arguments
+    /// * `f` - A mutable reference to a `std::fmt::Formatter` where the output will be written.
+    ///
+    /// # Returns
+    /// A `std::fmt::Result` indicating whether the formatting operation was successful.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "{self:#?}")
     }
 }
 
 impl Default for RequestToAgent {
-
-/// Provides a default constructor for `MappedRequest`, which internally calls the `new()` method and unwraps its result. This allows for convenient creation of a `MappedRequest` instance using default settings, assuming that `new()` will not fail during this process.
-///
-/// # Returns
-/// A new `MappedRequest` instance initialized with default or configured capacity.
+    /// Provides a default constructor for `MappedRequest`, which internally calls the `new()` method and unwraps its result. This allows for convenient creation of a `MappedRequest` instance using default settings, assuming that `new()` will not fail during this process.
+    ///
+    /// # Returns
+    /// A new `MappedRequest` instance initialized with default or configured capacity.
     fn default() -> Self {
         Self::new().unwrap()
     }
@@ -258,11 +250,10 @@ impl Default for RequestToAgent {
 
 #[allow(async_fn_in_trait)]
 impl RequestToAgent {
-
-/// Creates a new `RequestToAgent` instance, initializing its `preparing_requests` field. The `remaining_capacity` for requests is calculated based on the LLM's configured tokens and requests per minute, ensuring that agent requests adhere to rate limits.
-///
-/// # Returns
-/// A `Result<RequestToAgent, ErrorHandling>` containing a new `RequestToAgent` instance on success, or an `ErrorHandling` if the application configuration cannot be loaded.
+    /// Creates a new `RequestToAgent` instance, initializing its `preparing_requests` field. The `remaining_capacity` for requests is calculated based on the LLM's configured tokens and requests per minute, ensuring that agent requests adhere to rate limits.
+    ///
+    /// # Returns
+    /// A `Result<RequestToAgent, ErrorHandling>` containing a new `RequestToAgent` instance on success, or an `ErrorHandling` if the application configuration cannot be loaded.
     pub fn new() -> Result<RequestToAgent, ErrorHandling> {
         Ok(RequestToAgent {
             preparing_requests: PreparingRequests {
@@ -273,13 +264,13 @@ impl RequestToAgent {
         })
     }
 
-/// Asynchronously sends prepared batches of LLM requests to the configured Large Language Model. It iterates through `WaitForTimeout` batches, serializes each `MappedRequest` within them to JSON, and dispatches it via `AiRequest::switch_llm`. A one-minute delay is introduced between `WaitForTimeout` batches if multiple exist, to respect API rate limits.
-///
-/// # Arguments
-/// * `request` - A reference to a vector of `WaitForTimeout` structs, each containing prepared `MappedRequest` objects.
-///
-/// # Returns
-/// A `Result<Vec<String>, ErrorHandling>` containing a vector of string responses from the LLM, or an `ErrorHandling` if serialization fails, an LLM call fails, or a critical error occurs during processing.
+    /// Asynchronously sends prepared batches of LLM requests to the configured Large Language Model. It iterates through `WaitForTimeout` batches, serializes each `MappedRequest` within them to JSON, and dispatches it via `AiRequest::switch_llm`. A one-minute delay is introduced between `WaitForTimeout` batches if multiple exist, to respect API rate limits.
+    ///
+    /// # Arguments
+    /// * `request` - A reference to a vector of `WaitForTimeout` structs, each containing prepared `MappedRequest` objects.
+    ///
+    /// # Returns
+    /// A `Result<Vec<String>, ErrorHandling>` containing a vector of string responses from the LLM, or an `ErrorHandling` if serialization fails, an LLM call fails, or a critical error occurs during processing.
     pub async fn send_batches(request: &Vec<WaitForTimeout>) -> Result<Vec<String>, ErrorHandling> {
         let mut response = vec![];
         let one_minute = time::Duration::from_secs(61);
@@ -306,13 +297,13 @@ impl RequestToAgent {
         Ok(response)
     }
 
-/// Manages and batches incoming `MappedRequest` objects into `WaitForTimeout` groups based on configured requests per minute. If the total number of requests exceeds the per-minute limit, it splits them into multiple `WaitForTimeout` batches; otherwise, all requests are placed into a single batch.
-///
-/// # Arguments
-/// * `batch` - A `Vec<MappedRequest>` containing the requests to be managed.
-///
-/// # Returns
-/// A `Result<Vec<WaitForTimeout>, ErrorHandling>`: `Ok(Vec<WaitForTimeout>)` on success, with a vector of `WaitForTimeout` structs, each containing a subset of requests suitable for sending within a time limit, or `Err(ErrorHandling)` if reading configuration fails.
+    /// Manages and batches incoming `MappedRequest` objects into `WaitForTimeout` groups based on configured requests per minute. If the total number of requests exceeds the per-minute limit, it splits them into multiple `WaitForTimeout` batches; otherwise, all requests are placed into a single batch.
+    ///
+    /// # Arguments
+    /// * `batch` - A `Vec<MappedRequest>` containing the requests to be managed.
+    ///
+    /// # Returns
+    /// A `Result<Vec<WaitForTimeout>, ErrorHandling>`: `Ok(Vec<WaitForTimeout>)` on success, with a vector of `WaitForTimeout` structs, each containing a subset of requests suitable for sending within a time limit, or `Err(ErrorHandling)` if reading configuration fails.
     /// Manages and batches incoming `MappedRequest` objects into `WaitForTimeout` groups based on configured requests per minute.
     /// If the total number of requests exceeds the per-minute limit, it splits them into multiple `WaitForTimeout` batches.
     /// Otherwise, all requests are placed into a single batch.
@@ -362,13 +353,13 @@ impl RequestToAgent {
         Ok(await_response)
     }
 
-/// Organizes a vector of individual `Request` objects into multiple `MappedRequest` batches, respecting capacity limits. It iteratively adds requests to a current `MappedRequest`. If a request exceeds the current capacity, the filled `MappedRequest` is finalized, a new one is started, and the process continues.
-///
-/// # Arguments
-/// * `request` - A `Vec<Request>` containing the individual requests to be batched.
-///
-/// # Returns
-/// A `Result<Vec<MappedRequest>, ErrorHandling>` containing a vector of `MappedRequest` objects, each holding a subset of requests, or an `ErrorHandling` if an issue occurs during `MappedRequest` initialization.
+    /// Organizes a vector of individual `Request` objects into multiple `MappedRequest` batches, respecting capacity limits. It iteratively adds requests to a current `MappedRequest`. If a request exceeds the current capacity, the filled `MappedRequest` is finalized, a new one is started, and the process continues.
+    ///
+    /// # Arguments
+    /// * `request` - A `Vec<Request>` containing the individual requests to be batched.
+    ///
+    /// # Returns
+    /// A `Result<Vec<MappedRequest>, ErrorHandling>` containing a vector of `MappedRequest` objects, each holding a subset of requests, or an `ErrorHandling` if an issue occurs during `MappedRequest` initialization.
     pub fn prepare_map(
         &mut self,
         request: Vec<Request>,

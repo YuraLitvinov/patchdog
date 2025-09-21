@@ -18,7 +18,6 @@ pub enum Git2ErrorHandling {
 }
 
 impl From<git2::Error> for Git2ErrorHandling {
-
     fn from(e: git2::Error) -> Self {
         Git2ErrorHandling::Git2Error { source: e }
     }
