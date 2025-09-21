@@ -79,6 +79,7 @@ pub async fn cli_patch_to_agent(
         &excluded_paths,
         analyzer_data,
     )?;
+    println!("request: {:#?}", request);
     //Here occurs check for pending changes
     if request.is_empty() {
         event!(Level::INFO, "No requests");
