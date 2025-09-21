@@ -22,8 +22,8 @@ yaml-rust2 = "0.10.3"
 tracing = "0.1.41"
 rayon = "1.10.0"
 tokio = { version = "1.45.1", features = ["macros", "rt-multi-thread"] }
-ra_ap_syntax = "0.0.300"
-ra_ap_ide = "0.0.300"
+ra_ap_syntax = "0.0.301"
+ra_ap_ide = "0.0.301"
 
 [workspace.lints.clippy]
 all = { level = "deny", priority = -1 }

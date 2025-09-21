@@ -11,7 +11,7 @@ use snafu::ResultExt;
 use std::collections::HashMap;
 use std::fs;
 use std::ops::Range;
-use std::path::{Path};
+use std::path::Path;
 /*
 1. Парсер патчей
 2. Раст парсер
@@ -59,17 +59,16 @@ pub trait RustParser {
 pub struct RustItemParser;
 
 impl RustParser for RustItemParser {
-
-/// Parses a Rust source file from a given path and extracts a vector of `ObjectRange` items, each representing a distinct code object (e.g., function, struct) and its line range. This function first reads the file content, then uses a Rust item parser to identify and extract the structural elements.
-/// It then maps the byte-based text ranges provided by the parser to line-based ranges, making them more human-readable and suitable for operations involving line numbers. This is a core function for understanding the structure of a Rust file.
-///
-/// # Arguments
-///
-/// * `src` - A reference to a `Path` pointing to the Rust source file.
-///
-/// # Returns
-///
-/// A `Result<Vec<ObjectRange>, ErrorHandling>` containing a vector of `ObjectRange` objects representing the parsed code items, or an `ErrorHandling` if file reading or parsing fails.
+    /// Parses a Rust source file from a given path and extracts a vector of `ObjectRange` items, each representing a distinct code object (e.g., function, struct) and its line range. This function first reads the file content, then uses a Rust item parser to identify and extract the structural elements.
+    /// It then maps the byte-based text ranges provided by the parser to line-based ranges, making them more human-readable and suitable for operations involving line numbers. This is a core function for understanding the structure of a Rust file.
+    ///
+    /// # Arguments
+    ///
+    /// * `src` - A reference to a `Path` pointing to the Rust source file.
+    ///
+    /// # Returns
+    ///
+    /// A `Result<Vec<ObjectRange>, ErrorHandling>` containing a vector of `ObjectRange` objects representing the parsed code items, or an `ErrorHandling` if file reading or parsing fails.
     fn parse_rust_file(src: &Path) -> Result<Vec<ObjectRange>, ErrorHandling> {
         let file = fs::read_to_string(src).context(InvalidIoOperationsSnafu { path: src })?;
         let visited = Self::parse_result_items(&file)?
@@ -85,17 +84,17 @@ impl RustParser for RustItemParser {
         Ok(visited)
     }
 
-/// Parses a Rust source string to identify all significant Rust items and comments within it.
-/// It first extracts comments using `comment_lexer` and then parses other structural items (functions, structs, etc.) using `parse_result_items`.
-/// The function then merges these two sets of identified ranges, converts byte-based ranges to line-based ranges, and sorts the final list by their starting line numbers, providing a comprehensive overview of the code structure.
-///
-/// # Arguments
-///
-/// * `src` - A string slice representing the Rust source code.
-///
-/// # Returns
-///
-/// A `Result` which is `Ok(Vec<ObjectRange>)` on success, containing a sorted vector of `ObjectRange` structs for all identified items and comments, or an `ErrorHandling` enum if an error occurs during parsing.
+    /// Parses a Rust source string to identify all significant Rust items and comments within it.
+    /// It first extracts comments using `comment_lexer` and then parses other structural items (functions, structs, etc.) using `parse_result_items`.
+    /// The function then merges these two sets of identified ranges, converts byte-based ranges to line-based ranges, and sorts the final list by their starting line numbers, providing a comprehensive overview of the code structure.
+    ///
+    /// # Arguments
+    ///
+    /// * `src` - A string slice representing the Rust source code.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` which is `Ok(Vec<ObjectRange>)` on success, containing a sorted vector of `ObjectRange` structs for all identified items and comments, or an `ErrorHandling` enum if an error occurs during parsing.
     fn parse_all_rust_items(src: &str) -> Result<Vec<ObjectRange>, ErrorHandling> {
         let mut comments = comment_lexer(src)?;
         let mut visited = Self::parse_result_items(src)?
@@ -113,18 +112,18 @@ impl RustParser for RustItemParser {
 
         Ok(visited)
     }
-/// Converts a byte-offset based `TextRange` into a human-readable, 1-based line number `Range<usize>`.
-/// This utility function computes the start and end line numbers by first determining the line start offsets in the source string.
-/// It then translates the byte offsets of the `TextRange` into their corresponding line numbers, ensuring the output is always 1-based for user-friendliness.
-///
-/// # Arguments
-///
-/// * `range` - The `TextRange` to convert, specifying a section of text by byte offsets.
-/// * `src` - The complete source code string, used to compute line starts.
-///
-/// # Returns
-///
-/// A `Range<usize>` where `start` and `end` are 1-based line numbers.
+    /// Converts a byte-offset based `TextRange` into a human-readable, 1-based line number `Range<usize>`.
+    /// This utility function computes the start and end line numbers by first determining the line start offsets in the source string.
+    /// It then translates the byte offsets of the `TextRange` into their corresponding line numbers, ensuring the output is always 1-based for user-friendliness.
+    ///
+    /// # Arguments
+    ///
+    /// * `range` - The `TextRange` to convert, specifying a section of text by byte offsets.
+    /// * `src` - The complete source code string, used to compute line starts.
+    ///
+    /// # Returns
+    ///
+    /// A `Range<usize>` where `start` and `end` are 1-based line numbers.
     fn textrange_into_linerange(range: TextRange, src: &str) -> Range<usize> {
         let line_starts = compute_line_starts(src);
 
@@ -138,17 +137,17 @@ impl RustParser for RustItemParser {
         }
     }
 
-/// Parses the given Rust source code string to identify and categorize all top-level Rust items using the `rust-analyzer` AST.
-/// It leverages `ra_ap_syntax::SourceFile::parse` to construct the syntax tree and then extracts all items, delegating the detailed analysis to `parse_all_rust_analyzer`.
-/// The function provides a foundational step for understanding the structural elements of a Rust file.
-///
-/// # Arguments
-///
-/// * `src` - A string slice representing the Rust source code.
-///
-/// # Returns
-///
-/// A `Result` which is `Ok(HashMap<TextRange, AnalyzerRange>)` on success, containing a map of text ranges to `AnalyzerRange` structs for each identified top-level item, or an `ErrorHandling` enum if an error occurs during parsing.
+    /// Parses the given Rust source code string to identify and categorize all top-level Rust items using the `rust-analyzer` AST.
+    /// It leverages `ra_ap_syntax::SourceFile::parse` to construct the syntax tree and then extracts all items, delegating the detailed analysis to `parse_all_rust_analyzer`.
+    /// The function provides a foundational step for understanding the structural elements of a Rust file.
+    ///
+    /// # Arguments
+    ///
+    /// * `src` - A string slice representing the Rust source code.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` which is `Ok(HashMap<TextRange, AnalyzerRange>)` on success, containing a map of text ranges to `AnalyzerRange` structs for each identified top-level item, or an `ErrorHandling` enum if an error occurs during parsing.
     fn parse_result_items(src: &str) -> Result<HashMap<TextRange, AnalyzerRange>, ErrorHandling> {
         let parse = ra_ap_syntax::SourceFile::parse(src, ra_ap_ide::Edition::Edition2024);
         let items = parse
@@ -158,16 +157,16 @@ impl RustParser for RustItemParser {
         parse_all_rust_analyzer(items)
     }
 
-/// Parses a string slice representing Rust code and extracts a single `ObjectRange` corresponding to the primary code item found. This function is specifically designed to parse a snippet of Rust code (e.g., a single function or struct definition) and return its line range, type name, and identifier.
-/// It leverages internal parsing utilities to first find all code objects and then focuses on the first one identified. This is particularly useful for analyzing isolated code blocks or changes.
-///
-/// # Arguments
-///
-/// * `src` - A string slice (`&str`) containing the Rust code to be parsed.
-///
-/// # Returns
-///
-/// A `Result<ObjectRange, ErrorHandling>` containing the `ObjectRange` of the first identified code item, or an `ErrorHandling` if no valid code object is found or parsing fails.
+    /// Parses a string slice representing Rust code and extracts a single `ObjectRange` corresponding to the primary code item found. This function is specifically designed to parse a snippet of Rust code (e.g., a single function or struct definition) and return its line range, type name, and identifier.
+    /// It leverages internal parsing utilities to first find all code objects and then focuses on the first one identified. This is particularly useful for analyzing isolated code blocks or changes.
+    ///
+    /// # Arguments
+    ///
+    /// * `src` - A string slice (`&str`) containing the Rust code to be parsed.
+    ///
+    /// # Returns
+    ///
+    /// A `Result<ObjectRange, ErrorHandling>` containing the `ObjectRange` of the first identified code item, or an `ErrorHandling` if no valid code object is found or parsing fails.
     fn rust_item_parser(src: &str) -> Result<ObjectRange, ErrorHandling> {
         let analyzer: Vec<ObjectRange> = Self::parse_result_items(src)?
             .par_iter()
@@ -193,8 +192,6 @@ impl RustParser for RustItemParser {
             },
         })
     }
-
-
 }
 
 /// Computes a vector of byte offsets for the start of each line in a given string slice. This function is a fundamental utility for converting between byte-based `TextRange` (used by syntax parsers) and human-readable line-based ranges.
@@ -397,7 +394,7 @@ fn parse_all_rust_analyzer(
             }
             ra_ap_syntax::ast::Item::Trait(t) => {
                 let name = t.name();
-                let  range = t.syntax().text_range();
+                let range = t.syntax().text_range();
                 if let Some(name) = name {
                     analyzer.insert(
                         range,
