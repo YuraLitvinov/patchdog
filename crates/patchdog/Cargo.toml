@@ -1,6 +1,6 @@
 [package]
 name = "patchdog"
-version = "1.2.71"
+version = "1.2.72"
 edition = "2024"
 
 [dependencies]
@@ -27,19 +27,12 @@ opentelemetry_sdk = { version = "0.30.0", features = [
 ra_ap_vfs = "0.0.301"
 ra_ap_project_model = "0.0.301"
 camino = "1.1.11"
-rustc-hash = "2.1.1"
 ra_ap_base_db = "0.0.301"
-la-arena = "0.3.1"
 ra_ap_syntax = { workspace = true }
 ra_ap_hir = "0.0.301"
 ra_ap_hir_def = "0.0.301"
-ra_ap_hir_expand = "0.0.301"
-proc-macro2 = { version = "1", features = ["span-locations"] }
-salsa-macros = "0.23.0"
-salsa = "0.23.0"
 ra_ap_ide_db = "0.0.301"
 tracing-opentelemetry = "0.31.0"
 ra_ap_load-cargo = "0.0.301"
 ra_ap_ide = { workspace = true }
-ra_ap_span = "0.0.301"
 glob = "0.3.3"
