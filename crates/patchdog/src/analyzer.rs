@@ -29,7 +29,7 @@ pub fn init_analyzer() -> AnalyzerData {
     let cargo_config = CargoConfig {
         sysroot: Some(RustLibSource::Discover),
         all_targets: true,
-        no_deps: true,
+//        no_deps: true,
         ..Default::default()
     };
     let as_absolute = absolute.join("Cargo.toml");
