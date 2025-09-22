@@ -25,7 +25,7 @@ pub struct AnalyzerData {
 /// # Returns
 /// An `AnalyzerData` struct, containing the initialized `RootDatabase`, `Vfs`, and a vector of `ra_ap_base_db::Crate` instances representing local crates.
 pub fn init_analyzer() -> AnalyzerData {
-    let absolute = env::current_dir().unwrap();
+    let absolute = env::current_dir().expect("Couldn't get current directory");
     let cargo_config = CargoConfig {
         sysroot: Some(RustLibSource::Discover),
         all_targets: true,
@@ -33,7 +33,8 @@ pub fn init_analyzer() -> AnalyzerData {
         ..Default::default()
     };
     let as_absolute = absolute.join("Cargo.toml");
-    let utf8path = AbsPath::assert(Utf8Path::new(as_absolute.to_str().unwrap()));
+    let binding = as_absolute.display().to_string();
+    let utf8path = AbsPath::assert(Utf8Path::new(&binding));
     let manifest = ProjectManifest::discover_single(utf8path).expect("Couldn't get manifest");
     let no_progress = &|prog| println!("{prog}");
     let workspace = ProjectWorkspace::load(manifest, &cargo_config, no_progress)
@@ -115,13 +116,10 @@ fn semantic_modules(
     match module {
         ra_ap_hir_def::ModuleDefId::FunctionId(fn_id) => {
             let to_path = build_path(fn_id, vfs, db)
-                .cloned()
-                .unwrap()
-                .into_abs_path()
-                .unwrap();
+                .cloned();
 
             if return_functions(db, fn_id) == fn_range.copied()
-                && to_path == Utf8Path::new(filepath.to_str().unwrap())
+                && to_path == Some(VfsPath::new_real_path(filepath.display().to_string()))
             {
                 let semantics = Semantics::new(db);
                 if let Some(sem) = semantics.source::<ra_ap_hir::Function>(fn_id.into()) {
@@ -275,8 +273,7 @@ fn print_body(file_id: EditionedFileId, range: TextRange, db: &RootDatabase) -> 
 fn return_functions(db: &RootDatabase, fn_id: FunctionId) -> Option<TextRange> {
     let lookup = &db.lookup_intern_function(fn_id);
     let as_syn = lookup.id;
-    let file_unwrap = as_syn.file_id.file_id();
-    if let Some(file_id) = file_unwrap {
+    if let Some(file_id) = as_syn.file_id.file_id() {
         if db.relevant_crates(file_id.file_id(db))[0]
             .data(db)
             .origin
