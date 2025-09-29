@@ -1,0 +1,25 @@
+name: Patchdog
+#Best resort is calling patchdog once, when last commit is pushed into HEAD branch
+on:
+  issue_comment:
+    types: [created]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  run_patchdog:
+    if: |
+      github.event.issue.pull_request != '' && contains(github.event.comment.body, '@patchdog')
+
+    runs-on: ubuntu-latest
+    permissions: 
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Patchdog
+        uses: YuraLitvinov/patchdog@v1.2.70
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          api_key_gemini: ${{ secrets.API_KEY_GEMINI }}
