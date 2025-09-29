@@ -35,7 +35,7 @@ The goal is to save time, make code clearer by providing concise and well though
 
   - In repository settings, actions, general - scroll down and select 'Allow GitHub Actions to create and approve pull requests' 
 
-	- [Configuration file](config.yaml) where your personal settings are stored. You may manipulate the prompt as well to get more verbose or compact comments. Config has to be located inside your root directory. 
+	- [Configuration file](config.yaml) where your personal settings are stored. You may manipulate the prompt as well to get more verbose or compact comments. By default, config has to be located inside your root directory or any other path, specified inside the workflow file with config_path variable. 
 ```yaml
 Patchdog:
     prompt: | 
@@ -74,13 +74,16 @@ Patchdog:
         llm_model: google # you may use google or openai
 
 ```
-- You may get the reference for setting up patchdog inside [patchdog repository](.github/workflows/patchdog.yml), or 
+- You may get the reference for setting up patchdog inside of the [patchdog repository for pull_request trigger](.github/workflows/patchdog.yml) and [issue_comment trigger](.github/workflows/patchdog_issue_comment.yml), or 
 ```yaml
 name: Quickstart
 
 on:
 # You may specify the type of PR that triggers the action
   pull_request:
+  #or
+  issue_comment: #issue_comments is writing @patchdog inside the issue body, which is encouraged, so actual discussions do not trigger it.
+
 
 env:
   CARGO_TERM_COLOR: always
@@ -88,6 +91,9 @@ env:
 jobs:
   run_patchdog:
 #only linux is supported, but many flavors, as patchdog binaries are statically linked
+    # if is used for on: issue_comment, otherwise it is not required
+    if: | 
+      github.event.issue.pull_request != '' && contains(github.event.comment.body, '@patchdog') 
     runs-on: ubuntu-latest
 #these are the permission without which the actions wouldn't work
     permissions: 
@@ -96,7 +102,7 @@ jobs:
 
     steps:
       - name: Run Patchdog action
-        uses: YuraLitvinov/patchdog # marketplace-defined path
+        uses: YuraLitvinov/patchdog@latest # marketplace-defined path. Latest is for on: issue_comment, given the fact that configuration is stable, patchdog with pull_request trigger (v1.2.62) will always use the latest available binary. Release note post-v1.2.70 is redundant, as it would match the said version and trigger on issue_comment
         with: 
 #only crucial variables are being passed to patchdog in this case 
 #you may as well change commit author signature by default it is Patchdog, some@email.com and specify path to config.yaml
