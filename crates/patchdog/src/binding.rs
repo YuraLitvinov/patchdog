@@ -160,14 +160,11 @@ pub fn changes_from_patch(
                             lineranges.push(each.range);
                         }
                     }
-                    let analyzer_context = contextualizer(
-                        &change.filename,
-                        lineranges.first(),
-                        &analyzer_data,
-                    )
-                    .par_iter()
-                    .map(|(_, value)| value.to_string())
-                    .collect::<Vec<String>>();
+                    let analyzer_context =
+                        contextualizer(&change.filename, lineranges.first(), &analyzer_data)
+                            .par_iter()
+                            .map(|(_, value)| value.to_string())
+                            .collect::<Vec<String>>();
                     let context = Context {
                         class_name: "".to_string(),
                         external_dependencies: analyzer_context,

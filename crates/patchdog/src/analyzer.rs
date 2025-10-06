@@ -115,8 +115,7 @@ fn semantic_modules(
     let mut context_strings = HashMap::new();
     match module {
         ra_ap_hir_def::ModuleDefId::FunctionId(fn_id) => {
-            let to_path = build_path(fn_id, vfs, db)
-                .cloned();
+            let to_path = build_path(fn_id, vfs, db).cloned();
 
             if return_functions(db, fn_id) == fn_range.copied()
                 && to_path == Some(VfsPath::new_real_path(filepath.display().to_string()))
@@ -148,12 +147,10 @@ fn semantic_modules(
                                 if let Some(val) =
                                     resolve_method_call_expr(&semantics, &method_expr)
                                     && let Some(body_range) = function_text_range(val.into(), db)
-                                    && let Some(body) =
-                                        print_body(body_range.0, body_range.1, db)
+                                    && let Some(body) = print_body(body_range.0, body_range.1, db)
                                 {
                                     context_strings.insert(body_range.1, body);
                                 }
-                                    
                             }
                             _ => {}
                         }

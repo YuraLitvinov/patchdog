@@ -1,4 +1,5 @@
- mod tests {
+
+mod tests {
     use crate::cli::cherrypick_response;
     use gemini::request_preparation::RawResponse;
     use regex::Regex;
@@ -176,15 +177,12 @@
             .join("crates/patchdog/src/tests.rs")
             .display()
             .to_string();
-        let more_paths = [
-            "tests/",
-            "crates/**/src/tests.rs",
-            "crates/**/src/main.rs",
-        ]
-        .iter()
-        .map(|s| dir.join(s).display().to_string())
-        .collect::<Vec<String>>();
-        let val = crate::binding::is_file_allowed(&Path::new(&file_path_test), &more_paths).unwrap();
+        let more_paths = ["tests/", "crates/**/src/tests.rs", "crates/**/src/main.rs"]
+            .iter()
+            .map(|s| dir.join(s).display().to_string())
+            .collect::<Vec<String>>();
+        let val =
+            crate::binding::is_file_allowed(&Path::new(&file_path_test), &more_paths).unwrap();
 
         println!("is file_allowed: {:?}", val);
         assert!(!val);
@@ -198,15 +196,12 @@
             .join("crates/patchdog/src/main.rs")
             .display()
             .to_string();
-        let more_paths = [
-            "tests/",
-            "crates/**/src/tests.rs",
-            "crates/**/src/main.rs",
-        ]
-        .iter()
-        .map(|s| dir.join(s).display().to_string())
-        .collect::<Vec<String>>();
-        let val = crate::binding::is_file_allowed(&Path::new(&file_path_main), &more_paths).unwrap();
+        let more_paths = ["tests/", "crates/**/src/tests.rs", "crates/**/src/main.rs"]
+            .iter()
+            .map(|s| dir.join(s).display().to_string())
+            .collect::<Vec<String>>();
+        let val =
+            crate::binding::is_file_allowed(&Path::new(&file_path_main), &more_paths).unwrap();
 
         println!("is file_allowed: {:?}", val);
         assert!(!val);
@@ -214,22 +209,22 @@
 
     #[test]
     fn test_parsing_extended() {
-        
         let mut dir = env::current_dir().expect("Failed to get current directory");
         dir.pop();
         dir.pop();
         let filepath = dir.join("tests/data.rs").display().to_string();
         let file = fs::read_to_string(filepath).expect("Failed to read file");
-        let parsed = RustItemParser::parse_all_rust_items(&file).expect("Failed to parse")
-        .iter()
-        .filter_map(|x| {
-            if x.names.type_name == "fn" {
-                Some(x.clone())
-            } else {
-                None
-            }
-        })
-        .collect::<Vec<ObjectRange>>();
+        let parsed = RustItemParser::parse_all_rust_items(&file)
+            .expect("Failed to parse")
+            .iter()
+            .filter_map(|x| {
+                if x.names.type_name == "fn" {
+                    Some(x.clone())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<ObjectRange>>();
         let objects = vec![
             ObjectRange {
                 line_ranges: 1..2,
@@ -363,7 +358,7 @@
                     type_name: "fn".to_string(),
                     name: "result_function".to_string(),
                 },
-            }
+            },
         ];
         assert!(parsed == objects)
     }
@@ -375,7 +370,8 @@
         dir.pop();
         let filepath = dir.join("tests/data.rs").display().to_string();
         let file = fs::read_to_string(filepath).expect("Failed to read file");
-        let parsed = rust_parsing::comment_lexer(&file).expect("Failed to parse")
+        let parsed = rust_parsing::comment_lexer(&file)
+            .expect("Failed to parse")
             .into_iter()
             .filter_map(|each| {
                 if each.names.name == "///" {
@@ -472,11 +468,12 @@ pub async fn cli_patch_to_agent(
 }
 "#;
     #[test]
-    fn test_theory(){
-        let parsed = RustItemParser::parse_all_rust_items(ANUDDA_TEST_STRING).expect("Failed to parse");
+    fn test_theory() {
+        let parsed =
+            RustItemParser::parse_all_rust_items(ANUDDA_TEST_STRING).expect("Failed to parse");
         let comments = parsed
             .iter()
-            .filter_map(|each|{
+            .filter_map(|each| {
                 if each.names.name == "///" {
                     Some(each)
                 } else {
@@ -484,43 +481,57 @@ pub async fn cli_patch_to_agent(
                 }
             })
             .collect::<Vec<&ObjectRange>>();
-        let function_object = parsed.iter().filter_map(|each|{
-            if each.names.type_name == "fn" {
-                Some(each)
-            } else {
-                None
-            }
-        }).collect::<Vec<&ObjectRange>>().first().unwrap().clone();
+        let function_object = parsed
+            .iter()
+            .filter_map(|each| {
+                if each.names.type_name == "fn" {
+                    Some(each)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<&ObjectRange>>()
+            .first()
+            .cloned()
+            .unwrap()
+            .clone();
 
-        let remove_from_original = rust_parsing::file_parsing::FileExtractor::string_to_vector(ANUDDA_TEST_STRING);
+        let remove_from_original =
+            rust_parsing::file_parsing::FileExtractor::string_to_vector(ANUDDA_TEST_STRING);
         let mut remove_from_original = remove_from_original.clone();
         let first_element = comments.first().unwrap().line_start();
         let last_element = comments.last().unwrap().line_end();
-        remove_from_original.drain(first_element-1..last_element);
+        remove_from_original.drain(first_element - 1..last_element);
         let actual_function_object = ObjectRange {
-            line_ranges: function_object.line_start()+last_element..function_object.line_end(),
+            line_ranges: function_object.line_start() + last_element..function_object.line_end(),
             names: function_object.names.clone(),
         };
         println!("{:#?}", actual_function_object);
         println!("{}", remove_from_original.join("\n"));
 
-        assert_eq!(true,false)
+        assert_eq!(true, false)
     }
 
     #[test]
-    fn test_write_with_remove(){
+    fn test_write_with_remove() {
         let mut dir = env::current_dir().expect("Failed to get current directory");
         dir.pop();
         dir.pop();
-        let file = fs::read_to_string(dir.join("crates/rust_parsing/src/rust_parser.rs").display().to_string()).expect("Failed to read file");
+        let file = fs::read_to_string(
+            dir.join("crates/rust_parsing/src/rust_parser.rs")
+                .display()
+                .to_string(),
+        )
+        .expect("Failed to read file");
         let to_vec = FileExtractor::string_to_vector(&file);
         let test = rust_parsing::file_parsing::write_with_remove(
             dir.join("crates/rust_parsing/src/rust_parser.rs"),
-            to_vec, 
+            to_vec,
             235,
-            "====== TEST STRING =======".to_string()
-        ).unwrap();
-        
-        assert_eq!(true,false)
+            "/// ====== TEST STRING =======".to_string(),
+        )
+        .unwrap();
+
+        assert_eq!(true, false)
     }
 }
