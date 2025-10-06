@@ -73,7 +73,7 @@ pub fn is_file_allowed(file: &Path, exclusions: &[String]) -> Result<bool, Error
                     .collect::<Vec<_>>()
             } else {
                 // Just canonicalize single path
-                vec![fs::canonicalize(pat).unwrap()]
+                vec![fs::canonicalize(pat).expect("Canonicalize failed")]
             }
         })
         .collect::<Vec<PathBuf>>();
@@ -155,14 +155,14 @@ pub fn changes_from_patch(
                     for each in parse_analyzer {
                         let changed_syn = change.range.start..change.range.end;
                         let linerange =
-                            RustItemParser::textrange_into_linerange(each.0.to_owned(), &source);
+                            RustItemParser::textrange_into_linerange(each.range, &source);
                         if linerange == changed_syn {
-                            lineranges.push(each.0);
+                            lineranges.push(each.range);
                         }
                     }
                     let analyzer_context = contextualizer(
                         &change.filename,
-                        lineranges.first().copied(),
+                        lineranges.first(),
                         &analyzer_data,
                     )
                     .par_iter()
@@ -306,10 +306,10 @@ fn patch_export_change(
         let parsed = RustItemParser::parse_result_items(&file)?
             .par_iter()
             .map(|val| {
-                let range = RustItemParser::textrange_into_linerange(*val.0, &file);
+                let range = RustItemParser::textrange_into_linerange(val.range, &file);
                 ObjectRange {
                     line_ranges: range,
-                    names: val.1.names.clone(),
+                    names: val.names.to_owned(),
                 }
             })
             .collect::<Vec<ObjectRange>>();

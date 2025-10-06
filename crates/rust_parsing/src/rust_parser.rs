@@ -8,7 +8,6 @@ use rayon::prelude::*;
 use rustc_lexer::{TokenKind, tokenize};
 use serde::Serialize;
 use snafu::ResultExt;
-use std::collections::HashMap;
 use std::fs;
 use std::ops::Range;
 use std::path::Path;
@@ -53,7 +52,7 @@ pub trait RustParser {
     fn parse_rust_file(src: &Path) -> Result<Vec<ObjectRange>, ErrorHandling>;
     fn rust_item_parser(src: &str) -> Result<ObjectRange, ErrorHandling>;
     fn textrange_into_linerange(range: TextRange, src: &str) -> Range<usize>;
-    fn parse_result_items(src: &str) -> Result<HashMap<TextRange, AnalyzerRange>, ErrorHandling>;
+    fn parse_result_items(src: &str) -> Result<Vec<AnalyzerRange>, ErrorHandling>;
 }
 
 pub struct RustItemParser;
@@ -74,10 +73,10 @@ impl RustParser for RustItemParser {
         let visited = Self::parse_result_items(&file)?
             .par_iter()
             .map(|val| {
-                let line_ranges = Self::textrange_into_linerange(*val.0, &file);
+                let line_ranges = Self::textrange_into_linerange(val.range, &file);
                 ObjectRange {
                     line_ranges,
-                    names: val.1.names.clone(),
+                    names: val.names.clone(),
                 }
             })
             .collect::<Vec<ObjectRange>>();
@@ -100,10 +99,10 @@ impl RustParser for RustItemParser {
         let mut visited = Self::parse_result_items(src)?
             .par_iter()
             .map(|val| {
-                let line_ranges = Self::textrange_into_linerange(*val.0, src);
+                let line_ranges = Self::textrange_into_linerange(val.range, src);
                 ObjectRange {
                     line_ranges,
-                    names: val.1.names.clone(),
+                    names: val.names.clone(),
                 }
             })
             .collect::<Vec<ObjectRange>>();
@@ -148,7 +147,7 @@ impl RustParser for RustItemParser {
     /// # Returns
     ///
     /// A `Result` which is `Ok(HashMap<TextRange, AnalyzerRange>)` on success, containing a map of text ranges to `AnalyzerRange` structs for each identified top-level item, or an `ErrorHandling` enum if an error occurs during parsing.
-    fn parse_result_items(src: &str) -> Result<HashMap<TextRange, AnalyzerRange>, ErrorHandling> {
+    fn parse_result_items(src: &str) -> Result<Vec<AnalyzerRange>, ErrorHandling> {
         let parse = ra_ap_syntax::SourceFile::parse(src, ra_ap_ide::Edition::Edition2024);
         let items = parse
             .tree()
@@ -171,10 +170,10 @@ impl RustParser for RustItemParser {
         let analyzer: Vec<ObjectRange> = Self::parse_result_items(src)?
             .par_iter()
             .map(|val| {
-                let line_ranges = Self::textrange_into_linerange(*val.0, src);
+                let line_ranges = Self::textrange_into_linerange(val.range, src);
                 ObjectRange {
                     line_ranges,
-                    names: val.1.names.clone(),
+                    names: val.names.clone(),
                 }
             })
             .collect::<Vec<ObjectRange>>();
@@ -243,19 +242,18 @@ fn offset_to_line(offset: usize, line_starts: &[usize]) -> usize {
 ///
 /// # Returns
 ///
-/// A `Result` which is `Ok(HashMap<TextRange, AnalyzerRange>)` on success, containing a map of text ranges to `AnalyzerRange` structs for each identified item, or an `ErrorHandling` enum if an error occurs during processing.
+/// A `Result` which is `Ok(Vec<AnalyzerRange>)` on success, containing a map of text ranges to `AnalyzerRange` structs for each identified item, or an `ErrorHandling` enum if an error occurs during processing.
 fn parse_all_rust_analyzer(
     items: Vec<ra_ap_syntax::ast::Item>,
-) -> Result<HashMap<TextRange, AnalyzerRange>, ErrorHandling> {
-    let mut analyzer: HashMap<TextRange, AnalyzerRange> = HashMap::new();
+) -> Result<Vec<AnalyzerRange>, ErrorHandling> {
+    let mut analyzer: Vec<AnalyzerRange> = Vec::new();
     for each in items {
         match each {
             ra_ap_syntax::ast::Item::Fn(f) => {
                 let name = f.name();
                 let range = f.syntax().text_range();
                 if let Some(name) = name {
-                    analyzer.insert(
-                        range,
+                    analyzer.push(
                         AnalyzerRange {
                             range,
                             names: Name {
@@ -265,8 +263,7 @@ fn parse_all_rust_analyzer(
                         },
                     );
                 } else {
-                    analyzer.insert(
-                        range,
+                    analyzer.push(
                         AnalyzerRange {
                             range,
                             names: Name {
@@ -281,8 +278,7 @@ fn parse_all_rust_analyzer(
                 let name = s.name();
                 let range = s.syntax().text_range();
                 if let Some(name) = name {
-                    analyzer.insert(
-                        range,
+                    analyzer.push(
                         AnalyzerRange {
                             range,
                             names: Name {
@@ -292,8 +288,7 @@ fn parse_all_rust_analyzer(
                         },
                     );
                 } else {
-                    analyzer.insert(
-                        range,
+                    analyzer.push(
                         AnalyzerRange {
                             range,
                             names: Name {
@@ -308,8 +303,7 @@ fn parse_all_rust_analyzer(
                 let name = e.name();
                 let range = e.syntax().text_range();
                 if let Some(name) = name {
-                    analyzer.insert(
-                        range,
+                    analyzer.push(
                         AnalyzerRange {
                             range,
                             names: Name {
@@ -319,8 +313,7 @@ fn parse_all_rust_analyzer(
                         },
                     );
                 } else {
-                    analyzer.insert(
-                        range,
+                    analyzer.push(
                         AnalyzerRange {
                             range,
                             names: Name {
@@ -336,8 +329,7 @@ fn parse_all_rust_analyzer(
 
                 if let Some(name) = name_type {
                     let range = i.syntax().text_range();
-                    analyzer.insert(
-                        range,
+                    analyzer.push(
                         AnalyzerRange {
                             range,
                             names: Name {
@@ -348,8 +340,7 @@ fn parse_all_rust_analyzer(
                     );
                 } else {
                     let range = i.syntax().text_range();
-                    analyzer.insert(
-                        range,
+                    analyzer.push(
                         AnalyzerRange {
                             range,
                             names: Name {
@@ -366,8 +357,7 @@ fn parse_all_rust_analyzer(
                             let name = f.name();
                             let assoc_fn_range = f.syntax().text_range();
                             if let Some(name) = name {
-                                analyzer.insert(
-                                    assoc_fn_range,
+                                analyzer.push(
                                     AnalyzerRange {
                                         range: assoc_fn_range,
                                         names: Name {
@@ -377,8 +367,7 @@ fn parse_all_rust_analyzer(
                                     },
                                 );
                             } else {
-                                analyzer.insert(
-                                    assoc_fn_range,
+                                analyzer.push(
                                     AnalyzerRange {
                                         range: assoc_fn_range,
                                         names: Name {
@@ -396,8 +385,7 @@ fn parse_all_rust_analyzer(
                 let name = t.name();
                 let range = t.syntax().text_range();
                 if let Some(name) = name {
-                    analyzer.insert(
-                        range,
+                    analyzer.push(
                         AnalyzerRange {
                             range,
                             names: Name {
@@ -407,8 +395,7 @@ fn parse_all_rust_analyzer(
                         },
                     );
                 } else {
-                    analyzer.insert(
-                        range,
+                    analyzer.push(
                         AnalyzerRange {
                             range,
                             names: Name {
@@ -418,13 +405,16 @@ fn parse_all_rust_analyzer(
                         },
                     );
                 }
+                let recurse = t.syntax().children().filter_map(ra_ap_syntax::ast::Item::cast).collect::<Vec<ra_ap_syntax::ast::Item>>();
+                let parsed = parse_all_rust_analyzer(recurse)?;
+                analyzer.extend(parsed);
+                
             }
             ra_ap_syntax::ast::Item::TypeAlias(t) => {
                 let name = t.name();
                 let range = t.syntax().text_range();
                 if let Some(name) = name {
-                    analyzer.insert(
-                        range,
+                    analyzer.push(
                         AnalyzerRange {
                             range,
                             names: Name {
@@ -434,8 +424,7 @@ fn parse_all_rust_analyzer(
                         },
                     );
                 } else {
-                    analyzer.insert(
-                        range,
+                    analyzer.push(
                         AnalyzerRange {
                             range,
                             names: Name {
@@ -449,8 +438,7 @@ fn parse_all_rust_analyzer(
             ra_ap_syntax::ast::Item::Use(u) => {
                 let name = u.to_smolstr();
                 let range = u.syntax().text_range();
-                analyzer.insert(
-                    range,
+                analyzer.push(
                     AnalyzerRange {
                         range,
                         names: Name {
@@ -462,8 +450,7 @@ fn parse_all_rust_analyzer(
             }
             ra_ap_syntax::ast::Item::MacroCall(m) => {
                 let range = m.syntax().text_range();
-                analyzer.insert(
-                    range,
+                analyzer.push(
                     AnalyzerRange {
                         range,
                         names: Name {
@@ -477,8 +464,7 @@ fn parse_all_rust_analyzer(
                 let range = m.syntax().text_range();
                 let name = m.name();
                 if let Some(name) = name {
-                    analyzer.insert(
-                        range,
+                    analyzer.push(
                         AnalyzerRange {
                             range,
                             names: Name {
@@ -488,8 +474,7 @@ fn parse_all_rust_analyzer(
                         },
                     );
                 } else {
-                    analyzer.insert(
-                        range,
+                    analyzer.push(
                         AnalyzerRange {
                             range,
                             names: Name {
@@ -502,8 +487,7 @@ fn parse_all_rust_analyzer(
             }
             ra_ap_syntax::ast::Item::ExternBlock(e) => {
                 let range = e.syntax().text_range();
-                analyzer.insert(
-                    range,
+                analyzer.push(
                     AnalyzerRange {
                         range,
                         names: Name {
@@ -516,8 +500,7 @@ fn parse_all_rust_analyzer(
             ra_ap_syntax::ast::Item::Module(m) => {
                 let range = m.syntax().text_range();
                 if let Some(name) = m.name() {
-                    analyzer.insert(
-                        range,
+                    analyzer.push(
                         AnalyzerRange {
                             range,
                             names: Name {
@@ -527,8 +510,7 @@ fn parse_all_rust_analyzer(
                         },
                     );
                 } else {
-                    analyzer.insert(
-                        range,
+                    analyzer.push(
                         AnalyzerRange {
                             range,
                             names: Name {
@@ -548,8 +530,7 @@ fn parse_all_rust_analyzer(
             ra_ap_syntax::ast::Item::TraitAlias(t) => {
                 let range = t.syntax().text_range();
                 if let Some(name) = t.name() {
-                    analyzer.insert(
-                        range,
+                    analyzer.push(
                         AnalyzerRange {
                             range,
                             names: Name {
@@ -559,8 +540,7 @@ fn parse_all_rust_analyzer(
                         },
                     );
                 } else {
-                    analyzer.insert(
-                        range,
+                    analyzer.push(
                         AnalyzerRange {
                             range,
                             names: Name {
@@ -601,8 +581,8 @@ pub fn comment_lexer(source_vector: &str) -> Result<Vec<ObjectRange>, ErrorHandl
                     if terminated {
                         comment_vector.push(ObjectRange {
                             line_ranges: Range {
-                                start: line_number,
-                                end: line_number,
+                                start: line_number + 1,
+                                end: line_number + 1,
                             },
                             names: Name {
                                 type_name: "CommentBlockSingeLine".to_string(),
@@ -612,7 +592,7 @@ pub fn comment_lexer(source_vector: &str) -> Result<Vec<ObjectRange>, ErrorHandl
                     } else {
                         comment_vector.push(ObjectRange {
                             line_ranges: Range {
-                                start: line_number,
+                                start: line_number + 1,
                                 end: 0,
                             },
                             names: Name {
@@ -625,8 +605,8 @@ pub fn comment_lexer(source_vector: &str) -> Result<Vec<ObjectRange>, ErrorHandl
                 TokenKind::Slash => {
                     comment_vector.push(ObjectRange {
                         line_ranges: Range {
-                            start: line_number,
-                            end: line_number,
+                            start: line_number + 1,
+                            end: line_number + 1,
                         },
                         names: Name {
                             type_name: "CommentBlockMultiLineEnd".to_string(),
@@ -635,25 +615,38 @@ pub fn comment_lexer(source_vector: &str) -> Result<Vec<ObjectRange>, ErrorHandl
                     });
                 }
                 TokenKind::LineComment => {
-                    comment_vector.push(ObjectRange {
-                        line_ranges: Range {
-                            start: line_number,
-                            end: line_number,
-                        },
-                        names: Name {
-                            type_name: "LineComment".to_string(),
-                            name: "Comment".to_string(),
-                        },
-                    });
+                    if source.trim().starts_with("///") {
+                        comment_vector.push(ObjectRange {
+                            line_ranges: Range {
+                                start: line_number + 1,
+                                end: line_number + 1,
+                            },
+                            names: Name {
+                                type_name: "LineComment".to_string(),
+                                name: "///".to_string(),
+                            },
+                        }); 
+                    }        
+                    else {
+                        comment_vector.push(ObjectRange {
+                            line_ranges: Range {
+                                start: line_number + 1,
+                                end: line_number + 1,
+                            },
+                            names: Name {
+                                type_name: "LineComment".to_string(),
+                                name: "Comment".to_string(),
+                            },
+                        });
+                    }
                 }
-
                 TokenKind::Lifetime {
                     starts_with_number: _,
                 } => {
                     comment_vector.push(ObjectRange {
                         line_ranges: Range {
-                            start: line_number,
-                            end: line_number,
+                            start: line_number + 1,
+                            end: line_number + 1,
                         },
                         names: Name {
                             type_name: "LifetimeIndicator".to_string(),
@@ -684,18 +677,4 @@ pub fn comment_lexer(source_vector: &str) -> Result<Vec<ObjectRange>, ErrorHandl
     }
 
     Ok(comment_vector)
-}
-
-/// Removes all whitespace characters from the given input string.
-/// This function iterates through each character of the input and constructs a new string containing only the non-whitespace characters.
-///
-/// # Arguments
-///
-/// * `s` - The input `String` from which whitespace should be removed.
-///
-/// # Returns
-///
-/// A `Result` which is `Ok(String)` containing the new string with all whitespace removed, or an `ErrorHandling` enum if an error occurs.
-pub fn remove_whitespace(s: String) -> Result<String, ErrorHandling> {
-    Ok(s.chars().filter(|c| !c.is_whitespace()).collect())
 }

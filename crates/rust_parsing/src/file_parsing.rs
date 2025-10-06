@@ -1,6 +1,9 @@
 use crate::error::{ErrorHandling, InvalidIoOperationsSnafu};
 use crate::object_range::ObjectRange;
+use crate::rust_parser::RustItemParser;
+use crate::rust_parser::RustParser;
 use snafu::ResultExt;
+use tracing::Level;
 use std::{fs::File, io::Write, path::PathBuf};
 pub const REGEX: &str = r#"\{\s*"uuid"\s*:\s*"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",\s*"new_comment"\s*:\s*".*"\s*\}"#;
 pub struct FileExtractor;
@@ -12,11 +15,6 @@ pub trait Files {
 
     fn string_to_vector(source: &str) -> Vec<String>;
 
-    fn push_to_vector(
-        str_source: &[String],
-        push: String,
-        push_path: bool,
-    ) -> Result<Vec<String>, ErrorHandling>;
     //Representing file as a vector of lines is generally the most effective practise
     fn write_to_vecstring(
         path: PathBuf,
@@ -69,40 +67,7 @@ impl Files for FileExtractor {
         source.lines().map(|line| line.to_string()).collect()
     }
 
-    /// Inserts a new string (`push`) into a vector of strings (`str_source`), either at the beginning or the end, while preserving the indentation of the first line. This function is useful for adding new lines of code or comments to a file's content represented as a vector of strings, maintaining consistent formatting.
-    /// It intelligently extracts the leading whitespace from the first line of `str_source` and prepends it to the `push` string before insertion.
-    ///
-    /// # Arguments
-    ///
-    /// * `str_source` - A slice of `String` representing the current lines of code.
-    /// * `push` - The `String` content to be inserted.
-    /// * `push_where` - A `bool` flag: `true` to insert at the beginning (index 0), `false` to insert at the end.
-    ///
-    /// # Returns
-    ///
-    /// A `Result<Vec<String>, ErrorHandling>` containing the modified `Vec<String>` with the new content inserted, or an `ErrorHandling` if the `str_source` is empty.
-    fn push_to_vector(
-        str_source: &[String],
-        push: String,
-        push_where: bool,
-    ) -> Result<Vec<String>, ErrorHandling> {
-        let mut source_clone = str_source.to_owned(); //We do this, so the str_source stays immutable
-        let whitespace = &source_clone
-            .first()
-            .ok_or(ErrorHandling::LineOutOfBounds { line_number: 0 })?
-            .chars()
-            .take_while(|w| w.is_whitespace())
-            .collect::<String>();
-        //whitespace variable preserves formatting, push is the value that has to be inserted
-        let push_preserving = whitespace.to_owned() + &push;
-        if push_where {
-            source_clone.insert(0_usize, push_preserving);
-        } else {
-            source_clone.insert(source_clone.len(), push_preserving);
-        }
-        Ok(source_clone)
-    }
-
+    
     /// Checks if a given `line_number` falls within any of the provided `ObjectRange` items. This utility function helps determine if a specific line of code is part of a recognized structural element (like a function or struct) within the parsed code.
     /// It iterates through a slice of `ObjectRange` objects and returns `false` as soon as it finds a range that contains the `line_number`, indicating that the line is validly part of an object. If no such object is found, it returns `true`.
     ///
@@ -125,4 +90,82 @@ impl Files for FileExtractor {
         }
         Ok(true)
     }
+}
+
+
+pub fn write_with_remove(path: PathBuf, source: Vec<String>, line_index: usize, changes: String) -> Result<(), ErrorHandling> {
+    
+    let source_text = source.join("\n");
+
+    let parsed = RustItemParser::parse_all_rust_items(&source_text).expect("Failed to parse");
+    let functions = parsed.clone()
+        .into_iter()
+        .filter_map(|each| {
+            if each.names.type_name == "fn" {
+                Some(each)
+            } else {
+                None
+            }
+        }).collect::<Vec<ObjectRange>>();
+    let function_at_line_index = functions
+        .iter()
+        .find(|each| {
+            !FileExtractor::check_for_valid_object(&[(*each).clone()], line_index)
+                .expect("Failed to check")
+        });
+    if let Some(val) = function_at_line_index {
+        //Gatekeep against functions with no prior documentation
+        let comments = parsed.clone()
+            .into_iter()
+            .filter_map(|each|
+                if each.names.name == "///" {
+                    Some(each)
+                } else {
+                    None
+                }
+            )
+            .collect::<Vec<ObjectRange>>();
+        if comments.is_empty() {
+            tracing::event!(Level::INFO, "{}", comments.len());
+            FileExtractor::write_to_vecstring(path, source, line_index, changes)?;
+
+            return Ok(());
+        }
+        let remove_from_original = FileExtractor::string_to_vector(&source_text);
+        let mut remove_from_original = remove_from_original.clone();
+    
+        let collect_all_comment_in_range_of_function = comments.clone()
+            .into_iter()
+            .filter_map(|each| {
+                if each.line_ranges.start >= val.line_ranges.start && each.line_ranges.end <= val.line_ranges.end        {
+                    Some(each)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<ObjectRange>>();
+        if let Some(first_value) = collect_all_comment_in_range_of_function.first() && 
+            let Some(last_value) = collect_all_comment_in_range_of_function.last() {
+                remove_from_original.drain(first_value.line_start()-1..last_value.line_end());
+                let actual_function_object = ObjectRange {
+                    line_ranges: last_value.line_end()+1..val.line_end(),
+                    names: val.names.clone(),
+                };
+                tracing::event!(Level::INFO, "{function_at_line_index:?}");
+            
+                tracing::event!(Level::INFO, "{actual_function_object:?}");
+            
+                let no_comment = source[actual_function_object.line_start()-1..actual_function_object.line_end()].join("\n");
+                let mut clone_source = source.clone();
+                clone_source.insert(val.line_end(), no_comment);
+                clone_source.drain(val.line_start()-1..actual_function_object.line_end());
+            
+                FileExtractor::write_to_vecstring(path, clone_source, line_index, changes)?;
+            
+                return Ok(());     
+            }
+
+    }
+    
+    Ok(())
 }

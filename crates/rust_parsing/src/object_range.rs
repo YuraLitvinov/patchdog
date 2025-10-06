@@ -13,13 +13,6 @@ pub struct ObjectRange {
     pub line_ranges: Range<usize>, // Has to stay, as a lot of functionality is bound to this field
     pub names: Name,
 }
-/*
-Calling each object with ObjectRange
-object_name = %object%.object_name()
-object_type = %object%.object_type()
-line_start = %object%.line_start()
-line_end = %object%.line_end()
-*/
 
 impl Default for ObjectRange {
     fn default() -> Self {
