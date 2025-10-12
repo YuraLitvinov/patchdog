@@ -2,7 +2,8 @@ use ai_interactions::return_prompt;
 use gemini_rust::Gemini;
 use openai_rust::Client;
 use rust_parsing::ErrorHandling;
-use std::env::var;
+use snafu::ResultExt;
+use rust_parsing::error::StdVarSnafu;
 
 #[allow(async_fn_in_trait)]
 pub trait RequestResponseConstruction {
@@ -24,8 +25,11 @@ impl RequestResponseConstruction for AiRequest {
         }
     }
 
-    async fn call_llm_gemini(file_content: &str) -> Result<String, ErrorHandling> {
-        let api_key = var("API_KEY_GEMINI")?;
+    async fn call_llm_gemini(file_content: &str) -> Result<String, ErrorHandling> { 
+        let varname = "API_KEY_GEMINI";
+        let api_key = std::env::var(varname)
+            .context(StdVarSnafu {  varname: varname.to_string() })?;
+
         let model = return_prompt()?.llm_settings.gemini_model;
         let client = Gemini::with_model(api_key, model)
             .generate_content()
@@ -44,7 +48,10 @@ impl RequestResponseConstruction for AiRequest {
     /// # Returns
     /// A `Result<String, ErrorHandling>` containing the text response from the OpenAI LLM on success, or an `ErrorHandling` if the API key is missing, configuration cannot be loaded, or the API call fails.
     async fn call_llm_openai(file_content: &str) -> Result<String, ErrorHandling> {
-        let api_key = var("API_KEY_OPENAI")?;
+        let varname = "API_KEY_OPENAI";
+        let api_key = std::env::var(varname)
+            .context(StdVarSnafu {  varname: varname.to_string() })?;
+
         let client = Client::new(&api_key);
         let args = openai_rust::chat::ChatArguments::new(
             return_prompt()?.llm_settings.openai_model,

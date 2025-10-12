@@ -1,4 +1,4 @@
-use rust_parsing::{ErrorHandling, error::InvalidIoOperationsSnafu};
+use rust_parsing::{ErrorHandling, error::{InvalidIoOperationsSnafu, StdVarSnafu}};
 use snafu::ResultExt;
 use std::fs;
 use std::path::Path;
@@ -33,7 +33,10 @@ pub struct YamlRead {
 /// # Returns
 /// A `Result<YamlRead, ErrorHandling>` containing a `YamlRead` struct with the parsed configuration on success, or an `ErrorHandling` if the file cannot be read, parsed, or if essential configuration keys are missing, in which case default values are used and an error is logged.
 pub fn return_prompt() -> Result<YamlRead, ErrorHandling> {
-    let path = Path::new(&std::env::var("CONFIG_PATH")?).to_path_buf();
+    let varname = "CONFIG_PATH";
+    let var = std::env::var(varname)
+        .context(StdVarSnafu {  varname: varname.to_string() })?;
+    let path = Path::new(&var).to_path_buf();
     let config =
         fs::read_to_string(&path).context(InvalidIoOperationsSnafu { path: path.clone() })?;
     let docs = YamlLoader::load_from_str(&config)?;
