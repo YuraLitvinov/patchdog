@@ -2,7 +2,7 @@ name: Build release and publish
 
 on: 
   push:
-    branches: [main]
+    branches: [master]
 
 jobs:
   release-dog:
