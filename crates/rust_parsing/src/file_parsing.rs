@@ -141,13 +141,18 @@ fn write_to_vecstring(
     Ok(())
 }
 
-fn push_to_vector(str_source: &Vec<String>, push: String) -> Result<String, ErrorHandling> {
+fn push_to_vector(str_source: &[String], push: String) -> Result<String, ErrorHandling> {
     let whitespace = str_source
         .first()
         .ok_or(ErrorHandling::LineOutOfBounds { line_number: 0 })?
         .chars()
         .take_while(|w| w.is_whitespace())
         .collect::<String>();
-    let push_preserving = whitespace + &push;
-    Ok(push_preserving)
+    
+    let affect_all_lines = FsOperations::string_to_vector(&push)
+        .into_iter()
+        .map(|each|whitespace.clone() + &each)
+        .collect::<Vec<String>>().join("\n");
+
+    Ok(affect_all_lines)
 }
