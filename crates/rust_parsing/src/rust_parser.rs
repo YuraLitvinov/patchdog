@@ -1,5 +1,5 @@
 use crate::error::{ErrorHandling, InvalidIoOperationsSnafu};
-use crate::file_parsing::{FileExtractor, Files};
+use crate::file_parsing::{Files, FsOperations};
 use crate::object_range::{Name, ObjectRange};
 use ra_ap_ide::TextRange;
 use ra_ap_syntax::ast::{HasModuleItem, HasName};
@@ -8,7 +8,6 @@ use rayon::prelude::*;
 use rustc_lexer::{TokenKind, tokenize};
 use serde::Serialize;
 use snafu::ResultExt;
-use std::collections::HashMap;
 use std::fs;
 use std::ops::Range;
 use std::path::Path;
@@ -53,14 +52,16 @@ pub trait RustParser {
     fn parse_rust_file(src: &Path) -> Result<Vec<ObjectRange>, ErrorHandling>;
     fn rust_item_parser(src: &str) -> Result<ObjectRange, ErrorHandling>;
     fn textrange_into_linerange(range: TextRange, src: &str) -> Range<usize>;
-    fn parse_result_items(src: &str) -> Result<HashMap<TextRange, AnalyzerRange>, ErrorHandling>;
+    fn parse_result_items(src: &str) -> Result<Vec<AnalyzerRange>, ErrorHandling>;
 }
 
 pub struct RustItemParser;
 
 impl RustParser for RustItemParser {
-    /// Parses a Rust source file from a given path and extracts a vector of `ObjectRange` items, each representing a distinct code object (e.g., function, struct) and its line range. This function first reads the file content, then uses a Rust item parser to identify and extract the structural elements.
-    /// It then maps the byte-based text ranges provided by the parser to line-based ranges, making them more human-readable and suitable for operations involving line numbers. This is a core function for understanding the structure of a Rust file.
+    
+    /// Parses a Rust source file from a given path, extracting a vector of `ObjectRange` items. Each `ObjectRange` represents a distinct code object (e.g., function, struct) and its corresponding line range.
+    /// This function reads the file, parses its structural elements using an internal item parser, and then maps byte-based text ranges to human-readable line-based ranges.
+    /// It returns a `Result` containing the vector of `ObjectRange` objects on success, or an `ErrorHandling` if file operations or parsing fail.
     ///
     /// # Arguments
     ///
@@ -74,36 +75,36 @@ impl RustParser for RustItemParser {
         let visited = Self::parse_result_items(&file)?
             .par_iter()
             .map(|val| {
-                let line_ranges = Self::textrange_into_linerange(*val.0, &file);
+                let line_ranges = Self::textrange_into_linerange(val.range, &file);
                 ObjectRange {
                     line_ranges,
-                    names: val.1.names.clone(),
+                    names: val.names.clone(),
                 }
             })
             .collect::<Vec<ObjectRange>>();
         Ok(visited)
     }
 
-    /// Parses a Rust source string to identify all significant Rust items and comments within it.
-    /// It first extracts comments using `comment_lexer` and then parses other structural items (functions, structs, etc.) using `parse_result_items`.
-    /// The function then merges these two sets of identified ranges, converts byte-based ranges to line-based ranges, and sorts the final list by their starting line numbers, providing a comprehensive overview of the code structure.
+    /// This function comprehensively parses a given Rust source code string to identify and consolidate all significant structural items, such as functions, structs, and enums, along with their associated comments.
+    /// It achieves this by first extracting comments and then separately parsing code items, converting their byte-based positions into line-based ranges.
+    /// The results are then merged and sorted chronologically by their starting line number, providing a unified and ordered overview of the code's structure.
     ///
     /// # Arguments
     ///
-    /// * `src` - A string slice representing the Rust source code.
+    /// * `src` - A string slice containing the Rust source code to be parsed.
     ///
     /// # Returns
     ///
-    /// A `Result` which is `Ok(Vec<ObjectRange>)` on success, containing a sorted vector of `ObjectRange` structs for all identified items and comments, or an `ErrorHandling` enum if an error occurs during parsing.
+    /// A `Result` which, on success, yields a sorted `Vec<ObjectRange>` representing all identified code items and comments with their line-based positions. On failure, it returns an `ErrorHandling` enum.
     fn parse_all_rust_items(src: &str) -> Result<Vec<ObjectRange>, ErrorHandling> {
         let mut comments = comment_lexer(src)?;
         let mut visited = Self::parse_result_items(src)?
             .par_iter()
             .map(|val| {
-                let line_ranges = Self::textrange_into_linerange(*val.0, src);
+                let line_ranges = Self::textrange_into_linerange(val.range, src);
                 ObjectRange {
                     line_ranges,
-                    names: val.1.names.clone(),
+                    names: val.names.clone(),
                 }
             })
             .collect::<Vec<ObjectRange>>();
@@ -112,6 +113,7 @@ impl RustParser for RustItemParser {
 
         Ok(visited)
     }
+
     /// Converts a byte-offset based `TextRange` into a human-readable, 1-based line number `Range<usize>`.
     /// This utility function computes the start and end line numbers by first determining the line start offsets in the source string.
     /// It then translates the byte offsets of the `TextRange` into their corresponding line numbers, ensuring the output is always 1-based for user-friendliness.
@@ -138,8 +140,8 @@ impl RustParser for RustItemParser {
     }
 
     /// Parses the given Rust source code string to identify and categorize all top-level Rust items using the `rust-analyzer` AST.
-    /// It leverages `ra_ap_syntax::SourceFile::parse` to construct the syntax tree and then extracts all items, delegating the detailed analysis to `parse_all_rust_analyzer`.
-    /// The function provides a foundational step for understanding the structural elements of a Rust file.
+    /// It constructs the syntax tree using `ra_ap_syntax::SourceFile::parse` and then extracts all items, delegating the detailed analysis to `parse_all_rust_analyzer`.
+    /// This function serves as a foundational step for understanding the high-level structural elements of a Rust file by providing their byte-based text ranges and names.
     ///
     /// # Arguments
     ///
@@ -147,8 +149,8 @@ impl RustParser for RustItemParser {
     ///
     /// # Returns
     ///
-    /// A `Result` which is `Ok(HashMap<TextRange, AnalyzerRange>)` on success, containing a map of text ranges to `AnalyzerRange` structs for each identified top-level item, or an `ErrorHandling` enum if an error occurs during parsing.
-    fn parse_result_items(src: &str) -> Result<HashMap<TextRange, AnalyzerRange>, ErrorHandling> {
+    /// A `Result` which is `Ok(Vec<AnalyzerRange>)` on success, containing a vector of `AnalyzerRange` structs for each identified top-level item, or an `ErrorHandling` enum if an error occurs during parsing.
+    fn parse_result_items(src: &str) -> Result<Vec<AnalyzerRange>, ErrorHandling> {
         let parse = ra_ap_syntax::SourceFile::parse(src, ra_ap_ide::Edition::Edition2024);
         let items = parse
             .tree()
@@ -157,8 +159,9 @@ impl RustParser for RustItemParser {
         parse_all_rust_analyzer(items)
     }
 
-    /// Parses a string slice representing Rust code and extracts a single `ObjectRange` corresponding to the primary code item found. This function is specifically designed to parse a snippet of Rust code (e.g., a single function or struct definition) and return its line range, type name, and identifier.
-    /// It leverages internal parsing utilities to first find all code objects and then focuses on the first one identified. This is particularly useful for analyzing isolated code blocks or changes.
+    /// Parses a string slice representing Rust code to extract a single `ObjectRange` corresponding to the primary code item found within it.
+    /// This function is designed to analyze a snippet of Rust code (e.g., a single function or struct definition) and return its line range, type name, and identifier.
+    /// It first identifies all code objects using internal parsing utilities and then specifically focuses on the first one, making it ideal for analyzing isolated code blocks or granular changes.
     ///
     /// # Arguments
     ///
@@ -171,10 +174,10 @@ impl RustParser for RustItemParser {
         let analyzer: Vec<ObjectRange> = Self::parse_result_items(src)?
             .par_iter()
             .map(|val| {
-                let line_ranges = Self::textrange_into_linerange(*val.0, src);
+                let line_ranges = Self::textrange_into_linerange(val.range, src);
                 ObjectRange {
                     line_ranges,
-                    names: val.1.names.clone(),
+                    names: val.names.clone(),
                 }
             })
             .collect::<Vec<ObjectRange>>();
@@ -234,8 +237,8 @@ fn offset_to_line(offset: usize, line_starts: &[usize]) -> usize {
 }
 
 /// Processes a vector of `rust-analyzer` AST items to extract their `TextRange` and identify their type and name.
-/// It creates a `HashMap` where keys are `TextRange` and values are `AnalyzerRange` structs, categorizing each item like functions, structs, enums, impls, traits, and modules.
-/// The function recursively descends into modules and `impl` blocks to find nested items, building a complete map of all recognized Rust constructs.
+/// This function iterates through various item types like functions, structs, enums, impls, traits, and modules, creating `AnalyzerRange` structs for each.
+/// It recursively descends into modules and `impl` blocks to capture nested items, ensuring a complete and structured map of all recognized Rust constructs within the provided AST.
 ///
 /// # Arguments
 ///
@@ -243,92 +246,74 @@ fn offset_to_line(offset: usize, line_starts: &[usize]) -> usize {
 ///
 /// # Returns
 ///
-/// A `Result` which is `Ok(HashMap<TextRange, AnalyzerRange>)` on success, containing a map of text ranges to `AnalyzerRange` structs for each identified item, or an `ErrorHandling` enum if an error occurs during processing.
+/// A `Result` which is `Ok(Vec<AnalyzerRange>)` on success, containing a vector of `AnalyzerRange` structs for each identified item, or an `ErrorHandling` enum if an error occurs during processing.
 fn parse_all_rust_analyzer(
     items: Vec<ra_ap_syntax::ast::Item>,
-) -> Result<HashMap<TextRange, AnalyzerRange>, ErrorHandling> {
-    let mut analyzer: HashMap<TextRange, AnalyzerRange> = HashMap::new();
+) -> Result<Vec<AnalyzerRange>, ErrorHandling> {
+    let mut analyzer: Vec<AnalyzerRange> = Vec::new();
     for each in items {
         match each {
             ra_ap_syntax::ast::Item::Fn(f) => {
                 let name = f.name();
                 let range = f.syntax().text_range();
                 if let Some(name) = name {
-                    analyzer.insert(
+                    analyzer.push(AnalyzerRange {
                         range,
-                        AnalyzerRange {
-                            range,
-                            names: Name {
-                                type_name: "fn".to_string(),
-                                name: name.to_string(),
-                            },
+                        names: Name {
+                            type_name: "fn".to_string(),
+                            name: name.to_string(),
                         },
-                    );
+                    });
                 } else {
-                    analyzer.insert(
+                    analyzer.push(AnalyzerRange {
                         range,
-                        AnalyzerRange {
-                            range,
-                            names: Name {
-                                type_name: "fn".to_string(),
-                                name: "".to_string(),
-                            },
+                        names: Name {
+                            type_name: "fn".to_string(),
+                            name: "".to_string(),
                         },
-                    );
+                    });
                 }
             }
             ra_ap_syntax::ast::Item::Struct(s) => {
                 let name = s.name();
                 let range = s.syntax().text_range();
                 if let Some(name) = name {
-                    analyzer.insert(
+                    analyzer.push(AnalyzerRange {
                         range,
-                        AnalyzerRange {
-                            range,
-                            names: Name {
-                                type_name: "struct".to_string(),
-                                name: name.to_string(),
-                            },
+                        names: Name {
+                            type_name: "struct".to_string(),
+                            name: name.to_string(),
                         },
-                    );
+                    });
                 } else {
-                    analyzer.insert(
+                    analyzer.push(AnalyzerRange {
                         range,
-                        AnalyzerRange {
-                            range,
-                            names: Name {
-                                type_name: "struct".to_string(),
-                                name: "".to_string(),
-                            },
+                        names: Name {
+                            type_name: "struct".to_string(),
+                            name: "".to_string(),
                         },
-                    );
+                    });
                 }
             }
             ra_ap_syntax::ast::Item::Enum(e) => {
                 let name = e.name();
                 let range = e.syntax().text_range();
                 if let Some(name) = name {
-                    analyzer.insert(
+                    analyzer.push(AnalyzerRange {
                         range,
-                        AnalyzerRange {
-                            range,
-                            names: Name {
-                                type_name: "enum".to_string(),
-                                name: name.to_string(),
-                            },
+                        names: Name {
+                            type_name: "enum".to_string(),
+                            name: name.to_string(),
                         },
-                    );
+                    });
                 } else {
-                    analyzer.insert(
+                    analyzer.push(AnalyzerRange {
                         range,
-                        AnalyzerRange {
-                            range,
-                            names: Name {
-                                type_name: "enum".to_string(),
-                                name: "".to_string(),
-                            },
+                        names: Name {
+                            type_name: "enum".to_string(),
+                            name: "".to_string(),
                         },
-                    );
+                    });
                 }
             }
             ra_ap_syntax::ast::Item::Impl(i) => {
@@ -336,28 +321,22 @@ fn parse_all_rust_analyzer(
 
                 if let Some(name) = name_type {
                     let range = i.syntax().text_range();
-                    analyzer.insert(
+                    analyzer.push(AnalyzerRange {
                         range,
-                        AnalyzerRange {
-                            range,
-                            names: Name {
-                                type_name: "impl".to_string(),
-                                name: name.to_string(),
-                            },
+                        names: Name {
+                            type_name: "impl".to_string(),
+                            name: name.to_string(),
                         },
-                    );
+                    });
                 } else {
                     let range = i.syntax().text_range();
-                    analyzer.insert(
+                    analyzer.push(AnalyzerRange {
                         range,
-                        AnalyzerRange {
-                            range,
-                            names: Name {
-                                type_name: "impl".to_string(),
-                                name: "".to_string(),
-                            },
+                        names: Name {
+                            type_name: "impl".to_string(),
+                            name: "".to_string(),
                         },
-                    );
+                    });
                 }
                 if let Some(val) = i.assoc_item_list() {
                     let items = val.assoc_items();
@@ -366,27 +345,21 @@ fn parse_all_rust_analyzer(
                             let name = f.name();
                             let assoc_fn_range = f.syntax().text_range();
                             if let Some(name) = name {
-                                analyzer.insert(
-                                    assoc_fn_range,
-                                    AnalyzerRange {
-                                        range: assoc_fn_range,
-                                        names: Name {
-                                            type_name: "fn".to_string(),
-                                            name: name.to_string(),
-                                        },
+                                analyzer.push(AnalyzerRange {
+                                    range: assoc_fn_range,
+                                    names: Name {
+                                        type_name: "fn".to_string(),
+                                        name: name.to_string(),
                                     },
-                                );
+                                });
                             } else {
-                                analyzer.insert(
-                                    assoc_fn_range,
-                                    AnalyzerRange {
-                                        range: assoc_fn_range,
-                                        names: Name {
-                                            type_name: "fn".to_string(),
-                                            name: "".to_string(),
-                                        },
+                                analyzer.push(AnalyzerRange {
+                                    range: assoc_fn_range,
+                                    names: Name {
+                                        type_name: "fn".to_string(),
+                                        name: "".to_string(),
                                     },
-                                );
+                                });
                             }
                         }
                     }
@@ -396,147 +369,121 @@ fn parse_all_rust_analyzer(
                 let name = t.name();
                 let range = t.syntax().text_range();
                 if let Some(name) = name {
-                    analyzer.insert(
+                    analyzer.push(AnalyzerRange {
                         range,
-                        AnalyzerRange {
-                            range,
-                            names: Name {
-                                type_name: "trait".to_string(),
-                                name: name.to_string(),
-                            },
+                        names: Name {
+                            type_name: "trait".to_string(),
+                            name: name.to_string(),
                         },
-                    );
+                    });
                 } else {
-                    analyzer.insert(
+                    analyzer.push(AnalyzerRange {
                         range,
-                        AnalyzerRange {
-                            range,
-                            names: Name {
-                                type_name: "trait".to_string(),
-                                name: "".to_string(),
-                            },
+                        names: Name {
+                            type_name: "trait".to_string(),
+                            name: "".to_string(),
                         },
-                    );
+                    });
                 }
+                let recurse = t
+                    .syntax()
+                    .children()
+                    .filter_map(ra_ap_syntax::ast::Item::cast)
+                    .collect::<Vec<ra_ap_syntax::ast::Item>>();
+                let parsed = parse_all_rust_analyzer(recurse)?;
+                analyzer.extend(parsed);
             }
             ra_ap_syntax::ast::Item::TypeAlias(t) => {
                 let name = t.name();
                 let range = t.syntax().text_range();
                 if let Some(name) = name {
-                    analyzer.insert(
+                    analyzer.push(AnalyzerRange {
                         range,
-                        AnalyzerRange {
-                            range,
-                            names: Name {
-                                type_name: "type_alias".to_string(),
-                                name: name.to_string(),
-                            },
+                        names: Name {
+                            type_name: "type_alias".to_string(),
+                            name: name.to_string(),
                         },
-                    );
+                    });
                 } else {
-                    analyzer.insert(
+                    analyzer.push(AnalyzerRange {
                         range,
-                        AnalyzerRange {
-                            range,
-                            names: Name {
-                                type_name: "type_alias".to_string(),
-                                name: "".to_string(),
-                            },
+                        names: Name {
+                            type_name: "type_alias".to_string(),
+                            name: "".to_string(),
                         },
-                    );
+                    });
                 }
             }
             ra_ap_syntax::ast::Item::Use(u) => {
                 let name = u.to_smolstr();
                 let range = u.syntax().text_range();
-                analyzer.insert(
+                analyzer.push(AnalyzerRange {
                     range,
-                    AnalyzerRange {
-                        range,
-                        names: Name {
-                            type_name: "use".to_string(),
-                            name: name.to_string(),
-                        },
+                    names: Name {
+                        type_name: "use".to_string(),
+                        name: name.to_string(),
                     },
-                );
+                });
             }
             ra_ap_syntax::ast::Item::MacroCall(m) => {
                 let range = m.syntax().text_range();
-                analyzer.insert(
+                analyzer.push(AnalyzerRange {
                     range,
-                    AnalyzerRange {
-                        range,
-                        names: Name {
-                            type_name: "macro".to_string(),
-                            name: "".to_string(),
-                        },
+                    names: Name {
+                        type_name: "macro".to_string(),
+                        name: "".to_string(),
                     },
-                );
+                });
             }
             ra_ap_syntax::ast::Item::MacroRules(m) => {
                 let range = m.syntax().text_range();
                 let name = m.name();
                 if let Some(name) = name {
-                    analyzer.insert(
+                    analyzer.push(AnalyzerRange {
                         range,
-                        AnalyzerRange {
-                            range,
-                            names: Name {
-                                type_name: "macro_rules".to_string(),
-                                name: name.to_string(),
-                            },
+                        names: Name {
+                            type_name: "macro_rules".to_string(),
+                            name: name.to_string(),
                         },
-                    );
+                    });
                 } else {
-                    analyzer.insert(
+                    analyzer.push(AnalyzerRange {
                         range,
-                        AnalyzerRange {
-                            range,
-                            names: Name {
-                                type_name: "macro_rules".to_string(),
-                                name: "".to_string(),
-                            },
+                        names: Name {
+                            type_name: "macro_rules".to_string(),
+                            name: "".to_string(),
                         },
-                    );
+                    });
                 }
             }
             ra_ap_syntax::ast::Item::ExternBlock(e) => {
                 let range = e.syntax().text_range();
-                analyzer.insert(
+                analyzer.push(AnalyzerRange {
                     range,
-                    AnalyzerRange {
-                        range,
-                        names: Name {
-                            type_name: "extern_block".to_string(),
-                            name: "".to_string(),
-                        },
+                    names: Name {
+                        type_name: "extern_block".to_string(),
+                        name: "".to_string(),
                     },
-                );
+                });
             }
             ra_ap_syntax::ast::Item::Module(m) => {
                 let range = m.syntax().text_range();
                 if let Some(name) = m.name() {
-                    analyzer.insert(
+                    analyzer.push(AnalyzerRange {
                         range,
-                        AnalyzerRange {
-                            range,
-                            names: Name {
-                                type_name: "mod".to_string(),
-                                name: name.to_string(),
-                            },
+                        names: Name {
+                            type_name: "mod".to_string(),
+                            name: name.to_string(),
                         },
-                    );
+                    });
                 } else {
-                    analyzer.insert(
+                    analyzer.push(AnalyzerRange {
                         range,
-                        AnalyzerRange {
-                            range,
-                            names: Name {
-                                type_name: "mod".to_string(),
-                                name: "".to_string(),
-                            },
+                        names: Name {
+                            type_name: "mod".to_string(),
+                            name: "".to_string(),
                         },
-                    );
+                    });
                 }
                 let items = m.item_list();
                 if let Some(items) = items {
@@ -548,27 +495,21 @@ fn parse_all_rust_analyzer(
             ra_ap_syntax::ast::Item::TraitAlias(t) => {
                 let range = t.syntax().text_range();
                 if let Some(name) = t.name() {
-                    analyzer.insert(
+                    analyzer.push(AnalyzerRange {
                         range,
-                        AnalyzerRange {
-                            range,
-                            names: Name {
-                                type_name: "trait_alias".to_string(),
-                                name: name.to_string(),
-                            },
+                        names: Name {
+                            type_name: "trait_alias".to_string(),
+                            name: name.to_string(),
                         },
-                    );
+                    });
                 } else {
-                    analyzer.insert(
+                    analyzer.push(AnalyzerRange {
                         range,
-                        AnalyzerRange {
-                            range,
-                            names: Name {
-                                type_name: "trait_alias".to_string(),
-                                name: "".to_string(),
-                            },
+                        names: Name {
+                            type_name: "trait_alias".to_string(),
+                            name: "".to_string(),
                         },
-                    );
+                    });
                 }
             }
             _ => (),
@@ -578,9 +519,9 @@ fn parse_all_rust_analyzer(
     Ok(analyzer)
 }
 
-/// Analyzes the input source code to identify and categorize various types of comments and lifetime indicators.
+/// Analyzes the input source code string line by line to identify and categorize various types of comments and lifetime indicators.
 /// It processes line comments, block comments (both single and multi-line), and lifetime indicators, converting them into a structured `Vec<ObjectRange>`.
-/// The function intelligently resolves multi-line block comments by combining their start and end markers into a single `ObjectRange` for simplified representation.
+/// The function smartly resolves multi-line block comments by combining their start and end markers into a single `ObjectRange`, simplifying their representation for subsequent analysis.
 ///
 /// # Arguments
 ///
@@ -590,7 +531,7 @@ fn parse_all_rust_analyzer(
 ///
 /// A `Result` which is `Ok(Vec<ObjectRange>)` on successful parsing, containing a vector of identified comment and lifetime ranges, or an `ErrorHandling` enum if an error occurs.
 pub fn comment_lexer(source_vector: &str) -> Result<Vec<ObjectRange>, ErrorHandling> {
-    let vectorized = FileExtractor::string_to_vector(source_vector);
+    let vectorized = FsOperations::string_to_vector(source_vector);
     let mut comment_vector: Vec<ObjectRange> = Vec::new();
     for (line_number, source) in vectorized.into_iter().enumerate() {
         let tokenized = tokenize(&source);
@@ -601,8 +542,8 @@ pub fn comment_lexer(source_vector: &str) -> Result<Vec<ObjectRange>, ErrorHandl
                     if terminated {
                         comment_vector.push(ObjectRange {
                             line_ranges: Range {
-                                start: line_number,
-                                end: line_number,
+                                start: line_number + 1,
+                                end: line_number + 1,
                             },
                             names: Name {
                                 type_name: "CommentBlockSingeLine".to_string(),
@@ -612,7 +553,7 @@ pub fn comment_lexer(source_vector: &str) -> Result<Vec<ObjectRange>, ErrorHandl
                     } else {
                         comment_vector.push(ObjectRange {
                             line_ranges: Range {
-                                start: line_number,
+                                start: line_number + 1,
                                 end: 0,
                             },
                             names: Name {
@@ -625,8 +566,8 @@ pub fn comment_lexer(source_vector: &str) -> Result<Vec<ObjectRange>, ErrorHandl
                 TokenKind::Slash => {
                     comment_vector.push(ObjectRange {
                         line_ranges: Range {
-                            start: line_number,
-                            end: line_number,
+                            start: line_number + 1,
+                            end: line_number + 1,
                         },
                         names: Name {
                             type_name: "CommentBlockMultiLineEnd".to_string(),
@@ -635,25 +576,37 @@ pub fn comment_lexer(source_vector: &str) -> Result<Vec<ObjectRange>, ErrorHandl
                     });
                 }
                 TokenKind::LineComment => {
-                    comment_vector.push(ObjectRange {
-                        line_ranges: Range {
-                            start: line_number,
-                            end: line_number,
-                        },
-                        names: Name {
-                            type_name: "LineComment".to_string(),
-                            name: "Comment".to_string(),
-                        },
-                    });
+                    if source.trim().starts_with("///") {
+                        comment_vector.push(ObjectRange {
+                            line_ranges: Range {
+                                start: line_number + 1,
+                                end: line_number + 1,
+                            },
+                            names: Name {
+                                type_name: "LineComment".to_string(),
+                                name: "///".to_string(),
+                            },
+                        });
+                    } else {
+                        comment_vector.push(ObjectRange {
+                            line_ranges: Range {
+                                start: line_number + 1,
+                                end: line_number + 1,
+                            },
+                            names: Name {
+                                type_name: "LineComment".to_string(),
+                                name: "Comment".to_string(),
+                            },
+                        });
+                    }
                 }
-
                 TokenKind::Lifetime {
                     starts_with_number: _,
                 } => {
                     comment_vector.push(ObjectRange {
                         line_ranges: Range {
-                            start: line_number,
-                            end: line_number,
+                            start: line_number + 1,
+                            end: line_number + 1,
                         },
                         names: Name {
                             type_name: "LifetimeIndicator".to_string(),
@@ -684,18 +637,4 @@ pub fn comment_lexer(source_vector: &str) -> Result<Vec<ObjectRange>, ErrorHandl
     }
 
     Ok(comment_vector)
-}
-
-/// Removes all whitespace characters from the given input string.
-/// This function iterates through each character of the input and constructs a new string containing only the non-whitespace characters.
-///
-/// # Arguments
-///
-/// * `s` - The input `String` from which whitespace should be removed.
-///
-/// # Returns
-///
-/// A `Result` which is `Ok(String)` containing the new string with all whitespace removed, or an `ErrorHandling` enum if an error occurs.
-pub fn remove_whitespace(s: String) -> Result<String, ErrorHandling> {
-    Ok(s.chars().filter(|c| !c.is_whitespace()).collect())
 }

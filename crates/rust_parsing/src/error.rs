@@ -31,9 +31,10 @@ pub enum ErrorHandling {
         path: PathBuf,
         source: std::io::Error,
     },
-    #[snafu(display("{source}"))]
-    StdVarError {
-        source: VarError,
+    #[snafu(display("{source} NO VARIABLE {varname}"))]
+    StdVar {
+        varname: String,
+        source: VarError
     },
     #[snafu(display("{source}"))]
     GeminiRustError {
@@ -126,11 +127,6 @@ impl From<regex::Error> for ErrorHandling {
 impl From<ScanError> for ErrorHandling {
     fn from(e: ScanError) -> Self {
         ErrorHandling::YamlError { source: e }
-    }
-}
-impl From<VarError> for ErrorHandling {
-    fn from(e: VarError) -> Self {
-        ErrorHandling::StdVarError { source: e }
     }
 }
 

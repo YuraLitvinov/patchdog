@@ -12,7 +12,7 @@ use rust_parsing::error::ErrorBinding;
 use rust_parsing::error::ErrorHandling;
 use rust_parsing::error::InvalidIoOperationsSnafu;
 use rust_parsing::file_parsing::REGEX;
-use rust_parsing::file_parsing::{FileExtractor, Files};
+use rust_parsing::file_parsing::{Files, FsOperations};
 use serde::Deserialize;
 use serde::Serialize;
 use snafu::ResultExt;
@@ -48,15 +48,12 @@ pub struct ResponseForm {
 }
 
 /// Orchestrates the entire process of applying a patch to a codebase, generating AI-based code suggestions, and writing them back to files. This asynchronous function takes a patch file, analyzes the changes, filters them based on exclusion rules, and then generates `Request` objects for an AI agent.
-/// It then calls the AI agent, collects the responses, and writes the suggested new comments or code modifications to the corresponding files. The function includes a call limit to prevent infinite recursion in case of persistent AI failures.
 ///
 /// # Arguments
-///
 /// * `analyzer_data` - `AnalyzerData` providing context for code analysis.
 /// * `commands` - `Mode` struct containing command-line arguments, including the patch file path, target Rust types, and names, and debug flag.
 ///
 /// # Returns
-///
 /// A `Result<(), ErrorBinding>` indicating the success or failure of the entire patch-to-agent and write-back process.
 pub async fn cli_patch_to_agent(
     analyzer_data: AnalyzerData,
@@ -79,7 +76,6 @@ pub async fn cli_patch_to_agent(
         &excluded_paths,
         analyzer_data,
     )?;
-    println!("request: {:#?}", request);
     //Here occurs check for pending changes
     if request.is_empty() {
         event!(Level::INFO, "No requests");
@@ -174,22 +170,14 @@ pub fn cherrypick_response(response: &str) -> Result<Vec<RawResponse>, ErrorHand
     Ok(response_cherrypicked)
 }
 
-/// Matches and processes responses from an external agent, handling potential malformed JSON.
-/// It first attempts to deserialize the entire `response` string as a `Vec<RawResponse>`.
-/// If successful, it performs a cherry-pick extraction and then matches requests to responses.
-/// If deserialization fails, it attempts a fallback repair mechanism by cleaning up the response string
-/// and then re-attempts cherry-picking and matching.
+/// Matches and processes responses from an external agent, handling potential malformed JSON by employing a robust fallback repair mechanism. It attempts to deserialize the raw response directly, and if that fails, it cleans up the string before re-attempting to extract and match `RawResponse` objects with the original `WaitForTimeout` requests.
 ///
 /// # Arguments
-///
 /// * `response` - A string slice (`&str`) containing the raw response from the agent.
 /// * `prepared` - A reference to a `Vec<WaitForTimeout>` representing the original prepared requests.
 ///
 /// # Returns
-///
-/// A `Result<Vec<LinkedResponse>, ErrorHandling>`:
-/// - `Ok(Vec<LinkedResponse>)`: A vector of `LinkedResponse` objects, associating the original request data with the agent's new comment.
-/// - `Err(ErrorHandling)`: If response parsing, cherry-picking, or matching fails even after fallback attempts.
+/// A `Result<Vec<LinkedResponse>, ErrorHandling>`: `Ok` with a vector of `LinkedResponse` objects on success, or an `Err` if response parsing, cherry-picking, or matching fails even after fallback attempts.
 fn matched_response(
     response: &str,
     prepared: &Vec<WaitForTimeout>,
@@ -201,7 +189,7 @@ fn matched_response(
             Ok(res)
         }
         Err(_) => {
-            let as_vec = FileExtractor::string_to_vector(response);
+            let as_vec = FsOperations::string_to_vector(response);
             let a = &as_vec[1..as_vec.len() - 1];
             let to_struct = fallback_repair(a.to_vec())?;
             let from_reg = cherrypick_response(response)?;
@@ -323,16 +311,13 @@ fn fallback_repair(output: Vec<String>) -> Result<Vec<RawResponse>, ErrorHandlin
     Ok(vec![])
 }
 
-/// Writes generated comments or other code changes into specified files based on structured response data.
-/// It sorts the responses by line number in descending order to prevent index shifting issues when inserting multiple changes into the same file.
+/// Writes generated comments or other code changes into specified files based on structured response data. It sorts the responses by line number in descending order to prevent index shifting issues when inserting multiple changes into the same file.
 /// For each response, it reads the target file, inserts the `new_comment` at the designated line range, and then overwrites the file with the updated content.
 ///
 /// # Arguments
-///
 /// * `response` - A `Vec<ResponseForm>` containing the data to be written, including file paths, line ranges, and the new comments.
 ///
 /// # Returns
-///
 /// A `Result<(), ErrorHandling>` indicating success or failure of the write operations.
 pub fn write_to_file(response: Vec<ResponseForm>) -> Result<(), ErrorHandling> {
     let mut response = response;
@@ -343,15 +328,15 @@ pub fn write_to_file(response: Vec<ResponseForm>) -> Result<(), ErrorHandling> {
             .start
             .cmp(&a.data.metadata.line_range.start)
     });
+
     event!(Level::INFO, "Quantity of responses: {}", response.len());
-    //Typical representation of file as vector of lines
+
     for each in response {
         let path = each.data.metadata.filepath;
         let file = fs::read_to_string(&path).context(InvalidIoOperationsSnafu { path: &path })?;
-        let as_vec = FileExtractor::string_to_vector(&file);
-        FileExtractor::write_to_vecstring(
+        FsOperations::write_with_remove(
             path,
-            as_vec,
+            FsOperations::string_to_vector(&file),
             each.data.metadata.line_range.start,
             each.new_comment,
         )?;

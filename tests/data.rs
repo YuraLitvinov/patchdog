@@ -75,3 +75,4 @@ fn result_function() -> Result<(), String> {
     MyStruct::static_method();
     Ok(())
 }
+

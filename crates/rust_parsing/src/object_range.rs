@@ -13,15 +13,12 @@ pub struct ObjectRange {
     pub line_ranges: Range<usize>, // Has to stay, as a lot of functionality is bound to this field
     pub names: Name,
 }
-/*
-Calling each object with ObjectRange
-object_name = %object%.object_name()
-object_type = %object%.object_type()
-line_start = %object%.line_start()
-line_end = %object%.line_end()
-*/
 
 impl Default for ObjectRange {
+    /// Creates a default instance of the `ObjectRange` struct. This default implementation initializes `line_ranges` to an empty range (0..0) and `names` to a `Name` struct with empty strings for both `type_name` and `name`.
+    ///
+    /// # Returns
+    /// A new `ObjectRange` instance with default values.
     fn default() -> Self {
         Self {
             line_ranges: 0..0,

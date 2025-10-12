@@ -8,7 +8,7 @@ use glob::glob;
 use rayon::prelude::*;
 use rust_parsing::ObjectRange;
 use rust_parsing::error::{ErrorBinding, InvalidIoOperationsSnafu};
-use rust_parsing::file_parsing::{FileExtractor, Files};
+use rust_parsing::file_parsing::{Files, FsOperations};
 use rust_parsing::rust_parser::{RustItemParser, RustParser};
 use rust_parsing::{self};
 use serde::{Deserialize, Serialize};
@@ -60,6 +60,14 @@ pub struct ChangeFromPatch {
     pub range: Vec<Range<usize>>,
 }
 
+/// Determines if a given `file` path is allowed for processing based on a list of `exclusions`, which can include glob patterns. It canonicalizes both the file path and each exclusion pattern to ensure accurate comparisons, even with relative paths or symbolic links.
+///
+/// # Arguments
+/// * `file` - A reference to the `Path` of the file to check.
+/// * `exclusions` - A slice of strings, where each string is an exclusion pattern or a direct path.
+///
+/// # Returns
+/// A `Result<bool, ErrorBinding>` which is `true` if the file is not excluded, `false` if it matches any exclusion pattern or is a subpath of an excluded directory, or an `ErrorBinding` if canonicalization fails.
 pub fn is_file_allowed(file: &Path, exclusions: &[String]) -> Result<bool, ErrorBinding> {
     let excluded_global = exclusions
         .iter()
@@ -73,7 +81,7 @@ pub fn is_file_allowed(file: &Path, exclusions: &[String]) -> Result<bool, Error
                     .collect::<Vec<_>>()
             } else {
                 // Just canonicalize single path
-                vec![fs::canonicalize(pat).unwrap()]
+                vec![fs::canonicalize(pat).expect("Canonicalize failed")]
             }
         })
         .collect::<Vec<PathBuf>>();
@@ -89,6 +97,17 @@ pub fn is_file_allowed(file: &Path, exclusions: &[String]) -> Result<bool, Error
     Ok(!starts)
 }
 
+/// Processes a list of changes extracted from a patch, filtering them based on configured file and function exclusion lists, and then constructs `Request` objects for AI processing. For each relevant change, it identifies the affected Rust item (e.g., function, struct), extracts its source code, and gathers semantic context from the codebase using the `analyzer_data`.
+///
+/// # Arguments
+/// * `exported_from_file` - A vector of `ChangeFromPatch` structs detailing file and range changes.
+/// * `rust_type` - A vector of string names for Rust types to include (e.g., "fn", "struct").
+/// * `rust_name` - A vector of string names for specific Rust items to include.
+/// * `file_exclude` - A slice of strings representing file paths or glob patterns to exclude.
+/// * `analyzer_data` - `AnalyzerData` providing context for code analysis.
+///
+/// # Returns
+/// A `Result<Vec<Request>, ErrorBinding>` containing a vector of `Request` objects for the AI agent, or an `ErrorBinding` if any parsing or file operation fails.
 pub fn changes_from_patch(
     exported_from_file: Vec<ChangeFromPatch>,
     rust_type: Vec<String>,
@@ -140,7 +159,7 @@ pub fn changes_from_patch(
                             .contains(obj_name_to_compare)
                 {
                     //At this point in parsed_file we are already aware of all the referenced data
-                    let fn_as_string = FileExtractor::string_to_vector(&source)
+                    let fn_as_string = FsOperations::string_to_vector(&source)
                         [change.range.start - 1..change.range.end]
                         .join("\n");
                     /*
@@ -155,19 +174,16 @@ pub fn changes_from_patch(
                     for each in parse_analyzer {
                         let changed_syn = change.range.start..change.range.end;
                         let linerange =
-                            RustItemParser::textrange_into_linerange(each.0.to_owned(), &source);
+                            RustItemParser::textrange_into_linerange(each.range, &source);
                         if linerange == changed_syn {
-                            lineranges.push(each.0);
+                            lineranges.push(each.range);
                         }
                     }
-                    let analyzer_context = contextualizer(
-                        &change.filename,
-                        lineranges.first().copied(),
-                        &analyzer_data,
-                    )
-                    .par_iter()
-                    .map(|(_, value)| value.to_string())
-                    .collect::<Vec<String>>();
+                    let analyzer_context =
+                        contextualizer(&change.filename, lineranges.first(), &analyzer_data)
+                            .par_iter()
+                            .map(|(_, value)| value.to_string())
+                            .collect::<Vec<String>>();
                     let context = Context {
                         class_name: "".to_string(),
                         external_dependencies: analyzer_context,
@@ -279,16 +295,13 @@ fn store_objects(
     Ok(vec_of_surplus)
 }
 
-/// Parses a patch file to identify changed lines within Rust code objects and associates them with their respective files. This function reads the patch, extracts diff hunks, and then iterates through relevant Rust files to determine which `ObjectRange` items (e.g., functions, structs) are affected by the changes.
-/// It ultimately returns a structured list of `Difference` objects, each containing a filename and a vector of line numbers that have been modified.
+/// Parses a Git patch file to identify changed lines within Rust code objects and associates them with their respective files. This function reads the patch, extracts diff hunks, and then iterates through relevant Rust files to determine which `ObjectRange` items (e.g., functions, structs) are affected by the changes.
 ///
 /// # Arguments
-///
 /// * `path_to_patch` - A `PathBuf` pointing to the patch file to be analyzed.
 /// * `relative_path` - A `PathBuf` representing the base directory for resolving file paths mentioned in the patch.
 ///
 /// # Returns
-///
 /// A `Result<Vec<Difference>, ErrorBinding>` containing a vector of `Difference` objects, each indicating the filename and the lines affected by the patch, or an `ErrorBinding` if any file or parsing operation fails.
 fn patch_export_change(
     path_to_patch: PathBuf,
@@ -306,16 +319,18 @@ fn patch_export_change(
         let parsed = RustItemParser::parse_result_items(&file)?
             .par_iter()
             .map(|val| {
-                let range = RustItemParser::textrange_into_linerange(*val.0, &file);
+                let range = RustItemParser::textrange_into_linerange(val.range, &file);
                 ObjectRange {
                     line_ranges: range,
-                    names: val.1.names.clone(),
+                    names: val.names.to_owned(),
                 }
             })
             .collect::<Vec<ObjectRange>>();
         for each in &diff_hunk.hunk {
-            let parsed_in_diff = &parsed;
-            if FileExtractor::check_for_valid_object(parsed_in_diff, each.get_line())? {
+            if FsOperations::check_for_valid_object(
+                &parsed.iter().collect::<Vec<&ObjectRange>>(),
+                each.get_line(),
+            ) {
                 continue;
             }
             change_in_line.push(each.get_line());
