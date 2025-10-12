@@ -76,15 +76,3 @@ fn result_function() -> Result<(), String> {
     Ok(())
 }
 
-/// A blank function that does nothing at all, this is a oneliner
-fn test_for_lexer2() -> Result<(), String> {
-    MyStruct::static_method();
-    Ok(())
-}
-
-/// A blank function that does nothing at all
-/// I really mean it! This one is a multiliner
-fn test_for_lexer() -> Result<(), String> {
-    MyStruct::static_method();
-    Ok(())
-}

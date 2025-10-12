@@ -8,7 +8,7 @@ use glob::glob;
 use rayon::prelude::*;
 use rust_parsing::ObjectRange;
 use rust_parsing::error::{ErrorBinding, InvalidIoOperationsSnafu};
-use rust_parsing::file_parsing::{FileExtractor, Files};
+use rust_parsing::file_parsing::{Files, FsOperations};
 use rust_parsing::rust_parser::{RustItemParser, RustParser};
 use rust_parsing::{self};
 use serde::{Deserialize, Serialize};
@@ -140,7 +140,7 @@ pub fn changes_from_patch(
                             .contains(obj_name_to_compare)
                 {
                     //At this point in parsed_file we are already aware of all the referenced data
-                    let fn_as_string = FileExtractor::string_to_vector(&source)
+                    let fn_as_string = FsOperations::string_to_vector(&source)
                         [change.range.start - 1..change.range.end]
                         .join("\n");
                     /*
@@ -311,8 +311,10 @@ fn patch_export_change(
             })
             .collect::<Vec<ObjectRange>>();
         for each in &diff_hunk.hunk {
-            let parsed_in_diff = &parsed;
-            if FileExtractor::check_for_valid_object(parsed_in_diff, each.get_line())? {
+            if FsOperations::check_for_valid_object(
+                &parsed.iter().collect::<Vec<&ObjectRange>>(),
+                each.get_line(),
+            ) {
                 continue;
             }
             change_in_line.push(each.get_line());

@@ -5,54 +5,23 @@ use crate::rust_parser::RustParser;
 use snafu::ResultExt;
 use std::{fs::File, io::Write, path::PathBuf};
 use tracing::Level;
+// This REGEX is used outside of file_parsing and inside fallback_repair for JSON parsing
 pub const REGEX: &str = r#"\{\s*"uuid"\s*:\s*"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",\s*"new_comment"\s*:\s*".*"\s*\}"#;
-pub struct FileExtractor;
+pub struct FsOperations;
 pub trait Files {
-    fn check_for_valid_object(
-        parsed: &[ObjectRange],
-        line_number: usize,
-    ) -> Result<bool, ErrorHandling>;
+    fn check_for_valid_object(parsed: &[&ObjectRange], line_number: usize) -> bool;
 
     fn string_to_vector(source: &str) -> Vec<String>;
 
-    //Representing file as a vector of lines is generally the most effective practise
-    fn write_to_vecstring(
+    fn write_with_remove(
         path: PathBuf,
         source: Vec<String>,
-        line_index: usize,
+        line_number: usize,
         changed_element: String,
     ) -> Result<(), ErrorHandling>;
 }
 
-impl Files for FileExtractor {
-    /// Inserts a `changed_element` string into a `Vec<String>` representation of a file at a specific `line_index` and then writes the modified content back to the original file path. This function is designed to apply changes to a file by modifying its in-memory line representation and then persisting these changes.
-    /// It handles file creation and writing, ensuring that the updated content is correctly saved. The `line_index` is adjusted to be 1-based for user convenience, but internally adjusted for 0-based vector indexing.
-    ///
-    /// # Arguments
-    ///
-    /// * `path` - A `PathBuf` representing the path to the file to be modified.
-    /// * `source` - A mutable `Vec<String>` containing the lines of the file.
-    /// * `line_index` - The 1-based `usize` line number where the `changed_element` should be inserted.
-    /// * `changed_element` - The `String` content to be inserted into the file.
-    ///
-    /// # Returns
-    ///
-    /// A `Result<(), ErrorHandling>` indicating success or an `ErrorHandling` if file operations fail.
-    fn write_to_vecstring(
-        path: PathBuf,
-        mut source: Vec<String>,
-        line_index: usize,
-        changed_element: String,
-    ) -> Result<(), ErrorHandling> {
-        source.insert(line_index.saturating_sub(1), changed_element);
-        let mut file =
-            File::create(path.clone()).context(InvalidIoOperationsSnafu { path: path.clone() })?;
-        for each in &source {
-            writeln!(file, "{each}").context(InvalidIoOperationsSnafu { path: path.clone() })?;
-        }
-        Ok(())
-    }
-
+impl Files for FsOperations {
     /// Converts a multi-line string slice into a `Vec<String>`, where each element of the vector represents a single line from the input string. This function is a straightforward utility for breaking down file content into manageable line-by-line components.
     /// It simplifies processing textual data by providing a convenient way to iterate, modify, or analyze individual lines of a file.
     ///
@@ -78,107 +47,107 @@ impl Files for FileExtractor {
     /// # Returns
     ///
     /// A `Result<bool, ErrorHandling>` which is `false` if the line number is within an object's range, `true` otherwise, or an `ErrorHandling` if an internal error occurs.
-    fn check_for_valid_object(
-        parsed: &[ObjectRange],
-        line_number: usize,
-    ) -> Result<bool, ErrorHandling> {
+    fn check_for_valid_object(parsed: &[&ObjectRange], line_number: usize) -> bool {
         for each in parsed {
             if each.line_ranges.start <= line_number && line_number <= each.line_ranges.end {
-                return Ok(false);
+                return false;
             }
         }
-        Ok(true)
+        true
+    }
+
+    fn write_with_remove(
+        path: PathBuf,
+        mut source: Vec<String>,
+        line_number: usize,
+        changes: String,
+    ) -> Result<(), ErrorHandling> {
+        let parsed = RustItemParser::parse_all_rust_items(&source.join("\n"))?;
+        let functions = parsed
+            .into_iter()
+            .filter_map(|each| {
+                if each.names.type_name == "fn" {
+                    Some(each)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<ObjectRange>>();
+        let function_at_line_number = functions
+            .iter()
+            .find(|each| !FsOperations::check_for_valid_object(&[*each], line_number));
+
+        if let Some(func) = function_at_line_number {
+            let function_range = source[func.line_start() - 1..func.line_end()].to_vec();
+            let parse_items_within_function_range =
+                RustItemParser::parse_all_rust_items(&function_range.join("\n"))?;
+
+            //Gatekeep against functions with no prior documentation
+            let comments = parse_items_within_function_range
+                .into_iter()
+                .filter_map(|each| {
+                    if each.names.name == "///" {
+                        Some(each)
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<ObjectRange>>();
+            if comments.is_empty() {
+                tracing::event!(Level::INFO, "{}", comments.len());
+                let rfc_changes = push_to_vector(&function_range, changes)?;
+
+                write_to_vecstring(path, source, func.line_start(), rfc_changes)?;
+
+                return Ok(());
+            }
+            let mut function_no_comment = function_range;
+
+            if let Some(first_value) = comments.first()
+                && let Some(last_value) = comments.last()
+            {
+                function_no_comment.drain(first_value.line_start() - 1..last_value.line_end());
+
+                tracing::event!(Level::INFO, "{function_at_line_number:?}");
+
+                source.insert(func.line_end(), function_no_comment.join("\n"));
+                source.drain(func.line_start() - 1..func.line_end());
+
+                // Included whitespaces are necessary to suffice RFC 1574 convention
+                let rfc_changes = push_to_vector(&function_no_comment, changes)?;
+
+                write_to_vecstring(path, source, func.line_start(), rfc_changes)?;
+
+                return Ok(());
+            }
+        }
+
+        Ok(())
     }
 }
 
-pub fn write_with_remove(
+fn write_to_vecstring(
     path: PathBuf,
-    source: Vec<String>,
-    line_index: usize,
+    mut source: Vec<String>,
+    line_number: usize,
     changes: String,
 ) -> Result<(), ErrorHandling> {
-    println!("WRITE_WITH_REMOVE");
-    let source_text = source.join("\n");
-
-    let parsed = RustItemParser::parse_all_rust_items(&source_text).expect("Failed to parse");
-    let functions = parsed
-        .clone()
-        .into_iter()
-        .filter_map(|each| {
-            if each.names.type_name == "fn" {
-                Some(each)
-            } else {
-                None
-            }
-        })
-        .collect::<Vec<ObjectRange>>();
-    let function_at_line_index = functions.iter().find(|each| {
-        !FileExtractor::check_for_valid_object(&[(*each).clone()], line_index)
-            .expect("Failed to check")
-    });
-
-    if let Some(val) = function_at_line_index {
-        let function_range = source[val.line_start() - 1..val.line_end()].join("\n");
-        let parse_items_within_function_range = RustItemParser::parse_all_rust_items(&function_range)?;
-        //Gatekeep against functions with no prior documentation
-        let comments = parse_items_within_function_range
-            .clone()
-            .into_iter()
-            .filter_map(|each| {
-                if each.names.name == "///" {
-                    Some(each)
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<ObjectRange>>();
-        if comments.is_empty() {
-            println!("empty");
-            tracing::event!(Level::INFO, "{}", comments.len());
-            FileExtractor::write_to_vecstring(path, source, line_index, changes)?;
-
-            return Ok(());
-        }
-        let remove_from_original = FileExtractor::string_to_vector(&source_text);
-        let mut remove_from_original = remove_from_original.clone();
-
-        let collect_all_comment_in_range_of_function = comments
-            .clone()
-            .into_iter()
-            .filter_map(|each| {
-                if each.line_ranges.start >= val.line_ranges.start
-                    && each.line_ranges.end <= val.line_ranges.end
-                {
-                    Some(each)
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<ObjectRange>>();
-        if let Some(first_value) = collect_all_comment_in_range_of_function.first()
-            && let Some(last_value) = collect_all_comment_in_range_of_function.last()
-        {
-            remove_from_original.drain(first_value.line_start() - 1..last_value.line_end());
-            let actual_function_object = ObjectRange {
-                line_ranges: last_value.line_end() + 1..val.line_end(),
-                names: val.names.clone(),
-            };
-            tracing::event!(Level::INFO, "{function_at_line_index:?}");
-
-            tracing::event!(Level::INFO, "{actual_function_object:?}");
-
-            let no_comment = source
-                [actual_function_object.line_start() - 1..actual_function_object.line_end()]
-                .join("\n");
-            let mut clone_source = source.clone();
-            clone_source.insert(val.line_end(), no_comment);
-            clone_source.drain(val.line_start() - 1..actual_function_object.line_end());
-
-            FileExtractor::write_to_vecstring(path, clone_source, line_index, changes)?;
-
-            return Ok(());
-        }
+    let path = path.as_path();
+    source.insert(line_number.saturating_sub(1), changes);
+    let mut file = File::create(path).context(InvalidIoOperationsSnafu { path: &path })?;
+    for each in &source {
+        writeln!(file, "{each}").context(InvalidIoOperationsSnafu { path: &path })?;
     }
-
     Ok(())
+}
+
+fn push_to_vector(str_source: &Vec<String>, push: String) -> Result<String, ErrorHandling> {
+    let whitespace = str_source
+        .first()
+        .ok_or(ErrorHandling::LineOutOfBounds { line_number: 0 })?
+        .chars()
+        .take_while(|w| w.is_whitespace())
+        .collect::<String>();
+    let push_preserving = whitespace + &push;
+    Ok(push_preserving)
 }

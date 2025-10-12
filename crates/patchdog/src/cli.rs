@@ -12,7 +12,7 @@ use rust_parsing::error::ErrorBinding;
 use rust_parsing::error::ErrorHandling;
 use rust_parsing::error::InvalidIoOperationsSnafu;
 use rust_parsing::file_parsing::REGEX;
-use rust_parsing::file_parsing::{FileExtractor, Files};
+use rust_parsing::file_parsing::{Files, FsOperations};
 use serde::Deserialize;
 use serde::Serialize;
 use snafu::ResultExt;
@@ -201,7 +201,7 @@ fn matched_response(
             Ok(res)
         }
         Err(_) => {
-            let as_vec = FileExtractor::string_to_vector(response);
+            let as_vec = FsOperations::string_to_vector(response);
             let a = &as_vec[1..as_vec.len() - 1];
             let to_struct = fallback_repair(a.to_vec())?;
             let from_reg = cherrypick_response(response)?;
@@ -343,15 +343,15 @@ pub fn write_to_file(response: Vec<ResponseForm>) -> Result<(), ErrorHandling> {
             .start
             .cmp(&a.data.metadata.line_range.start)
     });
+
     event!(Level::INFO, "Quantity of responses: {}", response.len());
-    //Typical representation of file as vector of lines
+
     for each in response {
         let path = each.data.metadata.filepath;
         let file = fs::read_to_string(&path).context(InvalidIoOperationsSnafu { path: &path })?;
-        let as_vec = FileExtractor::string_to_vector(&file);
-        FileExtractor::write_to_vecstring(
+        FsOperations::write_with_remove(
             path,
-            as_vec,
+            FsOperations::string_to_vector(&file),
             each.data.metadata.line_range.start,
             each.new_comment,
         )?;

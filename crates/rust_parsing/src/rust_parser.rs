@@ -1,5 +1,5 @@
 use crate::error::{ErrorHandling, InvalidIoOperationsSnafu};
-use crate::file_parsing::{FileExtractor, Files};
+use crate::file_parsing::{Files, FsOperations};
 use crate::object_range::{Name, ObjectRange};
 use ra_ap_ide::TextRange;
 use ra_ap_syntax::ast::{HasModuleItem, HasName};
@@ -253,75 +253,63 @@ fn parse_all_rust_analyzer(
                 let name = f.name();
                 let range = f.syntax().text_range();
                 if let Some(name) = name {
-                    analyzer.push(
-                        AnalyzerRange {
-                            range,
-                            names: Name {
-                                type_name: "fn".to_string(),
-                                name: name.to_string(),
-                            },
+                    analyzer.push(AnalyzerRange {
+                        range,
+                        names: Name {
+                            type_name: "fn".to_string(),
+                            name: name.to_string(),
                         },
-                    );
+                    });
                 } else {
-                    analyzer.push(
-                        AnalyzerRange {
-                            range,
-                            names: Name {
-                                type_name: "fn".to_string(),
-                                name: "".to_string(),
-                            },
+                    analyzer.push(AnalyzerRange {
+                        range,
+                        names: Name {
+                            type_name: "fn".to_string(),
+                            name: "".to_string(),
                         },
-                    );
+                    });
                 }
             }
             ra_ap_syntax::ast::Item::Struct(s) => {
                 let name = s.name();
                 let range = s.syntax().text_range();
                 if let Some(name) = name {
-                    analyzer.push(
-                        AnalyzerRange {
-                            range,
-                            names: Name {
-                                type_name: "struct".to_string(),
-                                name: name.to_string(),
-                            },
+                    analyzer.push(AnalyzerRange {
+                        range,
+                        names: Name {
+                            type_name: "struct".to_string(),
+                            name: name.to_string(),
                         },
-                    );
+                    });
                 } else {
-                    analyzer.push(
-                        AnalyzerRange {
-                            range,
-                            names: Name {
-                                type_name: "struct".to_string(),
-                                name: "".to_string(),
-                            },
+                    analyzer.push(AnalyzerRange {
+                        range,
+                        names: Name {
+                            type_name: "struct".to_string(),
+                            name: "".to_string(),
                         },
-                    );
+                    });
                 }
             }
             ra_ap_syntax::ast::Item::Enum(e) => {
                 let name = e.name();
                 let range = e.syntax().text_range();
                 if let Some(name) = name {
-                    analyzer.push(
-                        AnalyzerRange {
-                            range,
-                            names: Name {
-                                type_name: "enum".to_string(),
-                                name: name.to_string(),
-                            },
+                    analyzer.push(AnalyzerRange {
+                        range,
+                        names: Name {
+                            type_name: "enum".to_string(),
+                            name: name.to_string(),
                         },
-                    );
+                    });
                 } else {
-                    analyzer.push(
-                        AnalyzerRange {
-                            range,
-                            names: Name {
-                                type_name: "enum".to_string(),
-                                name: "".to_string(),
-                            },
+                    analyzer.push(AnalyzerRange {
+                        range,
+                        names: Name {
+                            type_name: "enum".to_string(),
+                            name: "".to_string(),
                         },
-                    );
+                    });
                 }
             }
             ra_ap_syntax::ast::Item::Impl(i) => {
@@ -329,26 +317,22 @@ fn parse_all_rust_analyzer(
 
                 if let Some(name) = name_type {
                     let range = i.syntax().text_range();
-                    analyzer.push(
-                        AnalyzerRange {
-                            range,
-                            names: Name {
-                                type_name: "impl".to_string(),
-                                name: name.to_string(),
-                            },
+                    analyzer.push(AnalyzerRange {
+                        range,
+                        names: Name {
+                            type_name: "impl".to_string(),
+                            name: name.to_string(),
                         },
-                    );
+                    });
                 } else {
                     let range = i.syntax().text_range();
-                    analyzer.push(
-                        AnalyzerRange {
-                            range,
-                            names: Name {
-                                type_name: "impl".to_string(),
-                                name: "".to_string(),
-                            },
+                    analyzer.push(AnalyzerRange {
+                        range,
+                        names: Name {
+                            type_name: "impl".to_string(),
+                            name: "".to_string(),
                         },
-                    );
+                    });
                 }
                 if let Some(val) = i.assoc_item_list() {
                     let items = val.assoc_items();
@@ -357,25 +341,21 @@ fn parse_all_rust_analyzer(
                             let name = f.name();
                             let assoc_fn_range = f.syntax().text_range();
                             if let Some(name) = name {
-                                analyzer.push(
-                                    AnalyzerRange {
-                                        range: assoc_fn_range,
-                                        names: Name {
-                                            type_name: "fn".to_string(),
-                                            name: name.to_string(),
-                                        },
+                                analyzer.push(AnalyzerRange {
+                                    range: assoc_fn_range,
+                                    names: Name {
+                                        type_name: "fn".to_string(),
+                                        name: name.to_string(),
                                     },
-                                );
+                                });
                             } else {
-                                analyzer.push(
-                                    AnalyzerRange {
-                                        range: assoc_fn_range,
-                                        names: Name {
-                                            type_name: "fn".to_string(),
-                                            name: "".to_string(),
-                                        },
+                                analyzer.push(AnalyzerRange {
+                                    range: assoc_fn_range,
+                                    names: Name {
+                                        type_name: "fn".to_string(),
+                                        name: "".to_string(),
                                     },
-                                );
+                                });
                             }
                         }
                     }
@@ -385,140 +365,121 @@ fn parse_all_rust_analyzer(
                 let name = t.name();
                 let range = t.syntax().text_range();
                 if let Some(name) = name {
-                    analyzer.push(
-                        AnalyzerRange {
-                            range,
-                            names: Name {
-                                type_name: "trait".to_string(),
-                                name: name.to_string(),
-                            },
+                    analyzer.push(AnalyzerRange {
+                        range,
+                        names: Name {
+                            type_name: "trait".to_string(),
+                            name: name.to_string(),
                         },
-                    );
+                    });
                 } else {
-                    analyzer.push(
-                        AnalyzerRange {
-                            range,
-                            names: Name {
-                                type_name: "trait".to_string(),
-                                name: "".to_string(),
-                            },
+                    analyzer.push(AnalyzerRange {
+                        range,
+                        names: Name {
+                            type_name: "trait".to_string(),
+                            name: "".to_string(),
                         },
-                    );
+                    });
                 }
-                let recurse = t.syntax().children().filter_map(ra_ap_syntax::ast::Item::cast).collect::<Vec<ra_ap_syntax::ast::Item>>();
+                let recurse = t
+                    .syntax()
+                    .children()
+                    .filter_map(ra_ap_syntax::ast::Item::cast)
+                    .collect::<Vec<ra_ap_syntax::ast::Item>>();
                 let parsed = parse_all_rust_analyzer(recurse)?;
                 analyzer.extend(parsed);
-                
             }
             ra_ap_syntax::ast::Item::TypeAlias(t) => {
                 let name = t.name();
                 let range = t.syntax().text_range();
                 if let Some(name) = name {
-                    analyzer.push(
-                        AnalyzerRange {
-                            range,
-                            names: Name {
-                                type_name: "type_alias".to_string(),
-                                name: name.to_string(),
-                            },
+                    analyzer.push(AnalyzerRange {
+                        range,
+                        names: Name {
+                            type_name: "type_alias".to_string(),
+                            name: name.to_string(),
                         },
-                    );
+                    });
                 } else {
-                    analyzer.push(
-                        AnalyzerRange {
-                            range,
-                            names: Name {
-                                type_name: "type_alias".to_string(),
-                                name: "".to_string(),
-                            },
+                    analyzer.push(AnalyzerRange {
+                        range,
+                        names: Name {
+                            type_name: "type_alias".to_string(),
+                            name: "".to_string(),
                         },
-                    );
+                    });
                 }
             }
             ra_ap_syntax::ast::Item::Use(u) => {
                 let name = u.to_smolstr();
                 let range = u.syntax().text_range();
-                analyzer.push(
-                    AnalyzerRange {
-                        range,
-                        names: Name {
-                            type_name: "use".to_string(),
-                            name: name.to_string(),
-                        },
+                analyzer.push(AnalyzerRange {
+                    range,
+                    names: Name {
+                        type_name: "use".to_string(),
+                        name: name.to_string(),
                     },
-                );
+                });
             }
             ra_ap_syntax::ast::Item::MacroCall(m) => {
                 let range = m.syntax().text_range();
-                analyzer.push(
-                    AnalyzerRange {
-                        range,
-                        names: Name {
-                            type_name: "macro".to_string(),
-                            name: "".to_string(),
-                        },
+                analyzer.push(AnalyzerRange {
+                    range,
+                    names: Name {
+                        type_name: "macro".to_string(),
+                        name: "".to_string(),
                     },
-                );
+                });
             }
             ra_ap_syntax::ast::Item::MacroRules(m) => {
                 let range = m.syntax().text_range();
                 let name = m.name();
                 if let Some(name) = name {
-                    analyzer.push(
-                        AnalyzerRange {
-                            range,
-                            names: Name {
-                                type_name: "macro_rules".to_string(),
-                                name: name.to_string(),
-                            },
+                    analyzer.push(AnalyzerRange {
+                        range,
+                        names: Name {
+                            type_name: "macro_rules".to_string(),
+                            name: name.to_string(),
                         },
-                    );
+                    });
                 } else {
-                    analyzer.push(
-                        AnalyzerRange {
-                            range,
-                            names: Name {
-                                type_name: "macro_rules".to_string(),
-                                name: "".to_string(),
-                            },
+                    analyzer.push(AnalyzerRange {
+                        range,
+                        names: Name {
+                            type_name: "macro_rules".to_string(),
+                            name: "".to_string(),
                         },
-                    );
+                    });
                 }
             }
             ra_ap_syntax::ast::Item::ExternBlock(e) => {
                 let range = e.syntax().text_range();
-                analyzer.push(
-                    AnalyzerRange {
-                        range,
-                        names: Name {
-                            type_name: "extern_block".to_string(),
-                            name: "".to_string(),
-                        },
+                analyzer.push(AnalyzerRange {
+                    range,
+                    names: Name {
+                        type_name: "extern_block".to_string(),
+                        name: "".to_string(),
                     },
-                );
+                });
             }
             ra_ap_syntax::ast::Item::Module(m) => {
                 let range = m.syntax().text_range();
                 if let Some(name) = m.name() {
-                    analyzer.push(
-                        AnalyzerRange {
-                            range,
-                            names: Name {
-                                type_name: "mod".to_string(),
-                                name: name.to_string(),
-                            },
+                    analyzer.push(AnalyzerRange {
+                        range,
+                        names: Name {
+                            type_name: "mod".to_string(),
+                            name: name.to_string(),
                         },
-                    );
+                    });
                 } else {
-                    analyzer.push(
-                        AnalyzerRange {
-                            range,
-                            names: Name {
-                                type_name: "mod".to_string(),
-                                name: "".to_string(),
-                            },
+                    analyzer.push(AnalyzerRange {
+                        range,
+                        names: Name {
+                            type_name: "mod".to_string(),
+                            name: "".to_string(),
                         },
-                    );
+                    });
                 }
                 let items = m.item_list();
                 if let Some(items) = items {
@@ -530,25 +491,21 @@ fn parse_all_rust_analyzer(
             ra_ap_syntax::ast::Item::TraitAlias(t) => {
                 let range = t.syntax().text_range();
                 if let Some(name) = t.name() {
-                    analyzer.push(
-                        AnalyzerRange {
-                            range,
-                            names: Name {
-                                type_name: "trait_alias".to_string(),
-                                name: name.to_string(),
-                            },
+                    analyzer.push(AnalyzerRange {
+                        range,
+                        names: Name {
+                            type_name: "trait_alias".to_string(),
+                            name: name.to_string(),
                         },
-                    );
+                    });
                 } else {
-                    analyzer.push(
-                        AnalyzerRange {
-                            range,
-                            names: Name {
-                                type_name: "trait_alias".to_string(),
-                                name: "".to_string(),
-                            },
+                    analyzer.push(AnalyzerRange {
+                        range,
+                        names: Name {
+                            type_name: "trait_alias".to_string(),
+                            name: "".to_string(),
                         },
-                    );
+                    });
                 }
             }
             _ => (),
@@ -570,7 +527,7 @@ fn parse_all_rust_analyzer(
 ///
 /// A `Result` which is `Ok(Vec<ObjectRange>)` on successful parsing, containing a vector of identified comment and lifetime ranges, or an `ErrorHandling` enum if an error occurs.
 pub fn comment_lexer(source_vector: &str) -> Result<Vec<ObjectRange>, ErrorHandling> {
-    let vectorized = FileExtractor::string_to_vector(source_vector);
+    let vectorized = FsOperations::string_to_vector(source_vector);
     let mut comment_vector: Vec<ObjectRange> = Vec::new();
     for (line_number, source) in vectorized.into_iter().enumerate() {
         let tokenized = tokenize(&source);
@@ -625,9 +582,8 @@ pub fn comment_lexer(source_vector: &str) -> Result<Vec<ObjectRange>, ErrorHandl
                                 type_name: "LineComment".to_string(),
                                 name: "///".to_string(),
                             },
-                        }); 
-                    }        
-                    else {
+                        });
+                    } else {
                         comment_vector.push(ObjectRange {
                             line_ranges: Range {
                                 start: line_number + 1,

@@ -1,11 +1,10 @@
-
 mod tests {
     use crate::cli::cherrypick_response;
     use gemini::request_preparation::RawResponse;
     use regex::Regex;
     use rust_parsing::ErrorHandling;
     use rust_parsing::error::InvalidIoOperationsSnafu;
-    use rust_parsing::file_parsing::{FileExtractor, Files, REGEX};
+    use rust_parsing::file_parsing::{Files, FsOperations, REGEX};
     use rust_parsing::object_range::Name;
     use rust_parsing::{
         ObjectRange,
@@ -142,7 +141,7 @@ mod tests {
                 println!("{} = {}", ok.len(), assess_size.len());
             }
             Err(_) => {
-                let as_vec = FileExtractor::string_to_vector(&test);
+                let as_vec = FsOperations::string_to_vector(&test);
                 let a = &as_vec[1..as_vec.len() - 1].join("\n");
                 let to_struct = serde_json::from_str::<Vec<RawResponse>>(a).unwrap();
                 assert_eq!(assess_size.len(), 3);
@@ -360,7 +359,7 @@ mod tests {
                 },
             },
         ];
-        assert!(parsed == objects)
+        assert!(parsed == objects);
     }
 
     #[test]
@@ -407,16 +406,7 @@ mod tests {
         assert!(!(parsed == test_data))
     }
 
-    const TEST_STRING: &'static str = "/// Returns the name of the code object. This method provides direct access to the `name` field within the `names` property of the `ObjectRange` struct.
-    /// It is primarily used to retrieve the identifier (e.g., function name, struct name) associated with a parsed Rust code item.
-    ///
-    /// # Returns
-    ///
-    /// A `String` representing the name of the object.
-    pub fn object_name(&self) -> String {
-        self.names.name.to_string()
-    }";
-    const ANUDDA_TEST_STRING: &'static str = r#"/// Orchestrates the entire process of applying a patch to a codebase, generating AI-based code suggestions, and writing them back to files. This asynchronous function takes a patch file, analyzes the changes, filters them based on exclusion rules, and then generates `Request` objects for an AI agent.
+    const TEST_STRING: &'static str = r#"/// Orchestrates the entire process of applying a patch to a codebase, generating AI-based code suggestions, and writing them back to files. This asynchronous function takes a patch file, analyzes the changes, filters them based on exclusion rules, and then generates `Request` objects for an AI agent.
 /// It then calls the AI agent, collects the responses, and writes the suggested new comments or code modifications to the corresponding files. The function includes a call limit to prevent infinite recursion in case of persistent AI failures.
 ///
 /// # Arguments
@@ -469,8 +459,7 @@ pub async fn cli_patch_to_agent(
 "#;
     #[test]
     fn test_theory() {
-        let parsed =
-            RustItemParser::parse_all_rust_items(ANUDDA_TEST_STRING).expect("Failed to parse");
+        let parsed = RustItemParser::parse_all_rust_items(TEST_STRING).expect("Failed to parse");
         let comments = parsed
             .iter()
             .filter_map(|each| {
@@ -497,7 +486,7 @@ pub async fn cli_patch_to_agent(
             .clone();
 
         let remove_from_original =
-            rust_parsing::file_parsing::FileExtractor::string_to_vector(ANUDDA_TEST_STRING);
+            rust_parsing::file_parsing::FsOperations::string_to_vector(TEST_STRING);
         let mut remove_from_original = remove_from_original.clone();
         let first_element = comments.first().unwrap().line_start();
         let last_element = comments.last().unwrap().line_end();
@@ -508,8 +497,6 @@ pub async fn cli_patch_to_agent(
         };
         println!("{:#?}", actual_function_object);
         println!("{}", remove_from_original.join("\n"));
-
-        assert_eq!(true, false)
     }
 
     #[test]
@@ -517,21 +504,29 @@ pub async fn cli_patch_to_agent(
         let mut dir = env::current_dir().expect("Failed to get current directory");
         dir.pop();
         dir.pop();
-        let file = fs::read_to_string(
-            dir.join("crates/rust_parsing/src/rust_parser.rs")
-                .display()
-                .to_string(),
-        )
-        .expect("Failed to read file");
-        let to_vec = FileExtractor::string_to_vector(&file);
-        let test = rust_parsing::file_parsing::write_with_remove(
-            dir.join("crates/rust_parsing/src/rust_parser.rs"),
+        let file = fs::read_to_string(dir.join("tests/write_test.rs").display().to_string())
+            .expect("Failed to read file");
+        let to_vec = FsOperations::string_to_vector(&file);
+        FsOperations::write_with_remove(
+            dir.join("tests/write_test.rs"),
             to_vec,
-            235,
+            15,
             "/// ====== TEST STRING =======".to_string(),
         )
         .unwrap();
 
         assert_eq!(true, false)
+    }
+
+    fn restore_to_prev() {
+        let mut dir = env::current_dir().expect("Failed to get current directory");
+        dir.pop();
+        dir.pop();
+        let file = fs::read_to_string(
+            dir.join("tests/data_clone_for_write_test.rs")
+                .display()
+                .to_string(),
+        )
+        .expect("Failed to read file");
     }
 }
