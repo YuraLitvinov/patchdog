@@ -58,8 +58,10 @@ pub trait RustParser {
 pub struct RustItemParser;
 
 impl RustParser for RustItemParser {
-    /// Parses a Rust source file from a given path and extracts a vector of `ObjectRange` items, each representing a distinct code object (e.g., function, struct) and its line range. This function first reads the file content, then uses a Rust item parser to identify and extract the structural elements.
-    /// It then maps the byte-based text ranges provided by the parser to line-based ranges, making them more human-readable and suitable for operations involving line numbers. This is a core function for understanding the structure of a Rust file.
+    
+    /// Parses a Rust source file from a given path, extracting a vector of `ObjectRange` items. Each `ObjectRange` represents a distinct code object (e.g., function, struct) and its corresponding line range.
+    /// This function reads the file, parses its structural elements using an internal item parser, and then maps byte-based text ranges to human-readable line-based ranges.
+    /// It returns a `Result` containing the vector of `ObjectRange` objects on success, or an `ErrorHandling` if file operations or parsing fail.
     ///
     /// # Arguments
     ///
@@ -83,17 +85,17 @@ impl RustParser for RustItemParser {
         Ok(visited)
     }
 
-    /// Parses a Rust source string to identify all significant Rust items and comments within it.
-    /// It first extracts comments using `comment_lexer` and then parses other structural items (functions, structs, etc.) using `parse_result_items`.
-    /// The function then merges these two sets of identified ranges, converts byte-based ranges to line-based ranges, and sorts the final list by their starting line numbers, providing a comprehensive overview of the code structure.
+    /// This function comprehensively parses a given Rust source code string to identify and consolidate all significant structural items, such as functions, structs, and enums, along with their associated comments.
+    /// It achieves this by first extracting comments and then separately parsing code items, converting their byte-based positions into line-based ranges.
+    /// The results are then merged and sorted chronologically by their starting line number, providing a unified and ordered overview of the code's structure.
     ///
     /// # Arguments
     ///
-    /// * `src` - A string slice representing the Rust source code.
+    /// * `src` - A string slice containing the Rust source code to be parsed.
     ///
     /// # Returns
     ///
-    /// A `Result` which is `Ok(Vec<ObjectRange>)` on success, containing a sorted vector of `ObjectRange` structs for all identified items and comments, or an `ErrorHandling` enum if an error occurs during parsing.
+    /// A `Result` which, on success, yields a sorted `Vec<ObjectRange>` representing all identified code items and comments with their line-based positions. On failure, it returns an `ErrorHandling` enum.
     fn parse_all_rust_items(src: &str) -> Result<Vec<ObjectRange>, ErrorHandling> {
         let mut comments = comment_lexer(src)?;
         let mut visited = Self::parse_result_items(src)?
@@ -111,6 +113,7 @@ impl RustParser for RustItemParser {
 
         Ok(visited)
     }
+
     /// Converts a byte-offset based `TextRange` into a human-readable, 1-based line number `Range<usize>`.
     /// This utility function computes the start and end line numbers by first determining the line start offsets in the source string.
     /// It then translates the byte offsets of the `TextRange` into their corresponding line numbers, ensuring the output is always 1-based for user-friendliness.
@@ -137,8 +140,8 @@ impl RustParser for RustItemParser {
     }
 
     /// Parses the given Rust source code string to identify and categorize all top-level Rust items using the `rust-analyzer` AST.
-    /// It leverages `ra_ap_syntax::SourceFile::parse` to construct the syntax tree and then extracts all items, delegating the detailed analysis to `parse_all_rust_analyzer`.
-    /// The function provides a foundational step for understanding the structural elements of a Rust file.
+    /// It constructs the syntax tree using `ra_ap_syntax::SourceFile::parse` and then extracts all items, delegating the detailed analysis to `parse_all_rust_analyzer`.
+    /// This function serves as a foundational step for understanding the high-level structural elements of a Rust file by providing their byte-based text ranges and names.
     ///
     /// # Arguments
     ///
@@ -146,7 +149,7 @@ impl RustParser for RustItemParser {
     ///
     /// # Returns
     ///
-    /// A `Result` which is `Ok(HashMap<TextRange, AnalyzerRange>)` on success, containing a map of text ranges to `AnalyzerRange` structs for each identified top-level item, or an `ErrorHandling` enum if an error occurs during parsing.
+    /// A `Result` which is `Ok(Vec<AnalyzerRange>)` on success, containing a vector of `AnalyzerRange` structs for each identified top-level item, or an `ErrorHandling` enum if an error occurs during parsing.
     fn parse_result_items(src: &str) -> Result<Vec<AnalyzerRange>, ErrorHandling> {
         let parse = ra_ap_syntax::SourceFile::parse(src, ra_ap_ide::Edition::Edition2024);
         let items = parse
@@ -156,8 +159,9 @@ impl RustParser for RustItemParser {
         parse_all_rust_analyzer(items)
     }
 
-    /// Parses a string slice representing Rust code and extracts a single `ObjectRange` corresponding to the primary code item found. This function is specifically designed to parse a snippet of Rust code (e.g., a single function or struct definition) and return its line range, type name, and identifier.
-    /// It leverages internal parsing utilities to first find all code objects and then focuses on the first one identified. This is particularly useful for analyzing isolated code blocks or changes.
+    /// Parses a string slice representing Rust code to extract a single `ObjectRange` corresponding to the primary code item found within it.
+    /// This function is designed to analyze a snippet of Rust code (e.g., a single function or struct definition) and return its line range, type name, and identifier.
+    /// It first identifies all code objects using internal parsing utilities and then specifically focuses on the first one, making it ideal for analyzing isolated code blocks or granular changes.
     ///
     /// # Arguments
     ///
@@ -233,8 +237,8 @@ fn offset_to_line(offset: usize, line_starts: &[usize]) -> usize {
 }
 
 /// Processes a vector of `rust-analyzer` AST items to extract their `TextRange` and identify their type and name.
-/// It creates a `HashMap` where keys are `TextRange` and values are `AnalyzerRange` structs, categorizing each item like functions, structs, enums, impls, traits, and modules.
-/// The function recursively descends into modules and `impl` blocks to find nested items, building a complete map of all recognized Rust constructs.
+/// This function iterates through various item types like functions, structs, enums, impls, traits, and modules, creating `AnalyzerRange` structs for each.
+/// It recursively descends into modules and `impl` blocks to capture nested items, ensuring a complete and structured map of all recognized Rust constructs within the provided AST.
 ///
 /// # Arguments
 ///
@@ -242,7 +246,7 @@ fn offset_to_line(offset: usize, line_starts: &[usize]) -> usize {
 ///
 /// # Returns
 ///
-/// A `Result` which is `Ok(Vec<AnalyzerRange>)` on success, containing a map of text ranges to `AnalyzerRange` structs for each identified item, or an `ErrorHandling` enum if an error occurs during processing.
+/// A `Result` which is `Ok(Vec<AnalyzerRange>)` on success, containing a vector of `AnalyzerRange` structs for each identified item, or an `ErrorHandling` enum if an error occurs during processing.
 fn parse_all_rust_analyzer(
     items: Vec<ra_ap_syntax::ast::Item>,
 ) -> Result<Vec<AnalyzerRange>, ErrorHandling> {
@@ -515,9 +519,9 @@ fn parse_all_rust_analyzer(
     Ok(analyzer)
 }
 
-/// Analyzes the input source code to identify and categorize various types of comments and lifetime indicators.
+/// Analyzes the input source code string line by line to identify and categorize various types of comments and lifetime indicators.
 /// It processes line comments, block comments (both single and multi-line), and lifetime indicators, converting them into a structured `Vec<ObjectRange>`.
-/// The function intelligently resolves multi-line block comments by combining their start and end markers into a single `ObjectRange` for simplified representation.
+/// The function smartly resolves multi-line block comments by combining their start and end markers into a single `ObjectRange`, simplifying their representation for subsequent analysis.
 ///
 /// # Arguments
 ///

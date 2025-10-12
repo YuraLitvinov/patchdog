@@ -15,6 +15,10 @@ pub struct ObjectRange {
 }
 
 impl Default for ObjectRange {
+    /// Creates a default instance of the `ObjectRange` struct. This default implementation initializes `line_ranges` to an empty range (0..0) and `names` to a `Name` struct with empty strings for both `type_name` and `name`.
+    ///
+    /// # Returns
+    /// A new `ObjectRange` instance with default values.
     fn default() -> Self {
         Self {
             line_ranges: 0..0,

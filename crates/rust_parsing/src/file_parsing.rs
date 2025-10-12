@@ -23,30 +23,24 @@ pub trait Files {
 
 impl Files for FsOperations {
     /// Converts a multi-line string slice into a `Vec<String>`, where each element of the vector represents a single line from the input string. This function is a straightforward utility for breaking down file content into manageable line-by-line components.
-    /// It simplifies processing textual data by providing a convenient way to iterate, modify, or analyze individual lines of a file.
     ///
     /// # Arguments
-    ///
     /// * `source` - A string slice (`&str`) containing the multi-line text.
     ///
     /// # Returns
-    ///
     /// A `Vec<String>` where each `String` is a line from the input `source`.
     fn string_to_vector(source: &str) -> Vec<String> {
         source.lines().map(|line| line.to_string()).collect()
     }
 
     /// Checks if a given `line_number` falls within any of the provided `ObjectRange` items. This utility function helps determine if a specific line of code is part of a recognized structural element (like a function or struct) within the parsed code.
-    /// It iterates through a slice of `ObjectRange` objects and returns `false` as soon as it finds a range that contains the `line_number`, indicating that the line is validly part of an object. If no such object is found, it returns `true`.
     ///
     /// # Arguments
-    ///
     /// * `parsed` - A slice of `ObjectRange` representing the parsed code objects and their line ranges.
     /// * `line_number` - The `usize` line number to check.
     ///
     /// # Returns
-    ///
-    /// A `Result<bool, ErrorHandling>` which is `false` if the line number is within an object's range, `true` otherwise, or an `ErrorHandling` if an internal error occurs.
+    /// A `bool` which is `false` if the line number is within an object's range, `true` otherwise.
     fn check_for_valid_object(parsed: &[&ObjectRange], line_number: usize) -> bool {
         for each in parsed {
             if each.line_ranges.start <= line_number && line_number <= each.line_ranges.end {
@@ -56,6 +50,17 @@ impl Files for FsOperations {
         true
     }
 
+    /// Modifies a file by replacing or inserting new `changes` (comments) for a specific Rust function at a given `line_number`. It first identifies the target function, then checks for existing documentation.
+    /// If no comments exist, it inserts the new `changes` at the function's start; otherwise, it removes the old comments and inserts the new ones, preserving the function's original content and indentation.
+    ///
+    /// # Arguments
+    /// * `path` - The `PathBuf` to the file being modified.
+    /// * `source` - A `Vec<String>` representing the lines of the file content.
+    /// * `line_number` - The 1-indexed line number where the change is located, typically within the function to be documented.
+    /// * `changes` - The new comment or code string to be inserted.
+    ///
+    /// # Returns
+    /// A `Result<(), ErrorHandling>` indicating success or failure of the write operation.
     fn write_with_remove(
         path: PathBuf,
         mut source: Vec<String>,
@@ -126,6 +131,17 @@ impl Files for FsOperations {
     }
 }
 
+/// Writes a modified vector of strings, representing file content, to a specified file on disk. It inserts the `changes` string at the given `line_number` (1-indexed) into the `source` vector.
+/// The function then creates or overwrites the file at `path` and writes each line from the updated vector, followed by a newline.
+///
+/// # Arguments
+/// * `path` - The `PathBuf` to the target file where content will be written.
+/// * `source` - A mutable `Vec<String>` representing the lines of the file content.
+/// * `line_number` - The 1-indexed line number at which to insert the new changes.
+/// * `changes` - The string containing the content to be inserted.
+///
+/// # Returns
+/// A `Result<(), ErrorHandling>` indicating success or failure of the file write operation.
 fn write_to_vecstring(
     path: PathBuf,
     mut source: Vec<String>,
@@ -141,6 +157,15 @@ fn write_to_vecstring(
     Ok(())
 }
 
+/// Formats a multi-line string (`push`) by prepending the leading whitespace from the first line of `str_source` to each of its lines. This ensures that the new content maintains the original indentation when inserted into a code block.
+/// The function then joins these formatted lines into a single string, separated by newlines.
+///
+/// # Arguments
+/// * `str_source` - A slice of strings, typically representing the lines of an existing code block, used to determine indentation.
+/// * `push` - The multi-line string content to be formatted.
+///
+/// # Returns
+/// A `Result<String, ErrorHandling>` containing the formatted multi-line string with preserved indentation, or an `ErrorHandling` if `str_source` is empty.
 fn push_to_vector(str_source: &[String], push: String) -> Result<String, ErrorHandling> {
     let whitespace = str_source
         .first()
