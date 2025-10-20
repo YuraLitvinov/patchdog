@@ -3,14 +3,12 @@ mod tests {
     use gemini::request_preparation::RawResponse;
     use regex::Regex;
     use rust_parsing::ErrorHandling;
-    use rust_parsing::error::InvalidIoOperationsSnafu;
     use rust_parsing::file_parsing::{Files, FsOperations, REGEX};
     use rust_parsing::object_range::Name;
     use rust_parsing::{
         ObjectRange,
         rust_parser::{RustItemParser, RustParser},
     };
-    use snafu::ResultExt;
     use std::collections::HashMap;
     use std::{env, fs, path::Path};
     const PATH_BASE: &str = "../../tests/data.rs";
@@ -44,45 +42,6 @@ mod tests {
         println!("{}", analyzer.len());
 
         assert_eq!(parser.len(), analyzer.len());
-    }
-
-    #[test]
-    fn test_parse() {
-        let source = fs::read_to_string(PATH_BASE).expect("File read failed");
-        let parsed = RustItemParser::parse_all_rust_items(&source).expect("Parsing failed");
-        for object in parsed {
-            let obj_type = object.names.type_name.clone();
-            if obj_type == "impl".to_string() {}
-        }
-    }
-
-    #[test]
-    fn find_all_fn() {
-        let source = fs::read_to_string(PATH_BASE)
-            .context(InvalidIoOperationsSnafu { path: PATH_BASE })
-            .expect("Failed to read file");
-        let parsed = RustItemParser::parse_all_rust_items(&source).expect("Failed to parse");
-        for object in parsed {
-            let obj_type = object.names.type_name.clone();
-            if obj_type == "fn".to_string() {
-                println!("{:?}", object);
-            }
-        }
-    }
-
-    #[test]
-    fn test_read_argument() {
-        let mut path = env::current_dir().expect("couldn't get path");
-        path.pop();
-        path.pop();
-        let _path_to_patch = path.join("patch.patch");
-        /*
-        assert_eq!(
-            path_to_patch,
-            Path::new("/home/runner/work/patchdog/patchdog/patch.patch")
-        );
-        */
-        assert_eq!(true, true);
     }
 
     #[test]
@@ -152,31 +111,12 @@ mod tests {
     }
 
     #[test]
-    fn test_match() {
-        let names = Name {
-            type_name: "fn".to_string(),
-            name: "request_manager".to_string(),
-        };
-        let _input = ObjectRange {
-            line_ranges: 395..429,
-            names,
-        };
-
-        //match_context(context: Vec<(PathBuf, ObjectRange)>) -> HashMap<String, PathObject>
-        //let deserial_in = serde_json::from_str::<ObjectRange>(input).expect("err failed to parse from json ObjectRange");
-        //let deserial_out = serde_json::from_str::<PathObject>(output).expect("err failed to parse from json PathObject");
-    }
-
-    #[test]
-    fn test_path_test() {
+    fn test_path_tests() {
         let mut dir = env::current_dir().unwrap();
         dir.pop();
         dir.pop();
-        let file_path_test = dir
-            .join("crates/patchdog/src/tests.rs")
-            .display()
-            .to_string();
-        let more_paths = ["tests/", "crates/**/src/tests.rs", "crates/**/src/main.rs"]
+        let file_path_test = dir.join("tests/data.rs").display().to_string();
+        let more_paths = ["tests/*", "crates/**/src/tests.rs", "crates/**/src/main.rs"]
             .iter()
             .map(|s| dir.join(s).display().to_string())
             .collect::<Vec<String>>();
@@ -186,6 +126,7 @@ mod tests {
         println!("is file_allowed: {:?}", val);
         assert!(!val);
     }
+
     #[test]
     fn test_path_main() {
         let mut dir = env::current_dir().unwrap();
@@ -404,129 +345,5 @@ mod tests {
             },
         ];
         assert!(!(parsed == test_data))
-    }
-
-    const TEST_STRING: &'static str = r#"/// Orchestrates the entire process of applying a patch to a codebase, generating AI-based code suggestions, and writing them back to files. This asynchronous function takes a patch file, analyzes the changes, filters them based on exclusion rules, and then generates `Request` objects for an AI agent.
-/// It then calls the AI agent, collects the responses, and writes the suggested new comments or code modifications to the corresponding files. The function includes a call limit to prevent infinite recursion in case of persistent AI failures.
-///
-/// # Arguments
-///
-/// * `analyzer_data` - `AnalyzerData` providing context for code analysis.
-/// * `commands` - `Mode` struct containing command-line arguments, including the patch file path, target Rust types, and names, and debug flag.
-///
-/// # Returns
-///
-/// A `Result<(), ErrorBinding>` indicating the success or failure of the entire patch-to-agent and write-back process.
-pub async fn cli_patch_to_agent(
-    analyzer_data: AnalyzerData,
-    commands: Mode,
-) -> Result<(), ErrorBinding> {
-    //Mode accepts type and name of the object for the sake of debugging. It autodefaults to any fn
-    let patch = binding::patch_data_argument(commands.file_patch)?;
-    let parameters = ai_interactions::return_prompt()?.patchdog_settings;
-    event!(Level::INFO, "type: {:#?}", parameters.affected_object_types);
-    let dir = env::current_dir()?;
-    let excluded_paths = parameters
-        .excluded_files
-        .par_iter()
-        .map(|path| dir.join(path).display().to_string())
-        .collect::<Vec<String>>();
-    let request = changes_from_patch(
-        patch,
-        parameters.affected_object_types,
-        commands.name_rust,
-        &excluded_paths,
-        analyzer_data,
-    )?;
-    println!("request: {:#?}", request);
-    //Here occurs check for pending changes
-    if request.is_empty() {
-        event!(Level::INFO, "No requests");
-    } else {
-        event!(Level::INFO, "Requests length: {}", &request.len());
-        //Limiting possible call count to 3, to prevent infinite recursion, where LLM fails to fulfill the request
-        let mut call_limit = 0;
-        let responses_collected = call(request, &mut call_limit).await?;
-        event!(
-            Level::INFO,
-            "Responses collected: {}",
-            responses_collected.len()
-        );
-        write_to_file(responses_collected)?;
-    }
-    Ok(())
-}
-"#;
-    #[test]
-    fn test_theory() {
-        let parsed = RustItemParser::parse_all_rust_items(TEST_STRING).expect("Failed to parse");
-        let comments = parsed
-            .iter()
-            .filter_map(|each| {
-                if each.names.name == "///" {
-                    Some(each)
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<&ObjectRange>>();
-        let function_object = parsed
-            .iter()
-            .filter_map(|each| {
-                if each.names.type_name == "fn" {
-                    Some(each)
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<&ObjectRange>>()
-            .first()
-            .cloned()
-            .unwrap()
-            .clone();
-
-        let remove_from_original =
-            rust_parsing::file_parsing::FsOperations::string_to_vector(TEST_STRING);
-        let mut remove_from_original = remove_from_original.clone();
-        let first_element = comments.first().unwrap().line_start();
-        let last_element = comments.last().unwrap().line_end();
-        remove_from_original.drain(first_element - 1..last_element);
-        let actual_function_object = ObjectRange {
-            line_ranges: function_object.line_start() + last_element..function_object.line_end(),
-            names: function_object.names.clone(),
-        };
-        println!("{:#?}", actual_function_object);
-        println!("{}", remove_from_original.join("\n"));
-    }
-
-    #[test]
-    fn test_write_with_remove() {
-        let mut dir = env::current_dir().expect("Failed to get current directory");
-        dir.pop();
-        dir.pop();
-        let file = fs::read_to_string(dir.join("tests/write_test.rs").display().to_string())
-            .expect("Failed to read file");
-        let to_vec = FsOperations::string_to_vector(&file);
-        FsOperations::write_with_remove(
-            dir.join("tests/write_test.rs"),
-            to_vec,
-            15,
-            "/// ====== TEST STRING =======".to_string(),
-        )
-        .unwrap();
-
-        assert_eq!(true, false)
-    }
-
-    fn restore_to_prev() {
-        let mut dir = env::current_dir().expect("Failed to get current directory");
-        dir.pop();
-        dir.pop();
-        let file = fs::read_to_string(
-            dir.join("tests/data_clone_for_write_test.rs")
-                .display()
-                .to_string(),
-        )
-        .expect("Failed to read file");
     }
 }

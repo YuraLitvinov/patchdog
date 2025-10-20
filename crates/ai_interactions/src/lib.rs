@@ -1,4 +1,7 @@
-use rust_parsing::{ErrorHandling, error::{InvalidIoOperationsSnafu, StdVarSnafu}};
+use rust_parsing::{
+    ErrorHandling,
+    error::{InvalidIoOperationsSnafu, StdVarSnafu},
+};
 use snafu::ResultExt;
 use std::fs;
 use std::path::Path;
@@ -34,8 +37,9 @@ pub struct YamlRead {
 /// A `Result<YamlRead, ErrorHandling>` containing a `YamlRead` struct with the parsed configuration on success, or an `ErrorHandling` if the file cannot be read, parsed, or if essential configuration keys are missing, in which case default values are used and an error is logged.
 pub fn return_prompt() -> Result<YamlRead, ErrorHandling> {
     let varname = "CONFIG_PATH";
-    let var = std::env::var(varname)
-        .context(StdVarSnafu {  varname: varname.to_string() })?;
+    let var = std::env::var(varname).context(StdVarSnafu {
+        varname: varname.to_string(),
+    })?;
     let path = Path::new(&var).to_path_buf();
     let config =
         fs::read_to_string(&path).context(InvalidIoOperationsSnafu { path: path.clone() })?;
@@ -123,48 +127,17 @@ pub fn return_prompt() -> Result<YamlRead, ErrorHandling> {
                 },
             })
         } else {
-            event!(
-                Level::ERROR,
+            let fmt = format!(
                 "No proper configuration provided inside {}, at patchdog key",
                 path.display()
             );
-            Ok(YamlRead {
-                prompt: "".to_string(),
-                llm_settings: LLMSettings {
-                    openai_model: "".to_string(),
-                    gemini_model: "".to_string(),
-                    tokens: 0,
-                    requests: 0,
-                },
-                patchdog_settings: PathdogSettings {
-                    excluded_files: vec![],
-                    excluded_functions: vec![],
-                    affected_object_types: vec![],
-                    llm_model: String::new(),
-                },
-            })
+            event!(Level::ERROR, fmt);
+            Err(ErrorHandling::CouldNotGetObject { err_kind: fmt })
         }
     } else {
-        event!(
-            Level::ERROR,
-            "Couldn't find patchdog key in {}",
-            path.display()
-        );
-        // Default config if YAML isn't structured properly
-        Ok(YamlRead {
-            prompt: "".to_string(),
-            llm_settings: LLMSettings {
-                openai_model: "".to_string(),
-                gemini_model: "".to_string(),
-                tokens: 0,
-                requests: 0,
-            },
-            patchdog_settings: PathdogSettings {
-                excluded_files: vec![],
-                excluded_functions: vec![],
-                affected_object_types: vec![],
-                llm_model: String::new(),
-            },
-        })
+        let fmt = format!("Couldn't find patchdog key in {}", path.display());
+        event!(Level::ERROR, fmt);
+
+        Err(ErrorHandling::CouldNotGetObject { err_kind: fmt })
     }
 }

@@ -72,17 +72,14 @@ pub fn is_file_allowed(file: &Path, exclusions: &[String]) -> Result<bool, Error
     let excluded_global = exclusions
         .iter()
         .flat_map(|pat| {
-            if pat.contains("**") {
-                // Expand glob into multiple canonicalized paths
-                glob(pat)
-                    .expect("Invalid glob pattern: use **")
-                    .filter_map(|entry| entry.ok())
-                    .filter_map(|p| fs::canonicalize(p).ok())
-                    .collect::<Vec<_>>()
-            } else {
-                // Just canonicalize single path
-                vec![fs::canonicalize(pat).expect("Canonicalize failed")]
-            }
+            // Expand glob into multiple canonicalized paths
+            glob(pat)
+                .expect("Invalid glob pattern: use * at the end of the path, ** in the middle")
+                .map(|entry| {
+                    entry
+                        .unwrap_or_else(|_| panic!("Failed to retrieve path {} doesn't exist", pat))
+                })
+                .collect::<Vec<PathBuf>>()
         })
         .collect::<Vec<PathBuf>>();
 

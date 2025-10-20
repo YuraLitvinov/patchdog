@@ -34,7 +34,7 @@ pub enum ErrorHandling {
     #[snafu(display("{source} NO VARIABLE {varname}"))]
     StdVar {
         varname: String,
-        source: VarError
+        source: VarError,
     },
     #[snafu(display("{source}"))]
     GeminiRustError {

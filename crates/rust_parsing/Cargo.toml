@@ -16,6 +16,7 @@ uuid = { workspace = true }
 yaml-rust2 = { workspace = true }
 tracing = { workspace = true }
 anyhow = "1.0.99"
+textdistance = "1.1.1"
 ra_ap_syntax = { workspace = true }
 ra_ap_ide = { workspace = true }
 rayon = { workspace = true }

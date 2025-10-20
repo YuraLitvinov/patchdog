@@ -58,7 +58,6 @@ pub trait RustParser {
 pub struct RustItemParser;
 
 impl RustParser for RustItemParser {
-    
     /// Parses a Rust source file from a given path, extracting a vector of `ObjectRange` items. Each `ObjectRange` represents a distinct code object (e.g., function, struct) and its corresponding line range.
     /// This function reads the file, parses its structural elements using an internal item parser, and then maps byte-based text ranges to human-readable line-based ranges.
     /// It returns a `Result` containing the vector of `ObjectRange` objects on success, or an `ErrorHandling` if file operations or parsing fail.

@@ -4,6 +4,7 @@ use crate::rust_parser::RustItemParser;
 use crate::rust_parser::RustParser;
 use snafu::ResultExt;
 use std::{fs::File, io::Write, path::PathBuf};
+use textdistance::nstr::damerau_levenshtein;
 use tracing::Level;
 // This REGEX is used outside of file_parsing and inside fallback_repair for JSON parsing
 pub const REGEX: &str = r#"\{\s*"uuid"\s*:\s*"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",\s*"new_comment"\s*:\s*".*"\s*\}"#;
@@ -111,6 +112,8 @@ impl Files for FsOperations {
             if let Some(first_value) = comments.first()
                 && let Some(last_value) = comments.last()
             {
+                let comment = &source[func.line_start() - 1..func.line_end()].join("\n");
+
                 function_no_comment.drain(first_value.line_start() - 1..last_value.line_end());
 
                 tracing::event!(Level::INFO, "{function_at_line_number:?}");
@@ -121,7 +124,9 @@ impl Files for FsOperations {
                 // Included whitespaces are necessary to suffice RFC 1574 convention
                 let rfc_changes = push_to_vector(&function_no_comment, changes)?;
 
-                write_to_vecstring(path, source, func.line_start(), rfc_changes)?;
+                if damerau_levenshtein(comment, &rfc_changes) < 6.0 / 7.0 {
+                    write_to_vecstring(path, source, func.line_start(), rfc_changes)?;
+                }
 
                 return Ok(());
             }
@@ -173,11 +178,12 @@ fn push_to_vector(str_source: &[String], push: String) -> Result<String, ErrorHa
         .chars()
         .take_while(|w| w.is_whitespace())
         .collect::<String>();
-    
+
     let affect_all_lines = FsOperations::string_to_vector(&push)
         .into_iter()
-        .map(|each|whitespace.clone() + &each)
-        .collect::<Vec<String>>().join("\n");
+        .map(|each| whitespace.clone() + &each)
+        .collect::<Vec<String>>()
+        .join("\n");
 
     Ok(affect_all_lines)
 }
