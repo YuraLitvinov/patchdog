@@ -60,19 +60,18 @@ pub struct ChangeFromPatch {
     pub range: Vec<Range<usize>>,
 }
 
-/// Determines if a given `file` path is allowed for processing based on a list of `exclusions`, which can include glob patterns. It canonicalizes both the file path and each exclusion pattern to ensure accurate comparisons, even with relative paths or symbolic links.
+/// Determines if a given `file` path is allowed for processing based on a list of `exclusions`, which can include glob patterns. It checks if the file's path starts with any canonicalized exclusion pattern or matches a direct path.
 ///
 /// # Arguments
 /// * `file` - A reference to the `Path` of the file to check.
 /// * `exclusions` - A slice of strings, where each string is an exclusion pattern or a direct path.
 ///
 /// # Returns
-/// A `Result<bool, ErrorBinding>` which is `true` if the file is not excluded, `false` if it matches any exclusion pattern or is a subpath of an excluded directory, or an `ErrorBinding` if canonicalization fails.
+/// A `Result<bool, ErrorBinding>` which is `true` if the file is not excluded, `false` if it matches any exclusion pattern or is a subpath of an excluded directory, or an `ErrorBinding` if glob pattern expansion fails.
 pub fn is_file_allowed(file: &Path, exclusions: &[String]) -> Result<bool, ErrorBinding> {
     let excluded_global = exclusions
         .iter()
         .flat_map(|pat| {
-            // Expand glob into multiple canonicalized paths
             glob(pat)
                 .expect("Invalid glob pattern: use * at the end of the path, ** in the middle")
                 .map(|entry| {

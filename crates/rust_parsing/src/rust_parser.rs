@@ -58,16 +58,12 @@ pub trait RustParser {
 pub struct RustItemParser;
 
 impl RustParser for RustItemParser {
-    /// Parses a Rust source file from a given path, extracting a vector of `ObjectRange` items. Each `ObjectRange` represents a distinct code object (e.g., function, struct) and its corresponding line range.
-    /// This function reads the file, parses its structural elements using an internal item parser, and then maps byte-based text ranges to human-readable line-based ranges.
-    /// It returns a `Result` containing the vector of `ObjectRange` objects on success, or an `ErrorHandling` if file operations or parsing fail.
+    /// Parses a Rust source file from a given path, extracting a vector of `ObjectRange` items. Each `ObjectRange` represents a distinct code object (e.g., function, struct) and its corresponding line range, converting byte-based ranges to line-based ranges.
     ///
     /// # Arguments
-    ///
     /// * `src` - A reference to a `Path` pointing to the Rust source file.
     ///
     /// # Returns
-    ///
     /// A `Result<Vec<ObjectRange>, ErrorHandling>` containing a vector of `ObjectRange` objects representing the parsed code items, or an `ErrorHandling` if file reading or parsing fails.
     fn parse_rust_file(src: &Path) -> Result<Vec<ObjectRange>, ErrorHandling> {
         let file = fs::read_to_string(src).context(InvalidIoOperationsSnafu { path: src })?;

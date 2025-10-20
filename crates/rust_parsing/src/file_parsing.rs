@@ -51,8 +51,7 @@ impl Files for FsOperations {
         true
     }
 
-    /// Modifies a file by replacing or inserting new `changes` (comments) for a specific Rust function at a given `line_number`. It first identifies the target function, then checks for existing documentation.
-    /// If no comments exist, it inserts the new `changes` at the function's start; otherwise, it removes the old comments and inserts the new ones, preserving the function's original content and indentation.
+    /// Modifies a file by replacing or inserting new `changes` (comments) for a specific Rust function at a given `line_number`. It identifies the target function, determines if existing documentation needs replacement, or if new comments should be inserted, and then applies the `changes` while preserving original indentation.
     ///
     /// # Arguments
     /// * `path` - The `PathBuf` to the file being modified.
@@ -163,7 +162,6 @@ fn write_to_vecstring(
 }
 
 /// Formats a multi-line string (`push`) by prepending the leading whitespace from the first line of `str_source` to each of its lines. This ensures that the new content maintains the original indentation when inserted into a code block.
-/// The function then joins these formatted lines into a single string, separated by newlines.
 ///
 /// # Arguments
 /// * `str_source` - A slice of strings, typically representing the lines of an existing code block, used to determine indentation.

@@ -67,12 +67,13 @@ Patchdog:
         GEMINI_MODEL: models/gemini-2.5-flash
         TOKENS_PER_MIN: 250000
         REQUESTS_PER_MIN: 10
-        OPENAI_MODEL: gpt-3.5-turbo
+        OPENAI_MODEL: gpt-5-mini
     Patchdog_settings:
-        excluded_files: [tests/, crates/patchdog/src/tests.rs, crates/rust_parsing/src/error.rs]
-        excluded_functions: [new, default, main]
+        excluded_functions: [new, default, main, from]
+        #glob pattern: use * at the end of the path, ** in the middle
+        excluded_files: [tests/*, crates/**/src/tests.rs, crates/**/src/error.rs]
+        affected_object_types: [fn]
         llm_model: google # you may use google or openai
-
 ```
 - You may get the reference for setting up patchdog inside of the [patchdog repository for pull_request trigger](.github/workflows/patchdog.yml) and [issue_comment trigger](.github/workflows/patchdog_issue_comment.yml), or 
 ```yaml
