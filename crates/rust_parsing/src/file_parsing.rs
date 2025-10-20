@@ -4,6 +4,7 @@ use crate::rust_parser::RustItemParser;
 use crate::rust_parser::RustParser;
 use snafu::ResultExt;
 use std::{fs::File, io::Write, path::PathBuf};
+use textdistance::nstr::damerau_levenshtein;
 use tracing::Level;
 // This REGEX is used outside of file_parsing and inside fallback_repair for JSON parsing
 pub const REGEX: &str = r#"\{\s*"uuid"\s*:\s*"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",\s*"new_comment"\s*:\s*".*"\s*\}"#;
@@ -50,8 +51,7 @@ impl Files for FsOperations {
         true
     }
 
-    /// Modifies a file by replacing or inserting new `changes` (comments) for a specific Rust function at a given `line_number`. It first identifies the target function, then checks for existing documentation.
-    /// If no comments exist, it inserts the new `changes` at the function's start; otherwise, it removes the old comments and inserts the new ones, preserving the function's original content and indentation.
+    /// Modifies a file by replacing or inserting new `changes` (comments) for a specific Rust function at a given `line_number`. It identifies the target function, determines if existing documentation needs replacement, or if new comments should be inserted, and then applies the `changes` while preserving original indentation.
     ///
     /// # Arguments
     /// * `path` - The `PathBuf` to the file being modified.
@@ -111,6 +111,8 @@ impl Files for FsOperations {
             if let Some(first_value) = comments.first()
                 && let Some(last_value) = comments.last()
             {
+                let comment = &source[func.line_start() - 1..func.line_end()].join("\n");
+
                 function_no_comment.drain(first_value.line_start() - 1..last_value.line_end());
 
                 tracing::event!(Level::INFO, "{function_at_line_number:?}");
@@ -121,7 +123,9 @@ impl Files for FsOperations {
                 // Included whitespaces are necessary to suffice RFC 1574 convention
                 let rfc_changes = push_to_vector(&function_no_comment, changes)?;
 
-                write_to_vecstring(path, source, func.line_start(), rfc_changes)?;
+                if damerau_levenshtein(comment, &rfc_changes) < 6.0 / 7.0 {
+                    write_to_vecstring(path, source, func.line_start(), rfc_changes)?;
+                }
 
                 return Ok(());
             }
@@ -158,7 +162,6 @@ fn write_to_vecstring(
 }
 
 /// Formats a multi-line string (`push`) by prepending the leading whitespace from the first line of `str_source` to each of its lines. This ensures that the new content maintains the original indentation when inserted into a code block.
-/// The function then joins these formatted lines into a single string, separated by newlines.
 ///
 /// # Arguments
 /// * `str_source` - A slice of strings, typically representing the lines of an existing code block, used to determine indentation.
@@ -173,11 +176,12 @@ fn push_to_vector(str_source: &[String], push: String) -> Result<String, ErrorHa
         .chars()
         .take_while(|w| w.is_whitespace())
         .collect::<String>();
-    
+
     let affect_all_lines = FsOperations::string_to_vector(&push)
         .into_iter()
-        .map(|each|whitespace.clone() + &each)
-        .collect::<Vec<String>>().join("\n");
+        .map(|each| whitespace.clone() + &each)
+        .collect::<Vec<String>>()
+        .join("\n");
 
     Ok(affect_all_lines)
 }

@@ -30,7 +30,8 @@ Patchdog:
         REQUESTS_PER_MIN: 10
         OPENAI_MODEL: gpt-5-mini
     Patchdog_settings:
-        excluded_files: [tests/, crates/**/src/tests.rs, crates/**/src/error.rs]
         excluded_functions: [new, default, main, from]
+        #glob pattern: use * at the end of the path, ** in the middle
+        excluded_files: [tests/*, crates/**/src/tests.rs, crates/**/src/error.rs]
         affected_object_types: [fn]
         llm_model: google
